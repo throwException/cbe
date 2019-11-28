@@ -135,6 +135,78 @@ is
       Obj_1.Pool_Idx_Slot = Obj_2.Pool_Idx_Slot and then
       Obj_1.Operation     = Obj_2.Operation);
 
+   function Has_Tag_Lib_SB_Init (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Lib_SB_Init);
+
+   function Has_Tag_SB_Init_VBD_Init (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_VBD_Init);
+
+   function Has_Tag_SB_Init_FT_Init (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_FT_Init);
+
+   function Has_Tag_SB_Init_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_Blk_IO);
+
+   function Has_Tag_VBD_Init_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Init_Blk_Alloc);
+
+   function Has_Tag_VBD_Init_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Init_Blk_IO);
+
+   function Has_Tag_FT_Init_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Init_Blk_Alloc);
+
+   function Has_Tag_FT_Init_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Init_Blk_IO);
+
+   function Has_Tag_Lib_SB_Check (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Lib_SB_Check);
+
+   function Has_Tag_SB_Check_VBD_Check (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Check_VBD_Check);
+
+   function Has_Tag_SB_Check_FT_Check (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Check_FT_Check);
+
+   function Has_Tag_SB_Check_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Check_Blk_IO);
+
+   function Has_Tag_VBD_Check_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Check_Blk_Alloc);
+
+   function Has_Tag_VBD_Check_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Check_Blk_IO);
+
+   function Has_Tag_FT_Check_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Check_Blk_Alloc);
+
+   function Has_Tag_FT_Check_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Check_Blk_IO);
+
+   function Has_Tag_Lib_SB_Dump (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Lib_SB_Dump);
+
+   function Has_Tag_SB_Dump_VBD_Dump (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Dump_VBD_Dump);
+
+   function Has_Tag_SB_Dump_FT_Dump (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Dump_FT_Dump);
+
+   function Has_Tag_SB_Dump_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Dump_Blk_IO);
+
+   function Has_Tag_VBD_Dump_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Dump_Blk_Alloc);
+
+   function Has_Tag_VBD_Dump_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Dump_Blk_IO);
+
+   function Has_Tag_FT_Dump_Blk_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Dump_Blk_Alloc);
+
+   function Has_Tag_FT_Dump_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Dump_Blk_IO);
+
    function Has_Tag_Splitter (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Splitter);
 

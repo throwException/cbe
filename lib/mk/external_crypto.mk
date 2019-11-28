@@ -1,6 +1,5 @@
-LIBS    += cbe spark aes_cbc_4k
+LIBS    += cbe_common spark aes_cbc_4k
 
-INC_DIR += $(REP_DIR)/src/lib/cbe
 INC_DIR += $(REP_DIR)/src/lib/external_crypto
 
 SRC_ADS += external.ads

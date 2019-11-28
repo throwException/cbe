@@ -15,6 +15,195 @@ use Interfaces;
 package body CBE
 with SPARK_Mode
 is
+   function Snap_XML_Tag_Invalid (Snap_Idx : Snapshots_Index_Type)
+   return String
+   is (
+      "<snap idx=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap_Idx)) &
+      """/>");
+
+   function Snap_XML_Tag_Open (
+      Snap      : Snapshot_Type;
+      Snap_Idx  : Snapshots_Index_Type;
+      Show_Hash : Boolean)
+   return String
+   is (
+      "<snap idx=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap_Idx)) &
+      """ id=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap.ID)) &
+      """ pba=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap.PBA)) &
+      """ gen=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap.Gen)) &
+      """ lvls=""" &
+      Debug.To_String (Debug.Uint64_Type (Integer (Snap.Max_Level) + 1)) &
+      """ leafs=""" &
+      Debug.To_String (Debug.Uint64_Type (Snap.Nr_Of_Leafs)) &
+      """ keep=""" &
+      Debug.To_String (Snap.Keep) &
+      (if Show_Hash then
+         """ hash=""" &
+         Debug.Hash_To_Hex_String (Snap.Hash) &
+         """>"
+       else
+         """>"));
+
+   function Snap_XML_Tag_Close
+   return String
+   is ("</snap>");
+
+   function Free_Tree_XML_Tag_Open (
+      SB        : Superblock_Type;
+      Show_Hash : Boolean)
+   return String
+   is (
+      "<ft pba=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Free_Number)) &
+      """ gen=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Free_Gen)) &
+      """ lvls=""" &
+      Debug.To_String (Debug.Uint64_Type (Integer (SB.Free_Max_Level) + 1)) &
+      """ degr=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Free_Degree)) &
+      """ leafs=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Free_Leafs)) &
+      (if Show_Hash then
+         """ hash=""" &
+         Debug.Hash_To_Hex_String (SB.Free_Hash) &
+         """>"
+       else
+         """>"));
+
+   function Free_Tree_XML_Tag_Close
+   return String
+   is ("</ft>");
+
+   function Superblock_XML_Tag_Open (SB : Superblock_Type)
+   return String
+   is (
+      "<sb id=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Superblock_ID)) &
+      """ gen=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Last_Secured_Generation)) &
+      """ snap=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Curr_Snap)) &
+      """ degr=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Degree)) &
+      """>");
+
+   function Superblock_XML_Tag_Invalid (SB : Superblock_Type)
+   return String
+   is (
+      "<sb id=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Superblock_ID)) &
+      """/>");
+
+   function Superblock_XML_Tag_Close
+   return String
+   is ("</sb>");
+
+   function Type_2_Node_XML_Tag (
+      Node     : Type_2_Node_Type;
+      Node_Idx : Type_2_Node_Block_Index_Type)
+   return String
+   is (
+      "<t2 idx=""" &
+      Debug.To_String (Debug.Uint64_Type (Node_Idx)) &
+      """ pba=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.PBA)) &
+      """ vba=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.Last_VBA)) &
+      """ agen=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.Alloc_Gen)) &
+      """ fgen=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.Free_Gen)) &
+      """ key=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.Last_Key_ID)) &
+      """ res=""" &
+      Debug.To_String (Node.Reserved) &
+      """/>");
+
+   function Type_1_Node_XML_Attributes (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String
+   is (
+      "idx=""" &
+      Debug.To_String (Debug.Uint64_Type (Node_Idx)) &
+      """ pba=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.PBA)) &
+      """ gen=""" &
+      Debug.To_String (Debug.Uint64_Type (Node.Gen)) &
+      " vba=""0x" &
+      Debug.Hex_Image (Debug.Uint64_Type (VBA)) &
+      (if Show_Hash then
+         """ hash=""" &
+         Debug.Hash_To_Hex_String (Node.Hash) &
+         """"
+       else
+         """"));
+
+   function Type_1_Node_XML_Tag (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String
+   is (
+      "<t1 " & Type_1_Node_XML_Attributes (Node, Node_Idx, Show_Hash, VBA) &
+      "/>");
+
+   function Type_1_Node_XML_Tag_Open (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String
+   is (
+      "<t1 " & Type_1_Node_XML_Attributes (Node, Node_Idx, Show_Hash, VBA) &
+      ">");
+
+   function Type_1_Node_XML_Tag_Close
+   return String
+   is ("</t1>");
+
+   function Key_Invalid
+   return Key_Type
+   is
+      Result : Key_Type;
+   begin
+      Result.Value := (others => Byte_Type'First);
+      Result.ID    := Key_ID_Type'First;
+      return Result;
+   end Key_Invalid;
+
+   function Superblock_Valid (SB : Superblock_Type)
+   return Boolean
+   is (SB.Last_Secured_Generation /= Generation_Type'Last);
+
+   function Superblock_Invalid
+   return Superblock_Type
+   is
+      Result : Superblock_Type;
+   begin
+      Result.Superblock_ID           := Generation_Type'First;
+      Result.Keys                    := (others => Key_Invalid);
+      Result.Snapshots               := (others => Snapshot_Invalid);
+      Result.Last_Secured_Generation := Generation_Type'Last;
+      Result.Curr_Snap               := Snapshots_Index_Type'First;
+      Result.Degree                  := Tree_Degree_Type'First;
+      Result.Free_Gen                := Generation_Type'First;
+      Result.Free_Number             := Physical_Block_Address_Type'First;
+      Result.Free_Hash               := (others => Byte_Type'First);
+      Result.Free_Max_Level          := Tree_Level_Index_Type'First;
+      Result.Free_Degree             := Tree_Degree_Type'First;
+      Result.Free_Leafs              := Tree_Number_Of_Leafs_Type'First;
+      return Result;
+   end Superblock_Invalid;
+
    procedure Block_Data_From_Unsigned_64 (
       Data : in out Block_Data_Type;
       Off  :        Block_Data_Index_Type;
@@ -553,7 +742,7 @@ is
    return Pool_Index_Slot_Type
    is (
       Valid   => False,
-      Content => Pool_Index_Type'Last);
+      Content => Pool_Index_Type'First);
 
    function Pool_Idx_Slot_Valid (Slot : Pool_Index_Slot_Type)
    return Boolean
@@ -588,7 +777,7 @@ is
    return Index_Slot_Type
    is (
       Valid   => False,
-      Content => Index_Type'Last);
+      Content => Index_Type'First);
 
    function Idx_Slot_Valid (Slot : Index_Slot_Type)
    return Boolean

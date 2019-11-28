@@ -590,6 +590,16 @@ class Cbe::Main : Rpc_object<Typed_root<Block::Session>>
 				Cbe::Superblock &dst = sbs.block[i];
 				Genode::memcpy(&dst, src, sizeof (Cbe::Superblock));
 
+log(__func__,__LINE__, " ",
+	(unsigned long)most_recent_sb.value, " ",
+	(unsigned long)dst.superblock_id, " ",
+	(unsigned long)dst.degree, " ",
+	(unsigned long)dst.free_height, " ",
+	(unsigned long)dst.free_degree, " ",
+	(unsigned long)dst.free_leaves, " ",
+	(unsigned long)dst.last_secured_generation
+);
+
 				/*
 				 * We use the superblock id, which must be unique, to pick
 				 * the most recent superblock.
@@ -785,6 +795,10 @@ extern "C" void adainit();
 
 void Component::construct(Genode::Env &env)
 {
+	Timer::Connection timer(env);
+	timer.msleep(6000);
+	Genode::log("---- Start CBE ----");
+
 	env.exec_static_constructors();
 
 	/**

@@ -1,18 +1,4 @@
-
 assert_spec linux
-
-exec rm -rf var/libcache/cbe
-exec rm -rf var/libcache/cbe_cxx
-exec rm -rf var/libcache/cbe_common
-exec rm -rf var/libcache/cbe_common_cxx
-exec rm -rf var/libcache/cbe_init
-exec rm -rf var/libcache/cbe_init_cxx
-exec rm -rf var/libcache/cbe_check
-exec rm -rf var/libcache/cbe_check_cxx
-exec rm -rf var/libcache/cbe_dump
-exec rm -rf var/libcache/cbe_dump_cxx
-exec rm -rf var/libcache/external_crypto
-exec rm -rf var/libcache/external_crypto_cxx
 
 proc cbe_image_file { } {
 	return "/home/lypo/genodelabs/genode/git/build/x86_64/bin/cbe_block.img"
@@ -36,12 +22,24 @@ proc cbe_ft_size_mb { } {
 	return [expr [cbe_image_size_mb] / 8]
 }
 
+exec rm -rf var/libcache/cbe
+exec rm -rf var/libcache/cbe_cxx
+exec rm -rf var/libcache/cbe_init
+exec rm -rf var/libcache/cbe_init_cxx
+exec rm -rf var/libcache/cbe_check
+exec rm -rf var/libcache/cbe_check_cxx
+exec rm -rf var/libcache/external_crypto
+exec rm -rf var/libcache/external_crypto_cxx
+
 append build_components {
 	core init timer
-	app/cbe_tester
+	app/cbe_init
+	app/cbe_check
 	server/log_terminal
 	server/report_rom
+	server/cbe
 	server/lx_block
+	app/block_tester
 }
 
 build $build_components
@@ -89,48 +87,30 @@ append config {
 		<config file="} [cbe_image_file] {" block_size="4K" writeable="yes"/>
 	</start>
 
-	<start name="cbe_tester" caps="200">
-		<resource name="RAM" quantum="80M"/>
-		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
-			<tests>
+	<start name="cbe_init">
+		<resource name="RAM" quantum="4M"/>
+		<config>
+			<virtual-block-device
+				nr_of_levels="4"
+				nr_of_children="3"
+				nr_of_leafs="17" />
 
-				<initialize>
-					<virtual-block-device
-						nr_of_levels="4"
-						nr_of_children="4"
-						nr_of_leafs="40" />
-
-					<free-tree
-						nr_of_levels="4"
-						nr_of_children="4"
-						nr_of_leafs="40" />
-				</initialize>
-
-				<replay verbose="yes" bulk="no">
-					<request type="write" lba="0"  count="3"/>
-					<request type="sync"  lba="0"  count="3"/>
-					<request type="write" lba="2"  count="1"/>
-					<create-snapshot id="1" quarantine="yes"/>
-					<request type="write" lba="7"  count="1"/>
-					<request type="sync"  lba="7"  count="1"/>
-					<request type="write" lba="10" count="2"/>
-					<create-snapshot id="2" quarantine="yes"/>
-				</replay>
-
-				<dump unused_nodes="no"
-				      max_superblocks="2"
-				      max_snapshots="2"
-				      vbd="yes"
-				      vbd_pba_filter_enabled="yes"
-				      vbd_pba_filter="38"
-				      vbd_vba_filter_enabled="no"
-				      vbd_vba_filter="0x13"
-				      free_tree="no"
-				      hashes="no"/>
-
-			</tests>
-
+			<free-tree
+				nr_of_levels="4"
+				nr_of_children="3"
+				nr_of_leafs="18" />
 		</config>
+		<route>
+			<service name="Block"> <child name="lx_block"/> </service>
+			<service name="Terminal"> <child name="log_terminal"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
+	<start name="cbe_check">
+		<resource name="RAM" quantum="4M"/>
+		<config/>
 		<route>
 			<service name="Block"> <child name="lx_block"/> </service>
 			<service name="Terminal"> <child name="log_terminal"/> </service>
@@ -147,13 +127,13 @@ exec rm -rf [cbe_image_file]
 exec truncate -s [cbe_image_size_mb]M [cbe_image_file]
 
 append boot_modules {
-	core init timer cbe_tester
+	core init timer lx_block cbe_init cbe_check
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
-	log_terminal report_rom lx_block
+	log_terminal report_rom
 }
 
 build_boot_image $boot_modules
 
 append qemu_args " -nographic -m 1280 "
 
-run_genode_until {.*child "cbe_tester" exited with exit value 0.*\n} 240
+run_genode_until {.*child "cbe_check" exited with exit value 0.*\n} 240

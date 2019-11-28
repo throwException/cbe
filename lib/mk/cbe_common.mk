@@ -1,0 +1,13 @@
+LIBS += spark
+
+INC_DIR += $(REP_DIR)/src/lib/cbe_common
+
+SRC_ADB += cbe.adb
+SRC_ADB += cbe-debug.adb
+SRC_ADB += cbe-request.adb
+SRC_ADB += cbe-primitive.adb
+SRC_ADB += cbe-block_io.adb
+
+vpath % $(REP_DIR)/src/lib/cbe_common
+
+CC_ADA_OPT += -gnatec=$(REP_DIR)/src/lib/cbe_common/pragmas.adc

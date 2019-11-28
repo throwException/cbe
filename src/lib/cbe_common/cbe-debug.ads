@@ -53,7 +53,18 @@ is
       External_Name => "print_cstring",
       SPARK_Mode => Off;
 
+   procedure Print_Cstring_Buffered (Str : String; Length : Uint64_Type)
+   with
+      Import,
+      Convention => C,
+      External_Name => "print_cstring_buffered",
+      SPARK_Mode => Off;
+
    procedure Print_String (Str : String)
+   with
+      SPARK_Mode => Off;
+
+   procedure Print_String_Buffered (Str : String)
    with
       SPARK_Mode => Off;
 
@@ -72,11 +83,28 @@ is
    function To_String (H : Hash_Type)
    return String;
 
+   function Byte_To_Hex_String (Byte : Byte_Type)
+   return String;
+
+   function Hash_To_Hex_String (Hash : Hash_Type)
+   return String;
+
    function Image (Int : Uint64_Type)
    return String;
 
    procedure Dump_Superblock (
       SB_Index : Superblocks_Index_Type;
       SB       : Superblock_Type);
+
+   function Tabulator
+   return String
+   is ("   ");
+
+   function Line_Feed
+   return Character
+   is (Character'Val (10));
+
+   function Hex_Image (Int : Uint64_Type)
+   return String;
 
 end CBE.Debug;

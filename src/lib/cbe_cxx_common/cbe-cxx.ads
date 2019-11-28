@@ -30,6 +30,10 @@ is
    type CXX_Primitive_Index_Type is new CXX_UInt64_Type;
    type CXX_Snapshot_ID_Type     is new CXX_UInt64_Type;
 
+   type CXX_Tree_Level_Index_Type     is new CXX_UInt64_Type;
+   type CXX_Tree_Degree_Type          is new CXX_UInt64_Type;
+   type CXX_Tree_Number_Of_Leafs_Type is new CXX_UInt64_Type;
+
    type CXX_Superblocks_Type
    is array (Superblocks_Index_Type) of Block_Data_Type;
 
@@ -51,6 +55,20 @@ is
       Value : CXX_UInt32_Type;
    end record;
    pragma Pack (CXX_Crypto_Cipher_Buffer_Index_Type);
+
+   type CXX_Dump_Configuration_Type is record
+      Unused_Nodes           : CXX_Bool_Type;
+      Max_Superblocks        : CXX_UInt32_Type;
+      Max_Snapshots          : CXX_UInt32_Type;
+      VBD                    : CXX_Bool_Type;
+      VBD_PBA_Filter_Enabled : CXX_Bool_Type;
+      VBD_PBA_Filter         : CXX_UInt64_Type;
+      VBD_VBA_Filter_Enabled : CXX_Bool_Type;
+      VBD_VBA_Filter         : CXX_UInt64_Type;
+      Free_Tree              : CXX_Bool_Type;
+      Hashes                 : CXX_Bool_Type;
+   end record;
+   pragma Pack (CXX_Dump_Configuration_Type);
 
    type CXX_Request_Type is record
       Operation    : CXX_Operation_Type;
@@ -138,5 +156,19 @@ is
          Offset       => 0,
          Count        => 0,
          Tag          => 0));
+
+   function CXX_Dump_Configuration_To_SPARK (Cfg : CXX_Dump_Configuration_Type)
+   return Dump_Configuration_Type
+   is (
+      Unused_Nodes => CXX_Bool_To_SPARK (Cfg.Unused_Nodes),
+      Max_Superblocks => Dump_Cfg_Max_Superblocks_Type (Cfg.Max_Superblocks),
+      Max_Snapshots => Dump_Cfg_Max_Snapshots_Type (Cfg.Max_Snapshots),
+      VBD => CXX_Bool_To_SPARK (Cfg.VBD),
+      VBD_PBA_Filter_Enabled => CXX_Bool_To_SPARK (Cfg.VBD_PBA_Filter_Enabled),
+      VBD_PBA_Filter => Physical_Block_Address_Type (Cfg.VBD_PBA_Filter),
+      VBD_VBA_Filter_Enabled => CXX_Bool_To_SPARK (Cfg.VBD_VBA_Filter_Enabled),
+      VBD_VBA_Filter => Virtual_Block_Address_Type (Cfg.VBD_VBA_Filter),
+      Free_Tree => CXX_Bool_To_SPARK (Cfg.Free_Tree),
+      Hashes => CXX_Bool_To_SPARK (Cfg.Hashes));
 
 end CBE.CXX;

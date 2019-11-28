@@ -15,6 +15,7 @@ with SPARK_Mode
 is
    pragma Pure;
 
+   Nr_Of_Superblock_Slots : constant := 8;
    Max_Number_Of_Requests_In_Pool : constant := 16;
    Superblock_Nr_Of_Keys : constant := 2;
    Superblock_Nr_Of_Snapshots : constant := 48;
@@ -92,8 +93,11 @@ is
       Hash     : Hash_Type;
    end record;
 
+   subtype Type_1_Node_Block_Index_Type is
+      Standard.Integer range 0 .. Type_1_Nodes_Per_Block - 1;
+
    type Type_1_Node_Block_Type
-   is array (0 .. Type_1_Nodes_Per_Block - 1) of Type_1_Node_Type;
+   is array (Type_1_Node_Block_Index_Type) of Type_1_Node_Type;
 
    --
    --  The CBE::Type_i_node contains the on-disk type 2 inner node
@@ -109,8 +113,11 @@ is
       Reserved    : Boolean;
    end record;
 
+   subtype Type_2_Node_Block_Index_Type is
+      Standard.Integer range 0 .. Type_2_Nodes_Per_Block - 1;
+
    type Type_2_Node_Block_Type
-   is array (0 .. Type_2_Nodes_Per_Block - 1) of Type_2_Node_Type;
+   is array (Type_2_Node_Block_Index_Type) of Type_2_Node_Type;
 
    type Query_Data_Type is array (0 .. 0) of Block_Data_Type;
 
@@ -137,6 +144,36 @@ is
 
    type Type_1_Node_Walk_Type
    is array (Tree_Level_Index_Type) of Type_1_Node_Type;
+
+   type Dump_Cfg_Max_Superblocks_Type is range 0 .. 2**32 - 1;
+   type Dump_Cfg_Max_Snapshots_Type is range 0 .. 2**32 - 1;
+
+   type Dump_Configuration_Type is record
+      Unused_Nodes           : Boolean;
+      Max_Superblocks        : Dump_Cfg_Max_Superblocks_Type;
+      Max_Snapshots          : Dump_Cfg_Max_Snapshots_Type;
+      VBD                    : Boolean;
+      VBD_PBA_Filter_Enabled : Boolean;
+      VBD_PBA_Filter         : Physical_Block_Address_Type;
+      VBD_VBA_Filter_Enabled : Boolean;
+      VBD_VBA_Filter         : Virtual_Block_Address_Type;
+      Free_Tree              : Boolean;
+      Hashes                 : Boolean;
+   end record;
+
+   function Dump_Configuration_Default
+   return Dump_Configuration_Type
+   is (
+      Unused_Nodes => True,
+      Max_Superblocks => Dump_Cfg_Max_Superblocks_Type'Last,
+      Max_Snapshots => Dump_Cfg_Max_Snapshots_Type'Last,
+      VBD => True,
+      VBD_PBA_Filter_Enabled => False,
+      VBD_PBA_Filter => 0,
+      VBD_VBA_Filter_Enabled => False,
+      VBD_VBA_Filter => 0,
+      Free_Tree => True,
+      Hashes => True);
 
    function Type_1_Node_Invalid
    return Type_1_Node_Type
@@ -180,6 +217,9 @@ is
       Value : Key_Value_Type;
       ID    : Key_ID_Type;
    end record;
+
+   function Key_Invalid
+   return Key_Type;
 
    type Keys_Index_Type is range 0 .. Superblock_Nr_Of_Keys - 1;
    type Keys_Type is array (Keys_Index_Type) of Key_Type;
@@ -227,7 +267,13 @@ is
       Free_Leafs              : Tree_Number_Of_Leafs_Type;
    end record;
 
-   type Superblocks_Index_Type is range 0 .. 7;
+   function Superblock_Invalid
+   return Superblock_Type;
+
+   function Superblock_Valid (SB : Superblock_Type)
+   return Boolean;
+
+   type Superblocks_Index_Type is range 0 .. Nr_Of_Superblock_Slots - 1;
    type Superblocks_Type is array (Superblocks_Index_Type) of Superblock_Type;
 
    type Timeout_Request_Type is record
@@ -242,6 +288,64 @@ is
    procedure Type_2_Node_Block_From_Block_Data (
       Nodes : out Type_2_Node_Block_Type;
       Data  :     Block_Data_Type);
+
+   function Type_2_Node_XML_Tag (
+      Node     : Type_2_Node_Type;
+      Node_Idx : Type_2_Node_Block_Index_Type)
+   return String;
+
+   function Type_1_Node_XML_Attributes (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String;
+
+   function Type_1_Node_XML_Tag (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String;
+
+   function Type_1_Node_XML_Tag_Open (
+      Node      : Type_1_Node_Type;
+      Node_Idx  : Type_1_Node_Block_Index_Type;
+      Show_Hash : Boolean;
+      VBA       : Virtual_Block_Address_Type)
+   return String;
+
+   function Type_1_Node_XML_Tag_Close
+   return String;
+
+   function Superblock_XML_Tag_Open (SB : Superblock_Type)
+   return String;
+
+   function Superblock_XML_Tag_Invalid (SB : Superblock_Type)
+   return String;
+
+   function Superblock_XML_Tag_Close
+   return String;
+
+   function Snap_XML_Tag_Invalid (Snap_Idx : Snapshots_Index_Type)
+   return String;
+
+   function Snap_XML_Tag_Open (
+      Snap      : Snapshot_Type;
+      Snap_Idx  : Snapshots_Index_Type;
+      Show_Hash : Boolean)
+   return String;
+
+   function Snap_XML_Tag_Close
+   return String;
+
+   function Free_Tree_XML_Tag_Open (
+      SB        : Superblock_Type;
+      Show_Hash : Boolean)
+   return String;
+
+   function Free_Tree_XML_Tag_Close
+   return String;
 
    procedure Block_Data_From_Type_1_Node_Block (
       Data  : out Block_Data_Type;

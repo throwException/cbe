@@ -25,13 +25,11 @@ proc cbe_ft_size_mb { } {
 
 append build_components {
 	core init timer
-	server/ram_block
 	server/cbe
 	server/cbe_block
 	app/block_tester
 	server/log_terminal
 	server/report_rom
-
 	server/lx_block
 }
 
@@ -102,7 +100,7 @@ exec rm -rf bin/[cbe_image_file]
 exec truncate -s [cbe_image_size_mb]M bin/[cbe_image_file]
 
 append boot_modules {
-	core init timer ram_block cbe_block cbe
+	core init timer cbe_block cbe
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
 	report_rom lx_block
 }
