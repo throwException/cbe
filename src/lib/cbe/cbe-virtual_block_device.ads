@@ -10,7 +10,6 @@ pragma Ada_2012;
 
 with CBE.Primitive;
 with CBE.Tree_Helper;
-with CBE.Cache;
 with CBE.Translation;
 
 package CBE.Virtual_Block_Device
@@ -132,10 +131,40 @@ is
    --
    procedure Execute (
       Obj        : in out Object_Type;
-      Trans_Data : in out Translation_Data_Type;
-      Cach       : in out Cache.Object_Type;
-      Cach_Data  :        Cache.Cache_Data_Type;
-      Timestamp  :        Timestamp_Type);
+      Trans_Data : in out Translation_Data_Type);
+
+   --
+   --  Peek_Generated_Cache_Primitive
+   --
+   function Peek_Generated_Cache_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Cache_Lvl
+   --
+   function Peek_Generated_Cache_Lvl (Obj : Object_Type)
+   return Tree_Level_Index_Type;
+
+   --
+   --  Peek_Generated_Cache_Data
+   --
+   function Peek_Generated_Cache_Data (Obj : Object_Type)
+   return Block_Data_Type;
+
+   --
+   --  Drop_Generated_Cache_Primitive
+   --
+   procedure Drop_Generated_Cache_Primitive (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type);
+
+   --
+   --  Mark_Generated_Cache_Primitive_Complete
+   --
+   procedure Mark_Generated_Cache_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Data :        Block_Data_Type);
 
    -----------------
    --  Accessors  --
@@ -147,10 +176,15 @@ is
 
 private
 
+   type Cache_Primitive_State_Type is (Invalid, Generated, Dropped, Complete);
+
    type Object_Type is record
       Trans_Helper     : Tree_Helper.Object_Type;
       Trans            : Translation.Object_Type;
       Execute_Progress : Boolean;
+      Cache_Prim       : Primitive.Object_Type;
+      Cache_Prim_State : Cache_Primitive_State_Type;
+      Cache_Prim_Data  : Block_Data_Type;
    end record;
 
 end CBE.Virtual_Block_Device;

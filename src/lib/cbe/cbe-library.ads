@@ -11,8 +11,6 @@ pragma Ada_2012;
 with CBE.Pool;
 with CBE.Splitter;
 with CBE.Crypto;
-with CBE.Cache;
-with CBE.Cache_Flusher;
 with CBE.Virtual_Block_Device;
 with CBE.Write_Back;
 with CBE.Sync_Superblock;
@@ -20,6 +18,7 @@ with CBE.Free_Tree;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Primitive;
+with CBE.Cache;
 
 package CBE.Library
 with SPARK_Mode
@@ -350,6 +349,9 @@ private
       In_Progress : Boolean;
    end record;
 
+   type Cache_Prim_State_Type is (Invalid, Submitted, Complete);
+   type SCD_State_Type is (Inactive, Active);
+
    function Wait_For_Event_Invalid
    return Wait_For_Event_Type
    is (
@@ -358,16 +360,18 @@ private
       Event       => Event_Invalid,
       In_Progress => False);
 
+   type Cache_Sync_State_Type is (Inactive, Active);
+
    type Object_Type is record
       Execute_Progress             : Boolean;
+      Cache_Obj                    : Cache.Cache_Type;
+      Cache_Jobs_Data              : Cache.Jobs_Data_Type;
+      Cache_Slots_Data             : Cache.Slots_Data_Type;
+      Cache_Sync_State             : Cache_Sync_State_Type;
       Request_Pool_Obj             : Pool.Object_Type;
       Splitter_Obj                 : Splitter.Object_Type;
       Crypto_Obj                   : Crypto.Object_Type;
       IO_Obj                       : Block_IO.Object_Type;
-      Cache_Obj                    : Cache.Object_Type;
-      Cache_Data                   : Cache.Cache_Data_Type;
-      Cache_Job_Data               : Cache.Cache_Job_Data_Type;
-      Cache_Flusher_Obj            : Cache_Flusher.Object_Type;
       Trans_Data                   : Translation_Data_Type;
       VBD                          : Virtual_Block_Device.Object_Type;
       Write_Back_Obj               : Write_Back.Object_Type;
@@ -389,6 +393,48 @@ private
       Stall_Snapshot_Creation      : Boolean;
       Superblock                   : Superblock_Type;
       Sync_Primitive               : Primitive.Object_Type;
+
+      SCD_State    : SCD_State_Type;
+      SCD_Req      : Request.Object_Type;
+      SCD_Data     : Block_Data_Type;
+      SCD_Curr_Lvl : Tree_Level_Index_Type;
+
+      SCD_Cache_Prim        : Primitive.Object_Type;
+      SCD_Cache_Prim_State  : Cache_Prim_State_Type;
+      SCD_Cache_Prim_Data   : Block_Data_Type;
+
+      --
+      --  The array of new_PBA will either get populated from the Old_PBA
+      --  content or from newly allocated blocks.
+      --  The order of the array items corresponds to the level within
+      --  the tree.
+      --
+      SCD_New_PBAs   : Write_Back.New_PBAs_Type := (others => 0);
+      SCD_New_Blocks : Number_Of_Blocks_Type := 0;
+
+      --
+      --  This array contains all blocks that will get freed or rather
+      --  marked as reserved in the FT as they are still referenced by
+      --  an snapshot.
+      --
+      SCD_Free_PBAs   : Free_Tree.Free_PBAs_Type := (others => 0);
+      SCD_Free_Blocks : Tree_Level_Index_Type := 0;
+
+      WB_Update_PBA : Physical_Block_Address_Type;
+
+      WB_Cache_Prim_1       : Primitive.Object_Type;
+      WB_Cache_Prim_1_State : Cache_Prim_State_Type;
+      WB_Cache_Prim_1_Data  : Block_Data_Type;
+
+      WB_Cache_Prim_2       : Primitive.Object_Type;
+      WB_Cache_Prim_2_State : Cache_Prim_State_Type;
+      WB_Cache_Prim_2_Data  : Block_Data_Type;
+
+      WB_Cache_Prim_3       : Primitive.Object_Type;
+      WB_Cache_Prim_3_State : Cache_Prim_State_Type;
+      WB_Cache_Prim_3_Data  : Block_Data_Type;
+      WB_Prim               : Primitive.Object_Type;
+
    end record;
 
    function Advance_Superblocks_Index is new
@@ -398,9 +444,6 @@ private
       Snaps     : in out Snapshots_Type;
       Keep_Snap :        Snapshots_Index_Type;
       Success   :    out Boolean);
-
-   function Cache_Dirty (Obj : Object_Type)
-   return Boolean;
 
    procedure Try_Flush_Cache_If_Dirty (
       Obj   : in out Object_Type;
@@ -444,5 +487,40 @@ private
       when Event_Supply_Client_Data_After_FT  => "Supply_Client_Data_After_FT",
       when Event_IO_Request_Completed         => "IO_Request_Completed",
       when Event_Obtain_Client_Data           => "Obtain_Client_Data");
+
+   procedure Execute_VBD (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   procedure Execute_Free_Tree (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   procedure Execute_SCD (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Cache
+   --
+   procedure Execute_Cache (
+      Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Cache_Generated_Prims
+   --
+   procedure Execute_Cache_Generated_Prims (
+      Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Cache_Completed_Prims
+   --
+   procedure Execute_Cache_Completed_Prims (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
 
 end CBE.Library;

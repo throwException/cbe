@@ -6,14 +6,13 @@ SRC_ADB += cbe-library.adb
 SRC_ADB += cbe-splitter.adb
 SRC_ADB += cbe-pool.adb
 SRC_ADB += cbe-crypto.adb
-SRC_ADB += cbe-cache.adb
 SRC_ADB += cbe-tree_helper.adb
 SRC_ADB += cbe-translation.adb
-SRC_ADB += cbe-cache_flusher.adb
 SRC_ADB += cbe-sync_superblock.adb
 SRC_ADB += cbe-virtual_block_device.adb
 SRC_ADB += cbe-free_tree.adb
 SRC_ADB += cbe-write_back.adb
+SRC_ADB += cbe-cache.adb
 
 vpath % $(REP_DIR)/src/lib/cbe
 

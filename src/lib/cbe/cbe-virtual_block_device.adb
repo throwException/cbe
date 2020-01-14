@@ -42,7 +42,10 @@ is
          Trans_Helper     => Trans_Helpr,
          Trans            =>
             Translation.Initialized_Object (Trans_Helpr, False),
-         Execute_Progress => False);
+         Execute_Progress => False,
+         Cache_Prim       => Primitive.Invalid_Object,
+         Cache_Prim_State => Invalid,
+         Cache_Prim_Data  => (others => 0));
    end Initialized_Object;
 
    --
@@ -182,87 +185,128 @@ is
    --
    procedure Execute (
       Obj        : in out Object_Type;
-      Trans_Data : in out Translation_Data_Type;
-      Cach       : in out Cache.Object_Type;
-      Cach_Data  :        Cache.Cache_Data_Type;
-      Timestamp  :        Timestamp_Type)
+      Trans_Data : in out Translation_Data_Type)
    is
    begin
       Obj.Execute_Progress := False;
 
-      ----------------------------
-      --  Translation handling  --
-      ----------------------------
-
       Translation.Execute (Obj.Trans, Trans_Data);
-      Declare_Trans_Progress :
+      if Translation.Execute_Progress (Obj.Trans) then
+         Obj.Execute_Progress := True;
+      end if;
+
+      Declare_Prim :
       declare
-         Trans_Progress : constant Boolean :=
-            Translation.Execute_Progress (Obj.Trans);
+         Prim : constant Primitive.Object_Type :=
+            Translation.Peek_Generated_Primitive (Obj.Trans);
       begin
-         Obj.Execute_Progress :=
-            Obj.Execute_Progress or else Trans_Progress;
-      end Declare_Trans_Progress;
-
-      --  FIXME prevent module from checking the cache again and again
-      Endless_Loop :
-      loop
-         Declare_Primitive :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Translation.Peek_Generated_Primitive (Obj.Trans);
-            LvL  : constant Tree_Level_Index_Type :=
-               Translation.Peek_Generated_Level (Obj.Trans);
-         begin
-            if not Primitive.Valid (Prim) then
-               exit Endless_Loop;
-            end if;
-
-            Declare_PBA :
+         if Primitive.Valid (Prim) then
+            Declare_Cache_Prim :
             declare
-               PBA : constant Physical_Block_Address_Type :=
-                  Physical_Block_Address_Type (Primitive.Block_Number (Prim));
+               Cache_Prim : constant Primitive.Object_Type :=
+                  Primitive.Valid_Object_No_Pool_Idx (
+                     Read, False, Primitive.Tag_VBD_Cache,
+                     Primitive.Block_Number (Prim), 0);
             begin
+               if Obj.Cache_Prim_State = Invalid then
 
-               if not Cache.Data_Available (Cach, PBA) then
-                  if Cache.Request_Acceptable_Logged (Cach, PBA) then
-                     Cache.Submit_Request_Logged (Cach, PBA);
-
-                     --
-                     --  Only report progress on the initial request, all
-                     --  other data available checks do not denote progress.
-                     --  Otherwise we will end up with an endless loop.
-                     --
-                     Obj.Execute_Progress :=
-                        Obj.Execute_Progress or else True;
+                  Obj.Cache_Prim_State := Generated;
+                  Obj.Cache_Prim := Cache_Prim;
+                  Obj.Execute_Progress := True;
+               elsif
+                  Obj.Cache_Prim_State = Complete and then
+                  Primitive.Equal (Obj.Cache_Prim, Cache_Prim)
+               then
+                  if not Primitive.Success (Obj.Cache_Prim) then
+                     raise Program_Error;
                   end if;
-                  exit Endless_Loop;
-               else
-                  Declare_Data_Index :
-                  declare
-                     Data_Index : Cache.Cache_Index_Type;
-                  begin
-                     Cache.Data_Index (Cach, PBA, Timestamp, LvL, Data_Index);
-                     Declare_Data :
-                     declare
-                        Data : constant Block_Data_Type :=
-                           Cach_Data (Data_Index);
-                     begin
-                        Translation.Mark_Generated_Primitive_Complete (
-                           Obj.Trans, Data, Trans_Data);
-                     end Declare_Data;
-                  end Declare_Data_Index;
+                  Translation.Mark_Generated_Primitive_Complete (
+                     Obj.Trans, Obj.Cache_Prim_Data, Trans_Data);
 
-                  Translation.Discard_Generated_Primitive (
-                     Obj.Trans);
+                  Translation.Discard_Generated_Primitive (Obj.Trans);
+                  Obj.Cache_Prim_State := Invalid;
+                  Obj.Execute_Progress := True;
                end if;
-            end Declare_PBA;
-         end Declare_Primitive;
-
-         Obj.Execute_Progress := Obj.Execute_Progress or else True;
-
-      end loop Endless_Loop;
+            end Declare_Cache_Prim;
+         end if;
+      end Declare_Prim;
    end Execute;
+
+   --
+   --  Peek_Generated_Cache_Primitive
+   --
+   function Peek_Generated_Cache_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is (
+      if Obj.Cache_Prim_State = Generated then
+         Obj.Cache_Prim
+      else
+         Primitive.Invalid_Object);
+
+   --
+   --  Peek_Generated_Cache_Lvl
+   --
+   function Peek_Generated_Cache_Lvl (Obj : Object_Type)
+   return Tree_Level_Index_Type
+   is
+   begin
+      if Obj.Cache_Prim_State = Generated then
+         return Translation.Peek_Generated_Level (Obj.Trans);
+      else
+         raise Program_Error;
+      end if;
+   end Peek_Generated_Cache_Lvl;
+
+   --
+   --  Peek_Generated_Cache_Data
+   --
+   function Peek_Generated_Cache_Data (Obj : Object_Type)
+   return Block_Data_Type
+   is
+   begin
+      if Obj.Cache_Prim_State = Generated then
+         return Obj.Cache_Prim_Data;
+      else
+         raise Program_Error;
+      end if;
+   end Peek_Generated_Cache_Data;
+
+   --
+   --  Drop_Generated_Cache_Primitive
+   --
+   procedure Drop_Generated_Cache_Primitive (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type)
+   is
+   begin
+      if Obj.Cache_Prim_State = Generated and then
+         Primitive.Equal (Obj.Cache_Prim, Prim)
+      then
+         Obj.Cache_Prim_State := Dropped;
+      else
+         raise Program_Error;
+      end if;
+   end Drop_Generated_Cache_Primitive;
+
+   --
+   --  Mark_Generated_Cache_Primitive_Complete
+   --
+   procedure Mark_Generated_Cache_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Data :        Block_Data_Type)
+   is
+   begin
+      if Obj.Cache_Prim_State = Dropped and then
+         Primitive.Equal (Obj.Cache_Prim, Prim)
+      then
+         Obj.Cache_Prim_State := Complete;
+         Obj.Cache_Prim_Data := Data;
+         Obj.Cache_Prim := Prim;
+      else
+         raise Program_Error;
+      end if;
+   end Mark_Generated_Cache_Primitive_Complete;
 
    -----------------
    --  Accessors  --

@@ -8,651 +8,641 @@
 
 pragma Ada_2012;
 
-with CBE.Request;
-with CBE.Debug;
-pragma Unreferenced (CBE.Debug);
-
 package body CBE.Cache
 with SPARK_Mode
 is
-
-   package body Cache_Item
-   with SPARK_Mode
-   is
-
-      --
-      --  Unused_Object
-      --
-      function Unused_Object
-      return Cache_Item_Type
-      is (
-         PBA        => 0,
-         Ts         => 0,
-         State      => Unused,
-         Dirty      => False,
-         Used_Count => 0,
-         Level      => 0);
-
-      --
-      --  Initialize_Object
-      --
-      procedure Initialize_Object (
-         Obj : out Cache_Item_Type;
-         PBA : Physical_Block_Address_Type;
-         Ts  : Timestamp_Type)
-      is
-      begin
-         Obj.State      := Used;
-         Obj.PBA        := PBA;
-         Obj.Ts         := Ts;
-         Obj.Dirty      := False;
-         Obj.Used_Count := 1;
-         Obj.Level      := 0;
-      end Initialize_Object;
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Unused (Obj : Cache_Item_Type) return Boolean
-      is (Obj.State = Unused);
-
-      function Used   (Obj : Cache_Item_Type) return Boolean
-      is (Obj.State = Used);
-
-      function Dirty  (Obj : Cache_Item_Type) return Boolean
-      is (Obj.Dirty);
-
-      function PBA (Obj : Cache_Item_Type) return Physical_Block_Address_Type
-      is (Obj.PBA);
-
-      function Ts  (Obj : Cache_Item_Type) return Timestamp_Type
-      is (Obj.Ts);
-
-      function Used_Count (Obj : Cache_Item_Type) return Used_Count_Type
-      is (Obj.Used_Count);
-
-      function Level (Obj : Cache_Item_Type) return Tree_Level_Index_Type
-      is (Obj.Level);
-
-      procedure State (
-         Obj : in out Cache_Item_Type;
-         Sta :        State_Type)
-      is
-      begin
-         Obj.State := Sta;
-      end State;
-
-      procedure Set_Ts (
-         Obj : in out Cache_Item_Type;
-         Ts  :        Timestamp_Type;
-         Lvl :        Tree_Level_Index_Type)
-      is
-      begin
-         Obj.Ts         := Ts;
-         Obj.Used_Count := Obj.Used_Count + 1;
-         if Obj.Level = 0 then
-            Obj.Level := Lvl;
-         end if;
-      end Set_Ts;
-
-      procedure Invalidate (Obj : in out Cache_Item_Type)
-      is
-      begin
-         Obj.State := Unused;
-         Obj.Level := 0;
-      end Invalidate;
-
-      procedure Mark_Dirty (Obj : in out Cache_Item_Type)
-      is
-      begin
-         Obj.Dirty := True;
-      end Mark_Dirty;
-
-      procedure Mark_Clean (Obj : in out Cache_Item_Type)
-      is
-      begin
-         Obj.Dirty := False;
-      end Mark_Clean;
-
-   end Cache_Item;
-
-   package body Job_Item
-   with SPARK_Mode
-   is
-
-      --
-      --  Pending_Object
-      --
-      function Pending_Object (PBA : Physical_Block_Address_Type)
-      return Job_Item_Type
-      is (
-         State => Pending,
-         Success => False,
-         PBA => PBA);
-
-      --
-      --  Unused_Object
-      --
-      function Unused_Object
-      return Job_Item_Type
-      is (
-         PBA     => 0,
-         State   => Unused,
-         Success => False);
-
-      --
-      --  Already_Pending
-      --
-      function Already_Pending (
-         Obj : Job_Item_Type;
-         PBA : Physical_Block_Address_Type)
-      return Boolean
-      is
-      begin
-         if Obj.State = Pending and then Obj.PBA = PBA then
-            return True;
-         end if;
-         return False;
-      end Already_Pending;
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Unused (Obj : Job_Item_Type) return Boolean
-      is (Obj.State = Unused);
-
-      function Pending (Obj : Job_Item_Type) return Boolean
-      is (Obj.State = Pending);
-
-      function In_Progress (Obj : Job_Item_Type) return Boolean
-      is (Obj.State = In_Progress);
-
-      function Complete (Obj : Job_Item_Type) return Boolean
-      is (Obj.State = Complete);
-
-      function PBA (Obj : Job_Item_Type) return Physical_Block_Address_Type
-      is (Obj.PBA);
-
-      function Success (Obj : Job_Item_Type) return Boolean
-      is (Obj.Success);
-
-      procedure State (
-         Obj : in out Job_Item_Type;
-         Sta :        State_Type)
-      is
-      begin
-         Obj.State := Sta;
-      end State;
-
-      procedure Set_Unused (Obj : in out Job_Item_Type)
-      is
-      begin
-         Obj.State := Unused;
-      end Set_Unused;
-
-      procedure Set_Success (
-         Obj : in out Job_Item_Type;
-         Suc :        Boolean)
-      is
-      begin
-         Obj.Success := Suc;
-      end Set_Success;
-   end Job_Item;
-
-   procedure Dump_Cache_State (Obj : Object_Type)
+   --
+   --  Slot_Initialize
+   --
+   procedure Slot_Initialize (Slot : out Slot_Type)
    is
    begin
-      for I in Obj.Cache_Items'Range loop
-         if Cache_Item.Used (Obj.Cache_Items (I)) then
-            pragma Debug (Debug.Print_String ("Cache ("
-               & Debug.To_String (Debug.Uint64_Type (I)) & "): "
-               & " PBA: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Cache_Item.PBA (Obj.Cache_Items (I))))
-               & " D: "
-               & Debug.To_String (
-                  Cache_Item.Dirty (Obj.Cache_Items (I)))
-               & " LFU: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Cache_Item.Used_Count (Obj.Cache_Items (I))))
-               & " Level: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Cache_Item.Level (Obj.Cache_Items (I))))
-               ));
-         end if;
-      end loop;
-   end Dump_Cache_State;
+      Slot.State := Invalid;
+      Slot.Prim := Primitive.Invalid_Object;
+      Slot.PBA := 0;
+   end Slot_Initialize;
 
-   function Evictable_Item (Obj : Object_Type)
-   return Cache_Index_Type
-   is
-      Result : Cache_Index_Type := Cache_Index_Type'Last;
-      Result_Valid : Boolean := False;
-      Min_Item_Ts : Timestamp_Type := Timestamp_Type'Last;
-   begin
-      For_Cache_Items :
-      for Idx in Obj.Cache_Items'Range loop
-         if not Cache_Item.Used (Obj.Cache_Items (Idx)) then
-            raise Program_Error;
-         end if;
-         if not Cache_Item.Dirty (Obj.Cache_Items (Idx)) and then
-            Cache_Item.Ts (Obj.Cache_Items (Idx)) < Min_Item_Ts
-         then
-            Result := Idx;
-            Result_Valid := True;
-            Min_Item_Ts := Cache_Item.Ts (Obj.Cache_Items (Idx));
-         end if;
-      end loop For_Cache_Items;
-      if not Result_Valid then
-         raise Program_Error;
-      end if;
-      pragma Debug (Debug.Print_String ("Evictable_Item ("
-         & Debug.To_String (Debug.Uint64_Type (Result)) & "): "
-         & " PBA: "
-         & Debug.To_String (Debug.Uint64_Type (
-            Cache_Item.PBA (Obj.Cache_Items (Result))))
-         & " D: "
-         & Debug.To_String (
-            Cache_Item.Dirty (Obj.Cache_Items (Result)))
-         & " LFU: "
-         & Debug.To_String (Debug.Uint64_Type (
-            Cache_Item.Used_Count (Obj.Cache_Items (Result))))
-         & " Level: "
-         & Debug.To_String (Debug.Uint64_Type (
-            Cache_Item.Level (Obj.Cache_Items (Result))))
-         ));
-      return Result;
-   end Evictable_Item;
-
-   function Unused_Or_Evictable_Item (Obj : Object_Type)
-   return Cache_Index_Type
+   --
+   --  Job_Initialize
+   --
+   procedure Job_Initialize (Job : out Job_Type)
    is
    begin
-      Search_For_Unused_Item :
-      for Idx in Obj.Cache_Items'Range loop
-         if Cache_Item.Unused (Obj.Cache_Items (Idx)) then
-            return Idx;
-         end if;
-      end loop Search_For_Unused_Item;
-      return Evictable_Item (Obj);
-   end Unused_Or_Evictable_Item;
+      Job.State := Invalid;
+      Job.Prim := Primitive.Invalid_Object;
+      Job.PBA := 0;
+   end Job_Initialize;
 
    --
-   --  Initialize_Object
+   --  Initialize
    --
-   procedure Initialize_Object (Obj : out Object_Type)
+   procedure Initialize (Cache : out Cache_Type)
    is
    begin
-      Obj := Initialized_Object;
-   end Initialize_Object;
+      Initialize_Each_Slot :
+      for Idx in Cache.Slots'Range loop
+         Slot_Initialize (Cache.Slots (Idx));
+      end loop Initialize_Each_Slot;
 
-   --
-   --  Initialized_Object
-   --
-   function Initialized_Object
-   return Object_Type
-   is (
-      Cache_Items      => (others => Cache_Item.Unused_Object),
-      Job_Items        => (others => Job_Item.Unused_Object),
-      Active_Jobs      => 0,
-      Execute_Progress => False);
+      Initialize_Each_Job :
+      for Idx in Cache.Jobs'Range loop
+         Job_Initialize (Cache.Jobs (Idx));
+      end loop Initialize_Each_Job;
 
-   --
-   --  Data_Available
-   --
-   function Data_Available (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
-   return Boolean
-   is
-   begin
-      Item_Loop : for Item of Obj.Cache_Items loop
-         if Cache_Item.Used (Item) and then Cache_Item.PBA (Item) = PBA
-         then
-            return True;
-         end if;
-      end loop Item_Loop;
-
-      return False;
-   end Data_Available;
-
-   --
-   --  Data_Index
-   --
-   procedure Data_Index (
-      Obj    : in out Object_Type;
-      PBA    :        Physical_Block_Address_Type;
-      Ts     :        Timestamp_Type;
-      Lvl    :        Tree_Level_Index_Type;
-      Result :    out Cache_Index_Type)
-   is
-   begin
-      for Cache_Item_Id in Obj.Cache_Items'Range loop
-         if Cache_Item.Used (Obj.Cache_Items (Cache_Item_Id)) and then
-            Cache_Item.PBA (Obj.Cache_Items (Cache_Item_Id)) = PBA
-         then
-            declare
-               Item_Level : constant Tree_Level_Index_Type :=
-                  Cache_Item.Level (Obj.Cache_Items (Cache_Item_Id));
-            begin
-               if Item_Level /= 0
-                  and then Item_Level /= Lvl
-               then
-                  pragma Debug (Debug.Print_String ("PBA: "
-                     & Debug.To_String (Debug.Uint64_Type (PBA))
-                     & " Level old: "
-                     & Debug.To_String (Debug.Uint64_Type (Item_Level))
-                     & " new: "
-                     & Debug.To_String (Debug.Uint64_Type (Lvl))));
-
-                  Dump_Cache_State (Obj);
-                  raise Program_Error;
-               else
-                  pragma Debug (Debug.Print_String ("PBA: "
-                     & Debug.To_String (Debug.Uint64_Type (PBA))
-                     & " Level new: "
-                     & Debug.To_String (Debug.Uint64_Type (Lvl))));
-                  null;
-               end if;
-            end;
-            Cache_Item.Set_Ts (Obj.Cache_Items (Cache_Item_Id), Ts, Lvl);
-            Result := Cache_Item_Id;
-            return;
-         end if;
-      end loop;
-      raise Program_Error;
-   end Data_Index;
-
-   --
-   --  Invalidate
-   --
-   procedure Invalidate (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type)
-   is
-   begin
-      for Cache_Item_Id in Obj.Cache_Items'Range loop
-         if Cache_Item.Used (Obj.Cache_Items (Cache_Item_Id)) and then
-            Cache_Item.PBA (Obj.Cache_Items (Cache_Item_Id)) = PBA
-         then
-            Cache_Item.Invalidate (Obj.Cache_Items (Cache_Item_Id));
-         end if;
-      end loop;
-   end Invalidate;
+   end Initialize;
 
    --
    --  Dirty
    --
-   function Dirty (
-      Obj : Object_Type;
-      Idx : Cache_Index_Type)
+   function Dirty (Cache : Cache_Type)
    return Boolean
-   is
-   begin
-      ---  XXX remove loop and access directly?
-      for Cache_Item_Id in Obj.Cache_Items'Range loop
-         if Cache_Item_Id = Idx
-         then
-            return Cache_Item.Dirty (Obj.Cache_Items (Cache_Item_Id));
-         end if;
-      end loop;
-      return False;
-   end Dirty;
+   is (
+      for some Slot of Cache.Slots =>
+         Slot.State = Dirty or else
+         Slot.State = Write_Generated or else
+         Slot.State = Write_In_Progress);
 
    --
-   --  Flush
+   --  Primitive_Acceptable
    --
-   function Flush (
-      Obj : Object_Type;
-      Idx : Cache_Index_Type)
-   return Physical_Block_Address_Type
-   is
-   begin
-      return Cache_Item.PBA (Obj.Cache_Items (Idx));
-   end Flush;
-
-   --
-   --  Mark_Clean
-   --
-   procedure Mark_Clean (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type)
-   is
-   begin
-      for Cache_Item_Id in Obj.Cache_Items'Range loop
-         if Cache_Item.Used (Obj.Cache_Items (Cache_Item_Id)) and then
-            Cache_Item.PBA (Obj.Cache_Items (Cache_Item_Id)) = PBA
-         then
-            Cache_Item.Mark_Clean (Obj.Cache_Items (Cache_Item_Id));
-         end if;
-      end loop;
-   end Mark_Clean;
-
-   --
-   --  Mark_Dirty
-   --
-   procedure Mark_Dirty (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type)
-   is
-   begin
-      for Cache_Item_Id in Obj.Cache_Items'Range loop
-         if Cache_Item.Used (Obj.Cache_Items (Cache_Item_Id)) and then
-            Cache_Item.PBA (Obj.Cache_Items (Cache_Item_Id)) = PBA
-         then
-            Cache_Item.Mark_Dirty (Obj.Cache_Items (Cache_Item_Id));
-         end if;
-      end loop;
-   end Mark_Dirty;
-
-   --
-   --  Request_Acceptable_Logged
-   --
-   function Request_Acceptable_Logged (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
+   function Primitive_Acceptable (Cache : Cache_Type)
    return Boolean
-   is
-      Result : constant Boolean := Request_Acceptable (Obj, PBA);
-   begin
-      return Result;
-   end Request_Acceptable_Logged;
+   is (for some Job of Cache.Jobs => Job.State = Invalid);
 
    --
-   --  Request_Acceptable
+   --  Assert_PBA_Not_Affected_By_Any_Job
    --
-   function Request_Acceptable (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
-   return Boolean
+   procedure Assert_PBA_Not_Affected_By_Any_Job (
+      Jobs : Jobs_Type;
+      PBA  : Physical_Block_Address_Type)
    is
    begin
-      --  XXX replace cast, i.e. change Active_Jobs to Cache_Index_Type
-      if Obj.Active_Jobs >= Standard.Natural (Cache_Job_Index_Type'Last) then
-         return False;
+      Find_Job_That_Affects_PBA :
+      for Job of Jobs loop
+
+         case Job.State is
+         when Submitted | Completed =>
+
+            case Primitive.Operation (Job.Prim) is
+            when Read | Write =>
+
+               if Job.PBA = PBA then
+                  raise Program_Error;
+               end if;
+
+            when Sync =>
+               raise Program_Error;
+
+            end case;
+
+         when Invalid => null;
+         end case;
+
+      end loop Find_Job_That_Affects_PBA;
+
+   end Assert_PBA_Not_Affected_By_Any_Job;
+
+   --
+   --  Assert_PBA_Not_Writtem_By_Any_Job
+   --
+   procedure Assert_PBA_Not_Written_By_Any_Job (
+      Jobs : Jobs_Type;
+      PBA  : Physical_Block_Address_Type)
+   is
+   begin
+      Find_Job_That_Writes_PBA :
+      for Job of Jobs loop
+
+         case Job.State is
+         when Submitted | Completed =>
+
+            case Primitive.Operation (Job.Prim) is
+            when Write =>
+
+               if Job.PBA = PBA then
+                  raise Program_Error;
+               end if;
+
+            when Sync | Read => null;
+            end case;
+
+         when Invalid => null;
+         end case;
+
+      end loop Find_Job_That_Writes_PBA;
+
+   end Assert_PBA_Not_Written_By_Any_Job;
+
+   --
+   --  Submit_Primitive_Assertions
+   --
+   procedure Submit_Primitive_Assertions (
+      Jobs     : Jobs_Type;
+      Prim     : Primitive.Object_Type;
+      Prim_PBA : Physical_Block_Address_Type)
+   is
+   begin
+      if not Primitive.Valid (Prim) or else
+         Primitive.Success (Prim)
+      then
+         raise Program_Error;
       end if;
 
-      for Item of Obj.Job_Items loop
-         if Job_Item.Already_Pending (Item, PBA) then
-            return False;
-         end if;
-      end loop;
+      case Primitive.Operation (Prim) is
+      when Write => Assert_PBA_Not_Affected_By_Any_Job (Jobs, Prim_PBA);
+      when Read  => Assert_PBA_Not_Written_By_Any_Job (Jobs, Prim_PBA);
+      when Sync  => Assert_PBA_Not_Written_By_Any_Job (Jobs, Prim_PBA);
+      end case;
+   end Submit_Primitive_Assertions;
 
+   --
+   --  Submit_Primitive_Without_Data
+   --
+   procedure Submit_Primitive_Without_Data (
+      Cache   : in out Cache_Type;
+      Prim    :        Primitive.Object_Type)
+   is
+      Prim_PBA : constant Physical_Block_Address_Type :=
+         Physical_Block_Address_Type (Primitive.Block_Number (Prim));
+   begin
+      Submit_Primitive_Assertions (Cache.Jobs, Prim, Prim_PBA);
+
+      Find_Invalid_Job :
+      for Idx in Cache.Jobs'Range loop
+
+         case Cache.Jobs (Idx).State is
+         when Invalid =>
+
+            Cache.Jobs (Idx).State := Submitted;
+            Cache.Jobs (Idx).Prim := Prim;
+            Cache.Jobs (Idx).PBA := Prim_PBA;
+            return;
+
+         when Submitted | Completed => null;
+         end case;
+
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+
+   end Submit_Primitive_Without_Data;
+
+   --
+   --  Submit_Primitive
+   --
+   procedure Submit_Primitive (
+      Cache   : in out Cache_Type;
+      Prim    :        Primitive.Object_Type;
+      Job_Idx :    out Jobs_Index_Type)
+   is
+      Prim_PBA : constant Physical_Block_Address_Type :=
+         Physical_Block_Address_Type (Primitive.Block_Number (Prim));
+   begin
+      Submit_Primitive_Assertions (Cache.Jobs, Prim, Prim_PBA);
+
+      Find_Invalid_Job :
+      for Idx in Cache.Jobs'Range loop
+
+         case Cache.Jobs (Idx).State is
+         when Invalid =>
+
+            Job_Idx := Idx;
+            Cache.Jobs (Idx).State := Submitted;
+            Cache.Jobs (Idx).Prim := Prim;
+            Cache.Jobs (Idx).PBA := Prim_PBA;
+            return;
+
+         when Submitted | Completed => null;
+         end case;
+
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+
+   end Submit_Primitive;
+
+   --
+   --  Clean_Slot_Evictable
+   --
+   function Clean_Slot_Evictable (
+      Slot : Slot_Type;
+      Jobs : Jobs_Type)
+   return Boolean
+   is
+   begin
+
+      Find_Job_That_Accesses_Slot_Data :
+      for Job of Jobs loop
+
+         case Primitive.Operation (Job.Prim) is
+         when Read | Write =>
+
+            if Job.PBA = Slot.PBA then
+               return False;
+            end if;
+
+         when Sync => null;
+         end case;
+
+      end loop Find_Job_That_Accesses_Slot_Data;
       return True;
-   end Request_Acceptable;
+
+   end Clean_Slot_Evictable;
 
    --
-   --  Submit_Request_Logged
+   --  Job_Execute_Sync
    --
-   procedure Submit_Request_Logged (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type)
+   procedure Job_Execute_Sync (
+      Slots    : in out Slots_Type;
+      Job      : in out Job_Type;
+      Progress : in out Boolean)
    is
+      Dirty_Slot_Found : Boolean := False;
    begin
-      Submit_Request (Obj, PBA);
-   end Submit_Request_Logged;
+      Find_Dirty_Slot :
+      for Idx in Slots'Range loop
 
-   --
-   --  Submit_Request
-   --
-   procedure Submit_Request (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type)
-   is
-   begin
-      --
-      --  There is already a Job pending, we do not need to do the work
-      --  twice.
-      --
-      Already_Pending : for Item of Obj.Job_Items loop
-         if Job_Item.Already_Pending (Item, PBA) then
-            return;
-         end if;
-      end loop Already_Pending;
+         case Slots (Idx).State is
+         when Invalid | Read_Generated | Read_In_Progress | Clean =>
+            null;
 
-      --
-      --  The data is already available, do not create a new Job.
-      --  (XXX It stands to reason is this check is necessary.)
-      --
-      if Data_Available (Obj, PBA) then
-         return;
+         when Dirty =>
+
+            Slots (Idx).State := Write_Generated;
+            Slots (Idx).Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Write, False, Primitive.Tag_Cache_Blk_IO,
+                  Block_Number_Type (Slots (Idx).PBA),
+                  Primitive.Index_Type (Idx));
+
+            Progress := True;
+            Dirty_Slot_Found := True;
+
+         when Write_Generated | Write_In_Progress =>
+
+            Dirty_Slot_Found := True;
+
+         end case;
+
+      end loop Find_Dirty_Slot;
+
+      if not Dirty_Slot_Found then
+
+         Job.State := Completed;
+         Primitive.Success (Job.Prim, True);
+         Progress := True;
+
       end if;
 
-      New_Job : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.Unused (Obj.Job_Items (Job_Item_Id))
-         then
-            Obj.Job_Items (Job_Item_Id) := Job_Item.Pending_Object (PBA);
-            Job_Item.State (Obj.Job_Items (Job_Item_Id), Job_Item.Pending);
-            Obj.Active_Jobs := Obj.Active_Jobs + 1;
-            return;
-         end if;
-      end loop New_Job;
-   end Submit_Request;
+   end Job_Execute_Sync;
 
    --
-   --  Fill_Cache
+   --  Job_Execute_Read
    --
-   procedure Fill_Cache (
-      Obj      : in out Object_Type;
-      Data     : in out Cache_Data_Type;
-      Job_Data : in     Cache_Job_Data_Type;
-      Time     :        Timestamp_Type)
+   procedure Job_Execute_Read (
+      Slots      : in out Slots_Type;
+      Slots_Data :        Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   : in out Block_Data_Type;
+      Progress   : in out Boolean)
    is
-      Cache_Id : Cache_Index_Type;
    begin
-      Obj.Execute_Progress := False;
+      Find_Matching_Slot :
+      for Idx in Slots'Range loop
 
-      Complete_Job : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.Complete (Obj.Job_Items (Job_Item_Id)) and then
-            Job_Item.Success (Obj.Job_Items (Job_Item_Id))
-         then
-            Cache_Id := Unused_Or_Evictable_Item (Obj);
-            Cache_Item.Initialize_Object (
-               Obj.Cache_Items (Cache_Id),
-               Job_Item.PBA (Obj.Job_Items (Job_Item_Id)), Time);
+         case Slots (Idx).State is
+         when Clean | Dirty | Write_Generated | Write_In_Progress =>
 
-            --  XXX will it work?
-            Data (Cache_Id) := Job_Data (Job_Item_Id);
+            if Slots (Idx).PBA = Jobs (Job_Idx).PBA then
 
-            Job_Item.Set_Unused (Obj.Job_Items (Job_Item_Id));
+               Job_Data := Slots_Data (Idx);
+               Primitive.Success (Jobs (Job_Idx).Prim, True);
+               Jobs (Job_Idx).State := Completed;
+               Progress := True;
+               return;
 
-            Obj.Execute_Progress := True;
-            Obj.Active_Jobs := Obj.Active_Jobs - 1;
-         end if;
-      end loop Complete_Job;
-   end Fill_Cache;
+            end if;
+
+         when Read_Generated | Read_In_Progress =>
+
+            if Slots (Idx).PBA = Jobs (Job_Idx).PBA then
+               return;
+            end if;
+
+         when Invalid => null;
+         end case;
+
+      end loop Find_Matching_Slot;
+
+      Find_Evictable_Slot :
+      for Idx in Slots'Range loop
+
+         case Slots (Idx).State is
+         when Invalid =>
+
+            Slots (Idx).State := Read_Generated;
+            Slots (Idx).PBA := Jobs (Job_Idx).PBA;
+            Slots (Idx).Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Read, False, Primitive.Tag_Cache_Blk_IO,
+                  Block_Number_Type (Slots (Idx).PBA),
+                  Primitive.Index_Type (Idx));
+
+            Progress := True;
+            return;
+
+         when Clean =>
+
+            if Clean_Slot_Evictable (Slots (Idx), Jobs) then
+
+               Slots (Idx).State := Read_Generated;
+               Slots (Idx).PBA := Jobs (Job_Idx).PBA;
+               Slots (Idx).Prim :=
+                  Primitive.Valid_Object_No_Pool_Idx (
+                     Read, False, Primitive.Tag_Cache_Blk_IO,
+                     Block_Number_Type (Slots (Idx).PBA),
+                     Primitive.Index_Type (Idx));
+
+               Progress := True;
+               return;
+
+            end if;
+
+         when
+            Dirty | Read_Generated | Read_In_Progress | Write_Generated |
+            Write_In_Progress
+         =>
+            null;
+
+         end case;
+
+      end loop Find_Evictable_Slot;
+
+   end Job_Execute_Read;
 
    --
-   --  Execute_Progress
+   --  Job_Execute_Write
    --
-   function Execute_Progress (Obj : Object_Type)
-   return Boolean
-   is (Obj.Execute_Progress);
+   procedure Job_Execute_Write (
+      Slots      : in out Slots_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   :        Block_Data_Type;
+      Progress   : in out Boolean)
+   is
+   begin
+      Find_Matching_Slot :
+      for Idx in Slots'Range loop
+
+         case Slots (Idx).State is
+         when Clean | Dirty =>
+
+            if Slots (Idx).PBA = Jobs (Job_Idx).PBA then
+
+               Slots_Data (Idx) := Job_Data;
+               Slots (Idx).State := Dirty;
+
+               Primitive.Success (Jobs (Job_Idx).Prim, True);
+               Jobs (Job_Idx).State := Completed;
+               Progress := True;
+               return;
+
+            end if;
+
+         when
+            Read_Generated | Read_In_Progress | Write_Generated |
+            Write_In_Progress
+         =>
+            if Slots (Idx).PBA = Jobs (Job_Idx).PBA then
+               return;
+            end if;
+
+         when Invalid => null;
+         end case;
+
+      end loop Find_Matching_Slot;
+
+      Find_Evictable_Slot :
+      for Idx in Slots'Range loop
+
+         case Slots (Idx).State is
+         when Invalid =>
+
+            Slots_Data (Idx) := Job_Data;
+            Slots (Idx).State := Dirty;
+            Slots (Idx).PBA := Jobs (Job_Idx).PBA;
+
+            Primitive.Success (Jobs (Job_Idx).Prim, True);
+            Jobs (Job_Idx).State := Completed;
+            Progress := True;
+            return;
+
+         when Clean =>
+
+            if Clean_Slot_Evictable (Slots (Idx), Jobs) then
+
+               Slots_Data (Idx) := Job_Data;
+               Slots (Idx).State := Dirty;
+               Slots (Idx).PBA := Jobs (Job_Idx).PBA;
+
+               Primitive.Success (Jobs (Job_Idx).Prim, True);
+               Jobs (Job_Idx).State := Completed;
+               Progress := True;
+               return;
+
+            end if;
+
+         when
+            Dirty | Read_Generated | Read_In_Progress | Write_Generated |
+            Write_In_Progress
+         =>
+            null;
+
+         end case;
+
+      end loop Find_Evictable_Slot;
+
+   end Job_Execute_Write;
+
+   --
+   --  Job_Execute
+   --
+   procedure Job_Execute (
+      Slots      : in out Slots_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   : in out Block_Data_Type;
+      Progress   : in out Boolean)
+   is
+   begin
+      case Jobs (Job_Idx).State is
+      when Submitted =>
+
+         case Primitive.Operation (Jobs (Job_Idx).Prim) is
+         when Sync =>
+            Job_Execute_Sync (Slots, Jobs (Job_Idx), Progress);
+
+         when Read =>
+            Job_Execute_Read (
+               Slots, Slots_Data, Jobs, Job_Idx, Job_Data, Progress);
+
+         when Write =>
+            Job_Execute_Write (
+               Slots, Slots_Data, Jobs, Job_Idx, Job_Data, Progress);
+
+         end case;
+
+      when Invalid | Completed => null;
+      end case;
+
+   end Job_Execute;
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Cache      : in out Cache_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs_Data  : in out Jobs_Data_Type;
+      Progress   : in out Boolean)
+   is
+   begin
+
+      Execute_Each_Job :
+      for Idx in Cache.Jobs'Range loop
+
+         Job_Execute (
+            Cache.Slots, Slots_Data, Cache.Jobs, Idx, Jobs_Data (Idx),
+            Progress);
+
+      end loop Execute_Each_Job;
+
+   end Execute;
+
+   --
+   --  Peek_Completed_Primitive
+   --
+   procedure Peek_Completed_Primitive (
+      Cache   :     Cache_Type;
+      Prim    : out Primitive.Object_Type;
+      Job_Idx : out Jobs_Index_Type)
+   is
+   begin
+      Find_Completed_Job :
+      for Idx in Cache.Jobs'Range loop
+
+         case Cache.Jobs (Idx).State is
+         when Completed =>
+
+            Prim := Cache.Jobs (Idx).Prim;
+            Job_Idx := Idx;
+            return;
+
+         when Invalid | Submitted => null;
+         end case;
+
+      end loop Find_Completed_Job;
+
+      Prim := Primitive.Invalid_Object;
+      Job_Idx := Jobs_Index_Type'First;
+
+   end Peek_Completed_Primitive;
+
+   --
+   --  Drop_Completed_Primitive
+   --
+   procedure Drop_Completed_Primitive (
+      Cache   : in out Cache_Type;
+      Job_Idx :        Jobs_Index_Type)
+   is
+   begin
+      case Cache.Jobs (Job_Idx).State is
+      when Completed =>
+         Cache.Jobs (Job_Idx).State := Invalid;
+      when Invalid | Submitted =>
+         raise Program_Error;
+      end case;
+   end Drop_Completed_Primitive;
 
    --
    --  Peek_Generated_Primitive
    --
-   function Peek_Generated_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type
+   procedure Peek_Generated_Primitive (
+      Cache    :     Cache_Type;
+      Prim     : out Primitive.Object_Type;
+      Slot_Idx : out Slots_Index_Type)
    is
    begin
-      Peek_Primitive : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.Pending (Obj.Job_Items (Job_Item_Id))
-         then
-            return Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Read,
-               Succ   => Request.Success_Type (False),
-               Tg     => Primitive.Tag_Cache,
-               Blk_Nr => Block_Number_Type (
-                  Job_Item.PBA (Obj.Job_Items (Job_Item_Id))),
-               Idx    => 0);
-         end if;
-      end loop Peek_Primitive;
+      Find_Slot_With_Generated_Prim :
+      for Idx in Cache.Slots'Range loop
 
-      return Primitive.Invalid_Object;
+         case Cache.Slots (Idx).State is
+         when Read_Generated | Write_Generated =>
+
+            Prim := Cache.Slots (Idx).Prim;
+            Slot_Idx := Idx;
+            return;
+
+         when Invalid | Read_In_Progress | Write_In_Progress | Clean | Dirty =>
+
+            null;
+
+         end case;
+
+      end loop Find_Slot_With_Generated_Prim;
+
+      Prim := Primitive.Invalid_Object;
+      Slot_Idx := 0;
+
    end Peek_Generated_Primitive;
-
-   --
-   --  Peek_Generated_Data_Index
-   --
-   function Peek_Generated_Data_Index (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Cache_Index_Type
-   is
-   begin
-      Pending_Data : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.Pending (Obj.Job_Items (Job_Item_Id)) and then
-            Job_Item.PBA (Obj.Job_Items (Job_Item_Id)) =
-               Physical_Block_Address_Type (Primitive.Block_Number (Prim))
-         then
-            return Cache_Index_Type (Job_Item_Id);
-         end if;
-      end loop Pending_Data;
-
-      return Cache_Index_Type'Last;
-   end Peek_Generated_Data_Index;
 
    --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type)
+      Cache    : in out Cache_Type;
+      Slot_Idx :        Slots_Index_Type)
    is
    begin
-      Drop_Primitive : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.Pending (Obj.Job_Items (Job_Item_Id)) and then
-            Job_Item.PBA (Obj.Job_Items (Job_Item_Id)) =
-               Physical_Block_Address_Type (Primitive.Block_Number (Prim))
-         then
-            Job_Item.State (Obj.Job_Items (Job_Item_Id), Job_Item.In_Progress);
-            return;
-         end if;
-      end loop Drop_Primitive;
+      case Cache.Slots (Slot_Idx).State is
+      when Read_Generated =>
+         Cache.Slots (Slot_Idx).State := Read_In_Progress;
+
+      when Write_Generated =>
+         Cache.Slots (Slot_Idx).State := Write_In_Progress;
+
+      when Invalid | Read_In_Progress | Write_In_Progress | Clean | Dirty =>
+         raise Program_Error;
+
+      end case;
    end Drop_Generated_Primitive;
 
    --
-   --  Mark_Completed_Primitive
+   --  Mark_Generated_Primitive_Complete
    --
-   procedure Mark_Completed_Primitive (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type)
+   procedure Mark_Generated_Primitive_Complete (
+      Cache    : in out Cache_Type;
+      Slot_Idx :        Slots_Index_Type;
+      Success  :        Boolean)
    is
    begin
-      Complete_Primitive : for Job_Item_Id in Obj.Job_Items'Range loop
-         if Job_Item.In_Progress (Obj.Job_Items (Job_Item_Id)) and then
-            Job_Item.PBA (Obj.Job_Items (Job_Item_Id)) =
-               Physical_Block_Address_Type (Primitive.Block_Number (Prim))
-         then
-            Job_Item.State (Obj.Job_Items (Job_Item_Id), Job_Item.Complete);
-            Job_Item.Set_Success (
-               Obj.Job_Items (Job_Item_Id),
-               Boolean (Primitive.Success (Prim)));
-            return;
-         end if;
-      end loop Complete_Primitive;
-   end Mark_Completed_Primitive;
+      if not Success then
+         raise Program_Error;
+      end if;
+
+      case Cache.Slots (Slot_Idx).State is
+      when Read_In_Progress | Write_In_Progress =>
+
+         Cache.Slots (Slot_Idx).State := Clean;
+         Primitive.Success (Cache.Slots (Slot_Idx).Prim, True);
+
+      when Invalid | Read_Generated | Write_Generated | Clean | Dirty =>
+         raise Program_Error;
+
+      end case;
+   end Mark_Generated_Primitive_Complete;
+
 end CBE.Cache;

@@ -15,315 +15,214 @@ with SPARK_Mode
 is
    pragma Pure;
 
-   type Cache_Index_Type is range 0 .. 31;
-   type Cache_Job_Index_Type is range 0 .. 1;
+   Nr_Of_Jobs : constant := 4;
+   Nr_Of_Slots : constant := 32;
 
-   type Used_Count_Type is range 0 .. 2**32 - 1;
+   type Cache_Type is private;
 
-   type Cache_Data_Type is array (Cache_Index_Type'Range) of Block_Data_Type;
-   type Cache_Job_Data_Type
-   is array (Cache_Job_Index_Type'Range) of Block_Data_Type;
+   type Slots_Index_Type is range 0 .. Nr_Of_Slots - 1;
 
-   type Object_Type is private;
+   type Slots_Data_Type is array (Slots_Index_Type) of Block_Data_Type;
 
-   --
-   --  Initialize_Object
-   --
-   --  FIXME will not be used anymore when the library module is in spark
-   --
-   procedure Initialize_Object (Obj : out Object_Type);
+   type Jobs_Index_Type is range 0 .. Nr_Of_Jobs - 1;
+
+   type Jobs_Data_Type is array (Jobs_Index_Type) of Block_Data_Type;
 
    --
-   --  Initialized_Object
+   --  Initialize
    --
-   function Initialized_Object
-   return Object_Type;
+   procedure Initialize (Cache : out Cache_Type);
 
    --
-   --  Data_Available
+   --  Primitive_Acceptable
    --
-   function Data_Available (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
+   function Primitive_Acceptable (Cache : Cache_Type)
    return Boolean;
 
    --
-   --  Data_Index
+   --  Submit_Primitive
    --
-   procedure Data_Index (
-      Obj    : in out Object_Type;
-      PBA    :        Physical_Block_Address_Type;
-      Ts     :        Timestamp_Type;
-      Lvl    :        Tree_Level_Index_Type;
-      Result :    out Cache_Index_Type);
+   procedure Submit_Primitive (
+      Cache   : in out Cache_Type;
+      Prim    :        Primitive.Object_Type;
+      Job_Idx :    out Jobs_Index_Type);
 
    --
-   --  Invalidate
+   --  Submit_Primitive_Without_Data
    --
-   procedure Invalidate (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type);
+   procedure Submit_Primitive_Without_Data (
+      Cache   : in out Cache_Type;
+      Prim    :        Primitive.Object_Type);
 
    --
-   --  Dirty
+   --  Peek_Completed_Primitive
    --
-   function Dirty (
-      Obj : Object_Type;
-      Idx : Cache_Index_Type)
-   return Boolean;
+   procedure Peek_Completed_Primitive (
+      Cache   :     Cache_Type;
+      Prim    : out Primitive.Object_Type;
+      Job_Idx : out Jobs_Index_Type);
 
    --
-   --  Flush
+   --  Drop_Completed_Primitive
    --
-   function Flush (
-      Obj : Object_Type;
-      Idx : Cache_Index_Type)
-   return Physical_Block_Address_Type;
+   procedure Drop_Completed_Primitive (
+      Cache   : in out Cache_Type;
+      Job_Idx :        Jobs_Index_Type);
 
    --
-   --  Mark_Dirty
+   --  Execute
    --
-   procedure Mark_Dirty (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type);
-
-   --
-   --  Mark_Clean
-   --
-   procedure Mark_Clean (
-      Obj : in out Object_Type;
-      PBA :        Physical_Block_Address_Type);
-
-   --
-   --  Request_Acceptable
-   --
-   function Request_Acceptable (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
-   return Boolean;
-
-   --
-   --  Request_Acceptable_Logged
-   --
-   function Request_Acceptable_Logged (
-      Obj : Object_Type;
-      PBA : Physical_Block_Address_Type)
-   return Boolean;
-
-   --
-   --  Submit_Request
-   --
-   procedure Submit_Request (
-      Obj : in out Object_Type;
-      PBA : Physical_Block_Address_Type);
-
-   --
-   --  Submit_Request_Logged
-   --
-   procedure Submit_Request_Logged (
-      Obj : in out Object_Type;
-      PBA : Physical_Block_Address_Type);
-
-   --
-   --  Fill_Cache
-   --
-   procedure Fill_Cache (
-      Obj      : in out Object_Type;
-      Data     : in out Cache_Data_Type;
-      Job_Data : in     Cache_Job_Data_Type;
-      Time     :        Timestamp_Type);
-
-   --
-   --  Execute_Progress
-   --
-   function Execute_Progress (Obj : Object_Type)
-   return Boolean;
+   procedure Execute (
+      Cache      : in out Cache_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs_Data  : in out Jobs_Data_Type;
+      Progress   : in out Boolean);
 
    --
    --  Peek_Generated_Primitive
    --
-   function Peek_Generated_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_Data_Index
-   --
-   function Peek_Generated_Data_Index (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Cache_Index_Type
-   with
-      Pre => Primitive.Valid (Prim);
+   procedure Peek_Generated_Primitive (
+      Cache    :     Cache_Type;
+      Prim     : out Primitive.Object_Type;
+      Slot_Idx : out Slots_Index_Type);
 
    --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type)
-   with
-      Pre => Primitive.Valid (Prim);
+      Cache    : in out Cache_Type;
+      Slot_Idx :        Slots_Index_Type);
 
    --
-   --  Mark_Completed_Primitive
+   --  Mark_Generated_Primitive_Complete
    --
-   procedure Mark_Completed_Primitive (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type);
+   procedure Mark_Generated_Primitive_Complete (
+      Cache    : in out Cache_Type;
+      Slot_Idx :        Slots_Index_Type;
+      Success  :        Boolean);
 
-   procedure Dump_Cache_State (Obj : Object_Type);
+   --
+   --  Dirty
+   --
+   function Dirty (Cache : Cache_Type)
+   return Boolean;
 
 private
 
-   function Evictable_Item (Obj : Object_Type)
-   return Cache_Index_Type;
+   type Slot_State_Type is (
+      Invalid,
+      Read_Generated,
+      Read_In_Progress,
+      Clean,
+      Dirty,
+      Write_Generated,
+      Write_In_Progress);
 
-   function Unused_Or_Evictable_Item (Obj : Object_Type)
-   return Cache_Index_Type;
-
-   --
-   --  Cache_Item
-   --
-   package Cache_Item
-   with SPARK_Mode
-   is
-      type State_Type is (Unused, Used);
-      type Cache_Item_Type  is private;
-
-      --
-      --  Unused_Object
-      --
-      function Unused_Object
-      return Cache_Item_Type;
-
-      --
-      --  Initialize_Object
-      --
-      procedure Initialize_Object (
-         Obj : out Cache_Item_Type;
-         PBA :     Physical_Block_Address_Type;
-         Ts  :     Timestamp_Type);
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Unused (Obj : Cache_Item_Type) return Boolean;
-      function Used   (Obj : Cache_Item_Type) return Boolean;
-      function Dirty  (Obj : Cache_Item_Type) return Boolean;
-
-      function PBA (Obj : Cache_Item_Type) return Physical_Block_Address_Type;
-      function Ts  (Obj : Cache_Item_Type) return Timestamp_Type;
-
-      function Used_Count (Obj : Cache_Item_Type) return Used_Count_Type;
-
-      function Level (Obj : Cache_Item_Type) return Tree_Level_Index_Type;
-
-      procedure State (
-         Obj : in out Cache_Item_Type;
-         Sta :        State_Type);
-
-      procedure Set_Ts (
-         Obj : in out Cache_Item_Type;
-         Ts  :        Timestamp_Type;
-         Lvl :        Tree_Level_Index_Type);
-
-      procedure Invalidate (Obj : in out Cache_Item_Type);
-
-      procedure Mark_Dirty (Obj : in out Cache_Item_Type);
-      procedure Mark_Clean (Obj : in out Cache_Item_Type);
-
-   private
-
-      --
-      --  Cache_Item_Type
-      --
-      type Cache_Item_Type is record
-         PBA        : Physical_Block_Address_Type;
-         Ts         : Timestamp_Type;
-         State      : State_Type;
-         Dirty      : Boolean;
-         Used_Count : Used_Count_Type;
-         Level      : Tree_Level_Index_Type;
-      end record;
-
-   end Cache_Item;
-
-   type Cache_Items_Type
-   is array (Cache_Index_Type'Range) of Cache_Item.Cache_Item_Type;
-
-   --
-   --  Job_Item
-   --
-   package Job_Item
-   with SPARK_Mode
-   is
-      type State_Type is (Unused, Pending, In_Progress, Complete);
-      type Job_Item_Type  is private;
-
-      --
-      --  Pending_Object
-      --
-      function Pending_Object (PBA : Physical_Block_Address_Type)
-      return Job_Item_Type;
-
-      --
-      --  Unused_Object
-      --
-      function Unused_Object
-      return Job_Item_Type;
-
-      --
-      --  Already_Pending
-      --
-      function Already_Pending (
-         Obj : Job_Item_Type;
-         PBA : Physical_Block_Address_Type)
-      return Boolean;
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Unused      (Obj : Job_Item_Type) return Boolean;
-      function Pending     (Obj : Job_Item_Type) return Boolean;
-      function In_Progress (Obj : Job_Item_Type) return Boolean;
-      function Complete    (Obj : Job_Item_Type) return Boolean;
-
-      function PBA (Obj : Job_Item_Type) return Physical_Block_Address_Type;
-      function Success (Obj : Job_Item_Type) return Boolean;
-
-      procedure State (
-         Obj : in out Job_Item_Type;
-         Sta :        State_Type);
-
-      procedure Set_Unused (Obj : in out Job_Item_Type);
-      procedure Set_Success (Obj : in out Job_Item_Type; Suc : Boolean);
-
-   private
-
-      --
-      --  Job_Item_Type
-      --
-      type Job_Item_Type is record
-         PBA     : Physical_Block_Address_Type;
-         State   : State_Type;
-         Success : Boolean;
-      end record;
-
-   end Job_Item;
-
-   type Job_Items_Type
-   is array (Cache_Job_Index_Type'Range) of Job_Item.Job_Item_Type;
-
-   --
-   --  Object_Type
-   --
-   type Object_Type is record
-      Cache_Items      : Cache_Items_Type;
-      Job_Items        : Job_Items_Type;
-      Active_Jobs      : Natural;
-      Execute_Progress : Boolean;
+   type Slot_Type is record
+      State : Slot_State_Type;
+      Prim : Primitive.Object_Type;
+      PBA : Physical_Block_Address_Type;
    end record;
+
+   type Slots_Type is array (Slots_Index_Type) of Slot_Type;
+
+   type Job_State_Type is (
+      Invalid,
+      Submitted,
+      Completed);
+
+   type Job_Type is record
+      State : Job_State_Type;
+      Prim : Primitive.Object_Type;
+      PBA : Physical_Block_Address_Type;
+   end record;
+
+   type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
+
+   type Cache_Type is record
+      Slots : Slots_Type;
+      Jobs  : Jobs_Type;
+   end record;
+
+   --
+   --  Slot_Initialize
+   --
+   procedure Slot_Initialize (Slot : out Slot_Type);
+
+   --
+   --  Job_Initialize
+   --
+   procedure Job_Initialize (Job : out Job_Type);
+
+   --
+   --  Job_Execute_Sync
+   --
+   procedure Job_Execute_Sync (
+      Slots      : in out Slots_Type;
+      Job        : in out Job_Type;
+      Progress   : in out Boolean);
+
+   --
+   --  Job_Execute_Read
+   --
+   procedure Job_Execute_Read (
+      Slots      : in out Slots_Type;
+      Slots_Data :        Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   : in out Block_Data_Type;
+      Progress   : in out Boolean);
+
+   --
+   --  Job_Execute_Write
+   --
+   procedure Job_Execute_Write (
+      Slots      : in out Slots_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   :        Block_Data_Type;
+      Progress   : in out Boolean);
+
+   --
+   --  Job_Execute
+   --
+   procedure Job_Execute (
+      Slots      : in out Slots_Type;
+      Slots_Data : in out Slots_Data_Type;
+      Jobs       : in out Jobs_Type;
+      Job_Idx    :        Jobs_Index_Type;
+      Job_Data   : in out Block_Data_Type;
+      Progress   : in out Boolean);
+
+   --
+   --  Clean_Slot_Evictable
+   --
+   function Clean_Slot_Evictable (
+      Slot : Slot_Type;
+      Jobs : Jobs_Type)
+   return Boolean;
+
+   --
+   --  Submit_Primitive_Assertions
+   --
+   procedure Submit_Primitive_Assertions (
+      Jobs     : Jobs_Type;
+      Prim     : Primitive.Object_Type;
+      Prim_PBA : Physical_Block_Address_Type);
+
+   --
+   --  Assert_PBA_Not_Affected_By_Any_Job
+   --
+   procedure Assert_PBA_Not_Affected_By_Any_Job (
+      Jobs : Jobs_Type;
+      PBA  : Physical_Block_Address_Type);
+
+   --
+   --  Assert_PBA_Not_Writtem_By_Any_Job
+   --
+   procedure Assert_PBA_Not_Written_By_Any_Job (
+      Jobs : Jobs_Type;
+      PBA  : Physical_Block_Address_Type);
 
 end CBE.Cache;

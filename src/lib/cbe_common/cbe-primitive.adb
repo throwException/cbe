@@ -225,6 +225,12 @@ is
    function Has_Tag_Cache_Flush (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Cache_Flush);
 
+   function Has_Tag_Cache_Blk_IO (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Cache_Blk_IO);
+
+   function Has_Tag_Lib_Cache_Sync (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Lib_Cache_Sync);
+
    function Has_Tag_Decrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Decrypt);
 
@@ -233,6 +239,18 @@ is
 
    function Has_Tag_Sync_SB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Sync_SB);
+
+   function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_VBD_Cache);
+
+   function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_Cache);
+
+   function Has_Tag_WB_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_WB_Cache);
+
+   function Has_Tag_SCD_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SCD_Cache);
 
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Free_Tree_IO);

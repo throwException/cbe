@@ -9,7 +9,6 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
-with CBE.Cache;
 with CBE.Tree_Helper;
 with CBE.Translation;
 with CBE.Write_Back;
@@ -32,9 +31,8 @@ is
    --  The Io_entry provides a stateful I/O operation abstraction
    --
    type IO_Entry_Type is record
-      PBA         : Physical_Block_Address_Type;
-      State       : IO_Entry_State_Type;
-      Index       : Cache.Cache_Index_Type;
+      PBA   : Physical_Block_Address_Type;
+      State : IO_Entry_State_Type;
    end record;
 
    Max_levels         : constant := Tree_Level_Index_Type'Last + 1;
@@ -144,59 +142,40 @@ is
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Trans_Data       : in out Translation_Data_Type;
-      Cach             : in out Cache.Object_Type;
-      Cach_Data        : in out Cache.Cache_Data_Type;
-      Timestamp        :        Timestamp_Type);
+      Trans_Data       : in out Translation_Data_Type);
 
    --
-   --  Get the next generated primitive
+   --  Peek_Generated_Cache_Primitive
    --
-   --  \return valid primitive in case generated primitive
-   --         is pending, otherwise an invalid primitive is returned
-   --
-   function Peek_Generated_Primitive (Obj : Object_Type)
+   function Peek_Generated_Cache_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
 
    --
-   --  Get index of the Data buffer belonging to the given primitive
+   --  Peek_Generated_Cache_Lvl
    --
-   --  This method must only be called after executing
-   --  'peek_Generated_Primitive' returned a valid primitive.
-   --
-   --  \param  p  reference to primitive the Data belongs to
-   --
-   --  \return index of Data buffer
-   --
-   function Peek_Generated_Data_Index (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Index_Type;
+   function Peek_Generated_Cache_Lvl (Obj : Object_Type)
+   return Tree_Level_Index_Type;
 
    --
-   --  Discard given generated primitive
+   --  Peek_Generated_Cache_Data
    --
-   --  This method must only be called after executing
-   --  'peek_Generated_Primitive' returned a valid primitive.
+   function Peek_Generated_Cache_Data (Obj : Object_Type)
+   return Block_Data_Type;
+
    --
-   --  \param  p  reference to primitive
+   --  Drop_Generated_Cache_Primitive
    --
-   procedure Drop_Generated_Primitive (
+   procedure Drop_Generated_Cache_Primitive (
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type);
 
    --
-   --  Mark the primitive as completed
+   --  Mark_Generated_Cache_Primitive_Complete
    --
-   --  This method must only be called after executing
-   --  'peek_Generated_Primitive' returned a valid primitive.
-   --
-   --  \param p  reference to Primitive that is used to mark
-   --           the corresponding internal primitive as completed
-   --
-   procedure Mark_Generated_Primitive_Complete (
+   procedure Mark_Generated_Cache_Primitive_Complete (
       Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type);
+      Prim :        Primitive.Object_Type;
+      Data :        Block_Data_Type);
 
    --
    --  Check for any completed primitive
@@ -283,6 +262,17 @@ private
    type Query_Branches_Type
    is array (Query_Branches_Index_Type) of Query_Branch_Type;
 
+   type Cache_Primitive_State_Type is (Invalid, Generated, Dropped, Complete);
+   type Update_State_Type is (
+      Inactive,
+      Initialize,
+      Data_Read_Required,
+      Data_Read_In_Progress,
+      Pre_Data_Read_In_Progress,
+      Data_Write_Required,
+      Data_Write_In_Progress,
+      Finish);
+
    type Object_Type is record
 
       Trans_Helper : Tree_Helper.Object_Type;
@@ -301,7 +291,6 @@ private
       --
       --  FIXME Should be replaced by a proper State type.
       --
-      Do_Update : Boolean;
       Do_WB     : Boolean;
       WB_Done   : Boolean;
 
@@ -336,6 +325,17 @@ private
       WB_IOs  : WB_IO_Entries_Type;
       WB_Data : Write_Back_Data_Type;
 
+      Cache_Prim       : Primitive.Object_Type;
+      Cache_Prim_State : Cache_Primitive_State_Type;
+      Cache_Prim_Data  : Block_Data_Type;
+      Cache_Prim_Lvl   : Tree_Level_Index_Type;
+
+      Update_State       : Update_State_Type;
+      Update_Curr_Branch : Query_Branches_Index_Type;
+      Update_Curr_Lvl    : Tree_Level_Index_Type;
+      Update_Data        : Block_Data_Type;
+      Update_Pre_Data    : Block_Data_Type;
+
    end record;
 
    --
@@ -357,8 +357,7 @@ private
    function IO_Entry_Invalid return IO_Entry_Type
    is (
       PBA   => PBA_Invalid,
-      State => Invalid,
-      Index => 0);
+      State => Invalid);
 
    function Write_Back_Data_Invalid return Write_Back_Data_Type
    is (
@@ -392,42 +391,22 @@ private
    return Boolean;
 
    procedure Execute_Translation (
-      Obj              : in out Object_Type;
-      Trans_Data       : in out Translation_Data_Type;
-      Cach             : in out Cache.Object_Type;
-      Cach_Data        : in     Cache.Cache_Data_Type;
-      Timestamp        :        Timestamp_Type);
+      Obj        : in out Object_Type;
+      Trans_Data : in out Translation_Data_Type);
+
+   procedure Execute_Translation_Generated_Prims (
+      Obj        : in out Object_Type;
+      Trans_Data : in out Translation_Data_Type);
 
    procedure Execute_Query (
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
-      Last_Secured_Gen :        Generation_Type;
-      Data_Index       :        Cache.Cache_Index_Type;
-      Cach             : in out Cache.Object_Type;
-      Cach_Data        : in out Cache.Cache_Data_Type;
-      Timestamp        :        Timestamp_Type);
+      Last_Secured_Gen :        Generation_Type);
 
-   procedure Execute_Update (
-      Obj              : in out Object_Type;
-      Cach             : in out Cache.Object_Type;
-      Cach_Data        : in out Cache.Cache_Data_Type;
-      Timestamp        :        Timestamp_Type);
+   procedure Execute_Update (Obj : in out Object_Type);
 
-   procedure Execute_Writeback (
-      Obj              : in out Object_Type);
+   procedure Update_Inner_T1_Nodes (Obj : in out Object_Type);
 
-   procedure Update_Inner_T1_Nodes (
-      Obj          : in out Object_Type;
-      Cach         : in out Cache.Object_Type;
-      Cach_Data    : in out Cache.Cache_Data_Type;
-      Timestamp    :        Timestamp_Type;
-      Branch_Index :        Query_Branches_Index_Type;
-      Tree_Level   :        Tree_Level_Index_Type;
-      Data_Index   :        Cache.Cache_Index_Type);
-
-   procedure Exchange_PBA_In_T2_Node_Entries (
-      Obj        :        Object_Type;
-      Cach_Data  : in out Cache.Cache_Data_Type;
-      Data_Index :        Cache.Cache_Index_Type);
+   procedure Exchange_PBA_In_T2_Node_Entries (Obj : in out Object_Type);
 
 end CBE.Free_Tree;

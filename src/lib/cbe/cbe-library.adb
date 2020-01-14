@@ -100,50 +100,29 @@ is
       end loop Loop_Discard_Snapshot;
    end Discard_Snapshot;
 
-   function Cache_Dirty (Obj : Object_Type)
-   return Boolean
-   is
-      Result : Boolean := False;
-   begin
-      For_Cache_Data :
-      for Cache_Index in Cache.Cache_Index_Type loop
-         if Cache.Dirty (Obj.Cache_Obj, Cache_Index) then
-            Result := True;
-            exit For_Cache_Data;
-         end if;
-      end loop For_Cache_Data;
-      return Result;
-   end Cache_Dirty;
-
    procedure Try_Flush_Cache_If_Dirty (
       Obj   : in out Object_Type;
       Dirty :    out Boolean)
    is
    begin
-      Dirty := False;
+      Dirty := Cache.Dirty (Obj.Cache_Obj);
 
-      Loop_Check_Cache_Dirty :
-      for I in Cache.Cache_Index_Type loop
-         if Cache.Dirty (Obj.Cache_Obj, I) then
+      if Dirty and then
+         Obj.Cache_Sync_State = Inactive
+      then
 
-            --
-            --  Set variable first before consulting the flusher as
-            --  code at the outside depends on knowing if the cache
-            --  is still dirty or not.
-            --
-            Dirty := True;
+         if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
 
-            if Cache_Flusher.Request_Acceptable (Obj.Cache_Flusher_Obj) then
-               Cache_Flusher.Submit_Request (
-                  Obj.Cache_Flusher_Obj,
-                  Cache.Flush (Obj.Cache_Obj, I),
-                  I);
-            else
-               --  Leave loop and come back later
-               exit Loop_Check_Cache_Dirty;
-            end if;
+            Cache.Submit_Primitive_Without_Data (
+               Obj.Cache_Obj,
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Sync, False, Primitive.Tag_Lib_Cache_Sync, 0, 0));
+
+            Obj.Cache_Sync_State := Active;
+
          end if;
-      end loop Loop_Check_Cache_Dirty;
+
+      end if;
    end Try_Flush_Cache_If_Dirty;
 
    procedure Create_Snapshot (
@@ -203,21 +182,17 @@ is
       Progress :    out Boolean)
    is
    begin
-      Declare_Cache_Flusher_Active :
-      declare
-         Cache_Flusher_Active : constant Boolean :=
-            Cache_Flusher.Active (Obj.Cache_Flusher_Obj);
-      begin
-         if Cache_Flusher_Active or else Obj.Secure_Superblock then
-            pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
-                & "flusher active: "
-                & Debug.To_String (Cache_Flusher_Active) & " "
-                & "Secure_Superblock: "
-                & Debug.To_String (Obj.Secure_Superblock)));
-            Progress := False;
-            return;
-         end if;
-      end Declare_Cache_Flusher_Active;
+      if Obj.Cache_Sync_State = Active or else
+         Obj.Secure_Superblock
+      then
+         pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
+             & "flusher active: False "
+             & Debug.To_String (Obj.Cache_Sync_State = Active) & " "
+             & "Secure_Superblock: "
+             & Debug.To_String (Obj.Secure_Superblock)));
+         Progress := False;
+         return;
+      end if;
 
       Declare_Cache_Dirty :
       declare
@@ -300,10 +275,12 @@ is
       Obj.Crypto_Obj              := Crypto.Initialized_Object;
 
       Obj.IO_Obj                  := Block_IO.Initialized_Object;
-      Obj.Cache_Obj               := Cache.Initialized_Object;
-      Obj.Cache_Data              := (others => (others => 0));
-      Obj.Cache_Job_Data          := (others => (others => 0));
-      Obj.Cache_Flusher_Obj       := Cache_Flusher.Initialized_Object;
+
+      Cache.Initialize (Obj.Cache_Obj);
+      Obj.Cache_Jobs_Data := (others => (others => 0));
+      Obj.Cache_Slots_Data := (others => (others => 0));
+      Obj.Cache_Sync_State := Inactive;
+
       Obj.Trans_Data              := (others => (others => 0));
       Obj.VBD                     :=
          Virtual_Block_Device.Initialized_Object (Max_Level, Degree, Leafs);
@@ -346,6 +323,35 @@ is
       Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
 
       Obj.Sync_Primitive := Primitive.Invalid_Object;
+
+      Obj.SCD_State       := Inactive;
+      Obj.SCD_Req         := Request.Invalid_Object;
+      Obj.SCD_Data        := (others => 0);
+      Obj.SCD_Curr_Lvl    := 1;
+      Obj.SCD_New_PBAs    := (others => 0);
+      Obj.SCD_New_Blocks  := 0;
+      Obj.SCD_Free_PBAs   := (others => 0);
+      Obj.SCD_Free_Blocks := 0;
+
+      Obj.SCD_Cache_Prim := Primitive.Invalid_Object;
+      Obj.SCD_Cache_Prim_State := Invalid;
+      Obj.SCD_Cache_Prim_Data := (others => 0);
+
+      Obj.WB_Update_PBA := 0;
+
+      Obj.WB_Cache_Prim_1 := Primitive.Invalid_Object;
+      Obj.WB_Cache_Prim_1_State := Invalid;
+      Obj.WB_Cache_Prim_1_Data := (others => 0);
+
+      Obj.WB_Cache_Prim_2 := Primitive.Invalid_Object;
+      Obj.WB_Cache_Prim_2_State := Invalid;
+      Obj.WB_Cache_Prim_2_Data := (others => 0);
+
+      Obj.WB_Cache_Prim_3 := Primitive.Invalid_Object;
+      Obj.WB_Cache_Prim_3_State := Invalid;
+      Obj.WB_Cache_Prim_3_Data := (others => 0);
+
+      Obj.WB_Prim := Primitive.Invalid_Object;
 
       declare
          Next_Snap : constant Snapshots_Index_Type :=
@@ -432,57 +438,48 @@ is
       Write_Back.Peek_Completed_Root_Hash (WB, Prim, Snap.Hash);
    end Update_Snapshot_Hash;
 
-   procedure Execute (
-      Obj               : in out Object_Type;
-      IO_Buf            : in out Block_IO.Data_Type;
-      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
-      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
-      Now               :        Timestamp_Type)
+   procedure Execute_VBD (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
    is
-      Progress : Boolean := False;
+      Prim : Primitive.Object_Type;
+      Job_Idx : Cache.Jobs_Index_Type;
    begin
-
-      --  pragma Debug (Debug.Print_String (To_String (Obj)));
-
-      -------------------------
-      --  Snapshot handling  --
-      -------------------------
-
-      if Obj.Creating_Snapshot and then
-         not Obj.Secure_Superblock and then
-         not Obj.Stall_Snapshot_Creation
-      then
-         Create_Snapshot_Internal (Obj, Progress);
+      Virtual_Block_Device.Execute (Obj.VBD, Obj.Trans_Data);
+      if Virtual_Block_Device.Execute_Progress (Obj.VBD) then
+         Progress := True;
       end if;
 
-      --------------------
-      --  Sync handling --
-      --------------------
+      Loop_Generated_Cache_Prims :
+      loop
+         Prim := Virtual_Block_Device.Peek_Generated_Cache_Primitive (Obj.VBD);
 
-      if Primitive.Valid (Obj.Sync_Primitive) and then
-         not Obj.Secure_Superblock
-      then
-         Declare_Sync_Cache_Flusher_Active :
-         declare
-            Cache_Flusher_Active : constant Boolean :=
-               Cache_Flusher.Active (Obj.Cache_Flusher_Obj);
-         begin
-            if not Cache_Flusher_Active then
-               Declare_Sync_Cache_Dirty :
-               declare
-                  Cache_Dirty : Boolean;
-               begin
+         exit Loop_Generated_Cache_Prims when
+            not Primitive.Valid (Prim) or else
+            not Cache.Primitive_Acceptable (Obj.Cache_Obj);
 
-                  Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
+         Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Job_Idx);
 
-                  if not Cache_Dirty then
-                     Obj.Secure_Superblock := True;
-                  end if;
-                  Progress := True;
-               end Declare_Sync_Cache_Dirty;
-            end if;
-         end Declare_Sync_Cache_Flusher_Active;
-      end if;
+         if Primitive.Operation (Prim) = Write then
+            Obj.Cache_Jobs_Data (Job_Idx) :=
+               Virtual_Block_Device.Peek_Generated_Cache_Data (Obj.VBD);
+         end if;
+         Virtual_Block_Device.Drop_Generated_Cache_Primitive (
+            Obj.VBD, Prim);
+
+         Progress := True;
+
+      end loop Loop_Generated_Cache_Prims;
+
+   end Execute_VBD;
+
+   procedure Execute_Free_Tree (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+      Prim : Primitive.Object_Type;
+      Job_Idx : Cache.Jobs_Index_Type;
+   begin
 
       --------------------------
       --  Free-tree handling  --
@@ -504,21 +501,577 @@ is
       --  be better to use a different interface for that purpose as I
       --  do not know how well the current solution works with SPARK...)
       --
-      declare
-      begin
-         Free_Tree.Execute (
-            Obj.Free_Tree_Obj,
-            Obj.Superblock.Snapshots,
-            Obj.Last_Secured_Generation,
-            Obj.Free_Tree_Trans_Data,
-            Obj.Cache_Obj,
-            Obj.Cache_Data,
-            Now);
+      Free_Tree.Execute (
+         Obj.Free_Tree_Obj,
+         Obj.Superblock.Snapshots,
+         Obj.Last_Secured_Generation,
+         Obj.Free_Tree_Trans_Data);
 
-         if Free_Tree.Execute_Progress (Obj.Free_Tree_Obj) then
-            Progress := True;
+      if Free_Tree.Execute_Progress (Obj.Free_Tree_Obj) then
+         Progress := True;
+      end if;
+
+      Loop_Generated_Cache_Prims :
+      loop
+         Prim := Free_Tree.Peek_Generated_Cache_Primitive (Obj.Free_Tree_Obj);
+
+         exit Loop_Generated_Cache_Prims when
+            not Primitive.Valid (Prim) or else
+            not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+         Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Job_Idx);
+
+         if Primitive.Operation (Prim) = Write then
+            Obj.Cache_Jobs_Data (Job_Idx) :=
+               Free_Tree.Peek_Generated_Cache_Data (Obj.Free_Tree_Obj);
          end if;
-      end;
+         Free_Tree.Drop_Generated_Cache_Primitive (
+            Obj.Free_Tree_Obj, Prim);
+
+         Progress := True;
+
+      end loop Loop_Generated_Cache_Prims;
+   end Execute_Free_Tree;
+
+   procedure Execute_SCD (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+      Prim : constant Primitive.Object_Type := Obj.Wait_For_Front_End.Prim;
+      Curr_Lvl : constant Tree_Level_Index_Type := Obj.SCD_Curr_Lvl;
+      Req  : constant Request.Object_Type := Obj.SCD_Req;
+      Data : constant Block_Data_Type := Obj.SCD_Data;
+   begin
+      if Obj.SCD_State = Inactive then
+         return;
+      end if;
+
+      --
+      --  For now there is only one Request pending.
+      --
+      if not Request.Equal (Obj.Wait_For_Front_End.Req, Req) then
+         Obj.SCD_State := Inactive;
+         return;
+      end if;
+
+      if Obj.Wait_For_Front_End.Event = Event_Supply_Client_Data_After_FT then
+
+         if not Write_Back.Primitive_Acceptable (Obj.Write_Back_Obj) then
+            return;
+         end if;
+
+         Obj.Free_Tree_Retry_Count := 0;
+
+         declare
+            WB : constant Free_Tree.Write_Back_Data_Type :=
+               Free_Tree.Peek_Completed_WB_Data (Obj.Free_Tree_Obj, Prim);
+         begin
+
+            Write_Back.Submit_Primitive (
+               Obj.Write_Back_Obj, WB.Prim, WB.Gen, WB.VBA, WB.New_PBAs,
+               WB.Old_PBAs, WB.Tree_Max_Level, Data, Obj.Write_Back_Data);
+         end;
+
+         Obj.Superblock.Free_Hash := Free_Tree.Peek_Completed_Root_Hash (
+            Obj.Free_Tree_Obj, Prim);
+
+         Free_Tree.Drop_Completed_Primitive (Obj.Free_Tree_Obj, Prim);
+
+         Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+         Progress := True;
+         Obj.SCD_State := Inactive;
+         return;
+
+      --
+      --  The VBD module translated a write Request, writing the data
+      --  now to disk involves multiple steps:
+      --
+      --  1. Gathering of all nodes in the branch and looking up the
+      --     volatile ones (those, which belong to theCurr generation
+      --     and will be updated in place).
+      --  2. Allocate new blocks if needed by consulting the FT
+      --  3. Updating all entries in the nodes
+      --  4. Writing the branch back to the block device.
+      --
+      --  Those steps are handled by different modules, depending on
+      --  the allocation of new blocks.
+      --
+      elsif
+         Obj.Wait_For_Front_End.Event = Event_Supply_Client_Data_After_VBD
+      then
+
+         --
+         --  As usual check first we can submit new requests.
+         --
+         if not Free_Tree.Request_Acceptable (Obj.Free_Tree_Obj) or else
+            not Virtual_Block_Device.Trans_Can_Get_Type_1_Node_Walk (
+               Obj.VBD, Prim)
+         then
+            return;
+         end if;
+
+         --
+         --  Then (ab-)use the Translation module and its still pending
+         --  Request to get all old PBAs, whose generation we then check.
+         --  The order of the array items corresponds to the level within
+         --  the tree.
+         --
+         Declare_Old_PBAs : declare
+
+            Old_PBAs : Type_1_Node_Walk_Type := (
+               others => Type_1_Node_Invalid);
+
+            Trans_Max_Level : constant Tree_Level_Index_Type :=
+               Virtual_Block_Device.Tree_Max_Level (Obj.VBD);
+
+            Snap : constant Snapshot_Type :=
+               Obj.Superblock.Snapshots (Curr_Snap (Obj));
+
+            --
+            --  Get the corresponding VBA that we use to calculate the index
+            --  for the edge in the node for a given level within the tree.
+            --
+            VBA : constant Virtual_Block_Address_Type :=
+               Virtual_Block_Address_Type (
+                  Virtual_Block_Device.Trans_Get_Virtual_Block_Address (
+                     Obj.VBD, Prim));
+         begin
+
+            Virtual_Block_Device.Trans_Get_Type_1_Node_Walk (
+               Obj.VBD, Old_PBAs);
+
+            --
+            --  Make sure we work with the proper snapshot.
+            --
+            --  (This check may be removed at some point.)
+            --
+            if Old_PBAs (Trans_Max_Level).PBA /= Snap.PBA then
+               raise Program_Error;
+            end if;
+
+            --
+            --  Here only the inner nodes, i.E. all nodes excluding root and
+            --  leaf, are considered. The root node is checked afterwards as
+            --  we need the information of theCurr snapshot for that.
+            --
+            for Level in Curr_Lvl .. Trans_Max_Level loop
+
+               --
+               --  Use the old PBA to get the node's data from the cache and
+               --  use it check how we have to handle the node.
+               --
+               Declare_Nodes :
+               declare
+                  PBA : constant Physical_Block_Address_Type :=
+                     Old_PBAs (Tree_Level_Index_Type (Level)).PBA;
+
+                  Nodes : Type_1_Node_Block_Type;
+
+                  Cache_Prim : constant Primitive.Object_Type :=
+                     Primitive.Valid_Object_No_Pool_Idx (
+                        Read, False, Primitive.Tag_SCD_Cache,
+                        Block_Number_Type (PBA), 0);
+
+                  Job_Idx : Cache.Jobs_Index_Type;
+               begin
+
+                  if Obj.SCD_Cache_Prim_State = Invalid then
+
+                     if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
+
+                        Obj.SCD_Cache_Prim := Cache_Prim;
+                        Obj.SCD_Cache_Prim_State := Submitted;
+                        Cache.Submit_Primitive (
+                           Obj.Cache_Obj, Obj.SCD_Cache_Prim, Job_Idx);
+
+                        if Primitive.Operation (Obj.SCD_Cache_Prim) = Write
+                        then
+                           Obj.Cache_Jobs_Data (Job_Idx) :=
+                              Obj.SCD_Cache_Prim_Data;
+                        end if;
+
+                        Progress := True;
+                     end if;
+                     return;
+
+                  elsif Obj.SCD_Cache_Prim_State /= Complete or else
+                        not Primitive.Equal (Obj.SCD_Cache_Prim, Cache_Prim)
+                  then
+                     return;
+                  end if;
+
+                  if not Primitive.Success (Obj.SCD_Cache_Prim) then
+                     raise Program_Error;
+                  end if;
+
+                  Type_1_Node_Block_From_Block_Data (
+                     Nodes, Obj.SCD_Cache_Prim_Data);
+
+                  Declare_Generation :
+                  declare
+                     Child_Idx : constant Tree_Child_Index_Type :=
+                        Virtual_Block_Device.Index_For_Level (
+                           Obj.VBD, VBA, Tree_Level_Index_Type (Level));
+
+                     Gen : constant Generation_Type :=
+                        Nodes (Natural (Child_Idx)).Gen;
+                  begin
+                     --
+                     --  In case the generation of the entry is the same as the
+                     --  Curr generation OR if the generation is 0 (which means
+                     --  it was never used before) the block is volatile and we
+                     --  change it in place and store it directly in the
+                     --  new_PBA array.
+                     --
+                     pragma Debug (Debug.Print_String ("PBA: "
+                        & Debug.To_String (Debug.Uint64_Type (PBA)) & " "
+                        & "Gen: "
+                        & Debug.To_String (Debug.Uint64_Type (Gen)) & " "
+                        & "Cur_Gen: "
+                        & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))
+                        & " Npba: "
+                        & Debug.To_String (Debug.Uint64_Type (
+                           Nodes (Natural (Child_Idx)).PBA))));
+                     if Gen = Obj.Cur_Gen or else Gen = 0 then
+
+                        Obj.SCD_New_PBAs (Tree_Level_Index_Type (Level - 1)) :=
+                           Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
+
+                     --
+                     --  Otherwise add the block to the free_PBA array so that
+                     --  the FT will reserved it and note that we need another
+                     --  new block.
+                     --
+                     else
+                        Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks) :=
+                           Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
+
+                        Obj.SCD_Free_Blocks := Obj.SCD_Free_Blocks + 1;
+                        Obj.SCD_New_Blocks  := Obj.SCD_New_Blocks  + 1;
+
+                        pragma Debug (Debug.Print_String ("New_Blocks: "
+                           & Debug.To_String (Debug.Uint64_Type (
+                                Obj.SCD_New_Blocks))
+                           & " Free_PBA: "
+                           & Debug.To_String (Debug.Uint64_Type (
+                              Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks))) & " "
+                           & Debug.To_String (Debug.Uint64_Type (
+                              Old_PBAs (
+                                 Tree_Level_Index_Type (Level - 1)).PBA))));
+                     end if;
+                  end Declare_Generation;
+               end Declare_Nodes;
+
+               Obj.SCD_Cache_Prim_State := Invalid;
+               Obj.SCD_Curr_Lvl := Obj.SCD_Curr_Lvl + 1;
+            end loop;
+
+            pragma Debug (Debug.Print_String ("Snap.Gen: "
+               & Debug.To_String (Debug.Uint64_Type (Snap.Gen)) & " "
+               & "Cur_Gen: "
+               & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))
+               & " root PBA: "
+               & Debug.To_String (Debug.Uint64_Type (
+                  Old_PBAs (Trans_Max_Level - 1).PBA))
+               & " Gen: "
+               & Debug.To_String (Debug.Uint64_Type (
+                  Old_PBAs (Trans_Max_Level - 1).Gen))));
+
+            --  check root node
+            if Old_PBAs (Trans_Max_Level).Gen = 0
+               or else Old_PBAs (Trans_Max_Level).Gen = Obj.Cur_Gen
+            then
+               pragma Debug (Debug.Print_String ("Change root PBA in place"));
+               Obj.SCD_New_PBAs (Trans_Max_Level) :=
+                  Old_PBAs (Trans_Max_Level).PBA;
+            else
+               pragma Debug (Debug.Print_String ("New root PBA"));
+               Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks) :=
+                  Old_PBAs (Trans_Max_Level).PBA;
+               Obj.SCD_New_Blocks := Obj.SCD_New_Blocks  + 1;
+            end if;
+
+            --
+            --  Since there are blocks we cannot change in place, use the
+            --  FT module to allocate the blocks. As we have to reserve
+            --  the blocks we implicitly will free (free_PBA items), pass
+            --  on theCurr generation.
+            --
+            if Obj.SCD_New_Blocks > 0 then
+               Free_Tree.Submit_Request (
+                  Obj            => Obj.Free_Tree_Obj,
+                  Curr_Gen       => Obj.Cur_Gen,
+                  Nr_Of_Blks     => Obj.SCD_New_Blocks,
+                  New_PBAs       => Obj.SCD_New_PBAs,
+                  Old_PBAs       => Old_PBAs,
+                  Tree_Max_Level => Trans_Max_Level,
+                  Fr_PBAs        => Obj.SCD_Free_PBAs,
+                  Req_Prim       => Prim,
+                  VBA            => VBA);
+            else
+               --
+               --  The complete branch is still part of theCurr generation,
+               --  call the Write_Back module directly.
+               --
+               --  (We would have to check if the module can acutally accept
+               --  the Request...)
+               --
+               Write_Back.Submit_Primitive (
+                  Obj      => Obj.Write_Back_Obj,
+                  Prim     => Prim,
+                  Gen      => Obj.Cur_Gen,
+                  VBA      => VBA,
+                  New_PBAs => Obj.SCD_New_PBAs,
+                  Old_PBAs => Old_PBAs,
+                  N        => Trans_Max_Level,
+                  Data     => Data,
+                  WB_Data  => Obj.Write_Back_Data);
+            end if;
+
+            Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
+
+            Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+
+            --
+            --  Inhibit translation which effectively will suspend the
+            --  Translation modules operation and will stall all other
+            --  pending requests to make sure all following Request will
+            --  use the newest tree.
+            --
+            --  (It stands to reasons whether we can remove this check
+            --  if we make sure that only the requests belonging to
+            --  the same branch are serialized.)
+            --
+            Virtual_Block_Device.Trans_Inhibit_Translation (Obj.VBD);
+            Obj.Stall_Snapshot_Creation := True;
+            Progress := True;
+            Obj.SCD_State := Inactive;
+            return;
+         end Declare_Old_PBAs;
+      end if;
+      Obj.SCD_State := Inactive;
+   end Execute_SCD;
+
+   --
+   --  Execute_Cache_Generated_Prims
+   --
+   procedure Execute_Cache_Generated_Prims (
+      Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
+      Progress : in out Boolean)
+   is
+      Prim : Primitive.Object_Type;
+      Slot_Idx : Cache.Slots_Index_Type;
+      Data_Idx : Block_IO.Data_Index_Type;
+   begin
+
+      Handle_Generated_Prims :
+      loop
+
+         Cache.Peek_Generated_Primitive (Obj.Cache_Obj, Prim, Slot_Idx);
+         exit Handle_Generated_Prims when
+            not Primitive.Valid (Prim);
+
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_Cache_Blk_IO =>
+
+            exit Handle_Generated_Prims when
+               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
+
+            Block_IO.Submit_Primitive (
+               Obj.IO_Obj, Primitive.Tag_Cache_Blk_IO, Prim, Data_Idx);
+
+            if Primitive.Operation (Prim) = Write then
+               IO_Buf (Data_Idx) := Obj.Cache_Slots_Data (Slot_Idx);
+            end if;
+
+            Cache.Drop_Generated_Primitive (Obj.Cache_Obj, Slot_Idx);
+            Progress := True;
+
+         when others => raise Program_Error;
+         end case;
+
+      end loop Handle_Generated_Prims;
+
+   end Execute_Cache_Generated_Prims;
+
+   --
+   --  Execute_Cache_Completed_Prims
+   --
+   procedure Execute_Cache_Completed_Prims (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+      Prim : Primitive.Object_Type;
+      Job_Idx : Cache.Jobs_Index_Type;
+   begin
+
+      Handle_Completed_Prims :
+      loop
+
+         Cache.Peek_Completed_Primitive (Obj.Cache_Obj, Prim, Job_Idx);
+         exit Handle_Completed_Prims when
+            not Primitive.Valid (Prim);
+
+         if not Primitive.Success (Prim) then
+            raise Program_Error;
+         end if;
+
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_Lib_Cache_Sync =>
+
+            case Obj.Cache_Sync_State is
+            when Active =>
+
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Obj.Cache_Sync_State := Inactive;
+               Progress := True;
+
+            when Inactive => raise Program_Error;
+            end case;
+
+         when Primitive.Tag_WB_Cache =>
+
+            if Obj.WB_Cache_Prim_1_State = Submitted and then
+               Primitive.Equal (Obj.WB_Cache_Prim_1, Prim)
+            then
+               if Primitive.Operation (Prim) = Read then
+                  Obj.WB_Cache_Prim_1_Data := Obj.Cache_Jobs_Data (Job_Idx);
+               end if;
+               Obj.WB_Cache_Prim_1_State := Complete;
+               Obj.WB_Cache_Prim_1 := Prim;
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
+            elsif Obj.WB_Cache_Prim_2_State = Submitted and then
+                  Primitive.Equal (Obj.WB_Cache_Prim_2, Prim)
+            then
+               if Primitive.Operation (Prim) = Read then
+                  Obj.WB_Cache_Prim_2_Data := Obj.Cache_Jobs_Data (Job_Idx);
+               end if;
+               Obj.WB_Cache_Prim_2_State := Complete;
+               Obj.WB_Cache_Prim_2 := Prim;
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
+            elsif Obj.WB_Cache_Prim_3_State = Submitted and then
+                  Primitive.Equal (Obj.WB_Cache_Prim_3, Prim)
+            then
+               if Primitive.Operation (Prim) = Read then
+                  Obj.WB_Cache_Prim_3_Data := Obj.Cache_Jobs_Data (Job_Idx);
+               end if;
+               Obj.WB_Cache_Prim_3_State := Complete;
+               Obj.WB_Cache_Prim_3 := Prim;
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            else
+               raise Program_Error;
+            end if;
+
+         when Primitive.Tag_SCD_Cache =>
+
+            if Obj.SCD_Cache_Prim_State = Submitted and then
+               Primitive.Equal (Obj.SCD_Cache_Prim, Prim)
+            then
+               if Primitive.Operation (Prim) = Read then
+                  Obj.SCD_Cache_Prim_Data := Obj.Cache_Jobs_Data (Job_Idx);
+               end if;
+               Obj.SCD_Cache_Prim_State := Complete;
+               Obj.SCD_Cache_Prim := Prim;
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            else
+               raise Program_Error;
+            end if;
+
+         when Primitive.Tag_VBD_Cache =>
+
+            Virtual_Block_Device.Mark_Generated_Cache_Primitive_Complete (
+                  Obj.VBD, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
+         when Primitive.Tag_FT_Cache =>
+
+            Free_Tree.Mark_Generated_Cache_Primitive_Complete (
+               Obj.Free_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
+         when others => raise Program_Error;
+         end case;
+
+      end loop Handle_Completed_Prims;
+
+   end Execute_Cache_Completed_Prims;
+
+   --
+   --  Execute_Cache
+   --
+   procedure Execute_Cache (
+      Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      Cache.Execute (
+         Obj.Cache_Obj, Obj.Cache_Slots_Data, Obj.Cache_Jobs_Data, Progress);
+
+      Execute_Cache_Generated_Prims (Obj, IO_Buf, Progress);
+      Execute_Cache_Completed_Prims (Obj, Progress);
+
+   end Execute_Cache;
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj               : in out Object_Type;
+      IO_Buf            : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Now               :        Timestamp_Type)
+   is
+      pragma Unreferenced (Now);
+      Progress : Boolean := False;
+   begin
+
+      Execute_SCD (Obj, Progress);
+
+      --  pragma Debug (Debug.Print_String (To_String (Obj)));
+
+      -------------------------
+      --  Snapshot handling  --
+      -------------------------
+
+      if Obj.Creating_Snapshot and then
+         not Obj.Secure_Superblock and then
+         not Obj.Stall_Snapshot_Creation
+      then
+         Create_Snapshot_Internal (Obj, Progress);
+      end if;
+
+      --------------------
+      --  Sync handling --
+      --------------------
+
+      if Primitive.Valid (Obj.Sync_Primitive) and then
+         not Obj.Secure_Superblock
+      then
+         if Obj.Cache_Sync_State = Inactive then
+            Declare_Sync_Cache_Dirty :
+            declare
+               Cache_Dirty : Boolean;
+            begin
+
+               Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
+
+               if not Cache_Dirty then
+                  Obj.Secure_Superblock := True;
+               end if;
+               Progress := True;
+            end Declare_Sync_Cache_Dirty;
+         end if;
+      end if;
+
+      Execute_Cache (Obj, IO_Buf, Progress);
+      Execute_Free_Tree (Obj, Progress);
 
       --
       --  A complete primitive was either successful or has failed.
@@ -588,77 +1141,6 @@ is
          Progress := True;
 
       end loop Loop_Free_Tree_Completed_Prims;
-
-      --
-      --  There are two types of generated primitives by FT module,
-      --  the traversing of the tree is done by the internal Translation
-      --  module, which will access the nodes through the Cache - I/O
-      --  primitives will therefor be generated as a side-effect of the
-      --  querying attempt by the Cache module.
-      --
-      --  - IO_TAG primitives are only used for querying type 2 nodes, i.E.,
-      --   inner nodes of the free-tree containg free or reserved blocks.
-      --
-      --  - WRITE_BACK_TAG primitve are only used for writing one changed
-      --   branch back to the block device. Having the branch written
-      --   will lead to a complete primitve.
-      --
-      Loop_Free_Tree_Generated_Prims :
-      loop
-
-         Declare_Prim_2 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Free_Tree.Peek_Generated_Primitive (Obj.Free_Tree_Obj);
-         begin
-            exit Loop_Free_Tree_Generated_Prims when
-               not Primitive.Valid (Prim) or else
-               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-            Declare_Index_1 :
-            declare
-               Index : constant Index_Type :=
-                  Free_Tree.Peek_Generated_Data_Index (
-                     Obj.Free_Tree_Obj, Prim);
-               Data_Idx : Block_IO.Data_Index_Type;
-            begin
-               if Primitive.Has_Tag_Write_Back (Prim) then
-                  --
-                  --  FIXME Accessing the Cache in this way could be dangerous
-                  --  because the Cache is shared by the VBD as well as the FT.
-                  --  If we would not suspend the VBD while doing the
-                  --  write-back, another Request could evict the entry
-                  --  belonging to the Index value and replace it.
-                  --
-                  --  (Since the Prim contains the PBA we could check the
-                  --  validity of the index beforehand - but not storing the
-                  --  index in the first place would be the preferable
-                  --  solution.)
-                  --
-                  Block_IO.Submit_Primitive (
-                     Obj.IO_Obj, Primitive.Tag_Free_Tree_WB, Prim, Data_Idx);
-
-                  if Primitive.Operation (Prim) = Write then
-                     IO_Buf (Data_Idx) :=
-                        Obj.Cache_Data (Cache.Cache_Index_Type (Index));
-                  end if;
-
-               elsif Primitive.Has_Tag_IO (Prim) then
-                  Block_IO.Submit_Primitive (
-                     Obj.IO_Obj, Primitive.Tag_Free_Tree_IO, Prim, Data_Idx);
-
-                  if Primitive.Operation (Prim) = Write then
-                     IO_Buf (Data_Idx) :=
-                        Obj.Free_Tree_Query_Data (Natural (Index));
-                  end if;
-               end if;
-            end Declare_Index_1;
-            Free_Tree.Drop_Generated_Primitive (Obj.Free_Tree_Obj, Prim);
-
-         end Declare_Prim_2;
-         Progress := True;
-
-      end loop Loop_Free_Tree_Generated_Prims;
 
       ---------------------------------
       --  Put Request into splitter  --
@@ -793,108 +1275,7 @@ is
          Progress := True;
       end loop Loop_Splitter_Generated_Prims;
 
-      --------------------
-      --  VBD handling  --
-      --------------------
-
-      --
-      --  The VBD meta-module uses the Translation module internally and
-      --  needs access to the Cache since it wants to use its Data.
-      --  Because accessing a Cache entry will update its LRU value, the
-      --  Cache must be mutable (that is also the reason we need the
-      --  time object).
-      --
-      --
-      --  (Basically the same issue regarding SPARK as the FT module...)
-      --
-      Virtual_Block_Device.Execute (
-         Obj.VBD, Obj.Trans_Data, Obj.Cache_Obj, Obj.Cache_Data, Now);
-
-      if Virtual_Block_Device.Execute_Progress (Obj.VBD) then
-         Progress := True;
-      end if;
-
-      ------------------------------
-      --  Cache_Flusher handling  --
-      ------------------------------
-
-      --
-      --  The Cache_Flusher module is used to flush all dirty Cache entries
-      --  to the block device and mark them as clean again. While the flusher
-      --  is doing its work, all Cache entries should be locked, i.E., do not
-      --  Cache an entry while its flushed - otherwise the change might not
-      --  end up on the block device.
-      --
-      --  (For better or worse it is just a glorified I/O manager. At some
-      --  point it should be better merged into the Cache module later on.)
-      --
-
-      --
-      --  Mark the corresponding Cache entry as clean. If it was
-      --  evicted in the meantime it will be ignored.
-      --
-      Loop_Cache_Flusher_Completed_Prims :
-      loop
-         Declare_Prim_4 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Cache_Flusher.Peek_Completed_Primitive (
-                  Obj.Cache_Flusher_Obj);
-         begin
-            exit Loop_Cache_Flusher_Completed_Prims when
-               not Primitive.Valid (Prim);
-
-            if not Primitive.Success (Prim) then
-               raise Program_Error;
-            end if;
-
-            Cache.Mark_Clean (
-               Obj.Cache_Obj,
-               Physical_Block_Address_Type (
-                  Primitive.Block_Number (Prim)));
-
-            Cache_Flusher.Drop_Completed_Primitive (
-               Obj.Cache_Flusher_Obj, Prim);
-
-         end Declare_Prim_4;
-         Progress := True;
-
-      end loop Loop_Cache_Flusher_Completed_Prims;
-
-      --
-      --  Just pass the primitive on to the I/O module.
-      --
-      Loop_Cache_Flusher_Generated_Prims :
-      loop
-
-         Declare_Prim_5 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Cache_Flusher.Peek_Generated_Primitive (
-                  Obj.Cache_Flusher_Obj);
-
-            Data_Idx : Block_IO.Data_Index_Type;
-         begin
-            exit Loop_Cache_Flusher_Generated_Prims when
-               not Primitive.Valid (Prim) or else
-               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-            Block_IO.Submit_Primitive (
-               Obj.IO_Obj, Primitive.Tag_Cache_Flush, Prim, Data_Idx);
-
-            if Primitive.Operation (Prim) = Write then
-               IO_Buf (Data_Idx) :=
-                  Obj.Cache_Data (Cache_Flusher.Peek_Generated_Data_Index (
-                     Obj.Cache_Flusher_Obj, Prim));
-            end if;
-
-            Cache_Flusher.Drop_Generated_Primitive (
-               Obj.Cache_Flusher_Obj, Prim);
-
-         end Declare_Prim_5;
-         Progress := True;
-
-      end loop Loop_Cache_Flusher_Generated_Prims;
+      Execute_VBD (Obj, Progress);
 
       ---------------------------
       --  Write-back handling  --
@@ -1039,116 +1420,136 @@ is
       --
       Loop_WB_Generated_Cache_Prims :
       loop
+         if not Primitive.Valid (Obj.WB_Prim) then
+            Obj.WB_Prim :=
+               Write_Back.Peek_Generated_Cache_Primitive (
+                  Obj.Write_Back_Obj);
+         end if;
 
-         Declare_Prim_9 :
+         exit Loop_WB_Generated_Cache_Prims when
+            not Primitive.Valid (Obj.WB_Prim);
+
+         if Obj.WB_Cache_Prim_1_State = Invalid then
+            Obj.WB_Update_PBA :=
+               Write_Back.Peek_Generated_Cache_Update_PBA (
+                  Obj.Write_Back_Obj, Obj.WB_Prim);
+         end if;
+
+         Declare_PBAs :
          declare
-            Prim : constant Primitive.Object_Type :=
-               Write_Back.Peek_Generated_Cache_Primitive (Obj.Write_Back_Obj);
+            PBA : constant Physical_Block_Address_Type :=
+               Physical_Block_Address_Type (
+                  Primitive.Block_Number (Obj.WB_Prim));
+
+            Cache_Prim_1 : constant Primitive.Object_Type :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Read, False, Primitive.Tag_WB_Cache,
+                  Block_Number_Type (PBA), 0);
+
+            Cache_Prim_2 : constant Primitive.Object_Type :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Read, False, Primitive.Tag_WB_Cache,
+                  Block_Number_Type (Obj.WB_Update_PBA), 0);
+
+            Cache_Prim_3 : constant Primitive.Object_Type :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Write, False, Primitive.Tag_WB_Cache,
+                  Block_Number_Type (Obj.WB_Update_PBA), 0);
+
+            Job_Idx : Cache.Jobs_Index_Type;
          begin
-            exit Loop_WB_Generated_Cache_Prims when
-               not Primitive.Valid (Prim);
 
-            Declare_PBAs :
-            declare
-               PBA : constant Physical_Block_Address_Type :=
-                  Physical_Block_Address_Type (
-                     Primitive.Block_Number (Prim));
+            if Obj.WB_Cache_Prim_1_State = Invalid then
 
-               Update_PBA : constant Physical_Block_Address_Type :=
-                  Write_Back.Peek_Generated_Cache_Update_PBA (
-                     Obj.Write_Back_Obj, Prim);
+               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
 
-               Lvl : constant Tree_Level_Index_Type :=
-                  Write_Back.Peek_Generated_Cache_Level (
-                     Obj.Write_Back_Obj, Prim);
+                  Obj.WB_Cache_Prim_1 := Cache_Prim_1;
+                  Obj.WB_Cache_Prim_1_State := Submitted;
+                  Cache.Submit_Primitive (
+                     Obj.Cache_Obj, Obj.WB_Cache_Prim_1, Job_Idx);
 
-               Cache_Miss : Boolean := False;
-            begin
-
-               --
-               --  Check if the Cache contains the needed entries. In case of
-               --  the of the old node's block that is most likely. The new
-               --  one, if there is one (that happens when the inner nodes are
-               --  Obj.Not_ updated in place, might not be in the Cache -
-               --  check and Request both.
-               --
-               if not Cache.Data_Available (Obj.Cache_Obj, PBA) then
-                  if Cache.Request_Acceptable (Obj.Cache_Obj, PBA) then
-                     Cache.Submit_Request (Obj.Cache_Obj, PBA);
+                  if Primitive.Operation (Cache_Prim_1) = Write then
+                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_1_Data;
                   end if;
-                  Cache_Miss := True;
-               end if;
 
-               if PBA /= Update_PBA then
-                  if not Cache.Data_Available (Obj.Cache_Obj, Update_PBA) then
-                     if Cache.Request_Acceptable (Obj.Cache_Obj, Update_PBA)
-                     then
-                        Cache.Submit_Request (Obj.Cache_Obj, Update_PBA);
-                     end if;
-                     Cache_Miss := True;
+                  Progress := True;
+               end if;
+               exit Loop_WB_Generated_Cache_Prims;
+
+            elsif Obj.WB_Cache_Prim_1_State /= Complete or else
+                  not Primitive.Equal (Obj.WB_Cache_Prim_1, Cache_Prim_1)
+            then
+               exit Loop_WB_Generated_Cache_Prims;
+            end if;
+
+            if not Primitive.Success (Obj.WB_Cache_Prim_1) then
+               raise Program_Error;
+            end if;
+
+            if Obj.WB_Cache_Prim_2_State = Invalid then
+
+               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
+
+                  Obj.WB_Cache_Prim_2 := Cache_Prim_2;
+                  Obj.WB_Cache_Prim_2_State := Submitted;
+                  Cache.Submit_Primitive (
+                     Obj.Cache_Obj, Obj.WB_Cache_Prim_2, Job_Idx);
+
+                  if Primitive.Operation (Cache_Prim_2) = Write then
+                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_1_Data;
                   end if;
+
+                  Progress := True;
                end if;
+               exit Loop_WB_Generated_Cache_Prims;
 
-               --  read the needed blocks first
-               if Cache_Miss then
-                  exit Loop_WB_Generated_Cache_Prims;
+            elsif Obj.WB_Cache_Prim_2_State /= Complete or else
+                  not Primitive.Equal (Obj.WB_Cache_Prim_2, Cache_Prim_2)
+            then
+               exit Loop_WB_Generated_Cache_Prims;
+            end if;
+
+            if not Primitive.Success (Obj.WB_Cache_Prim_2) then
+               raise Program_Error;
+            end if;
+
+            if Obj.WB_Cache_Prim_3_State = Invalid then
+
+               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
+
+                  Write_Back.Drop_Generated_Cache_Primitive (
+                     Obj.Write_Back_Obj, Obj.WB_Prim);
+
+                  Write_Back.Update (
+                     Obj.Write_Back_Obj,
+                     PBA, Virtual_Block_Device.Get_Tree_Helper (Obj.VBD),
+                     Obj.WB_Cache_Prim_1_Data, Obj.WB_Cache_Prim_2_Data);
+
+                  Obj.WB_Cache_Prim_3 := Cache_Prim_3;
+                  Obj.WB_Cache_Prim_3_State := Submitted;
+                  Cache.Submit_Primitive (
+                     Obj.Cache_Obj, Obj.WB_Cache_Prim_3, Job_Idx);
+
+                  if Primitive.Operation (Cache_Prim_3) = Write then
+                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_2_Data;
+                  end if;
+
+                  Progress := True;
                end if;
+               exit Loop_WB_Generated_Cache_Prims;
 
-               Write_Back.Drop_Generated_Cache_Primitive (
-                  Obj.Write_Back_Obj, Prim);
+            elsif Obj.WB_Cache_Prim_3_State /= Complete or else
+                  not Primitive.Equal (Obj.WB_Cache_Prim_3, Cache_Prim_3)
+            then
+               exit Loop_WB_Generated_Cache_Prims;
+            end if;
 
-               --
-               --  To keep it simply, always set both properly - even if
-               --  the old and new node are the same.
-               --
-               Declare_Indices :
-               declare
-                  Index        : Cache.Cache_Index_Type;
-                  Update_Index : Cache.Cache_Index_Type;
-               begin
-                  Cache.Data_Index (Obj.Cache_Obj, PBA, Now, Lvl, Index);
-                  Cache.Data_Index (
-                     Obj.Cache_Obj, Update_PBA, Now, Lvl, Update_Index);
+            Obj.WB_Cache_Prim_1_State := Invalid;
+            Obj.WB_Cache_Prim_2_State := Invalid;
+            Obj.WB_Cache_Prim_3_State := Invalid;
+            Obj.WB_Prim := Primitive.Invalid_Object;
 
-                  --
-                  --  FIXME We copy the data to the stack first and back to the
-                  --  cache afterwards so gnatprove
-                  --  does not complain that 'formal parameters "Data" and
-                  --  "Update_Data" might be aliased (SPARK RM 6.4.2)' for the
-                  --  call to Write_Back.Update. This might be avoided by using
-                  --  assertions about the data indices.
-                  --
-                  Declare_Update_Data : declare
-                     Data : constant Block_Data_Type :=
-                        Obj.Cache_Data (Index);
-
-                     Update_Data : Block_Data_Type :=
-                        Obj.Cache_Data (Update_Index);
-                  begin
-                     --
-                     --  (Later on we can remove the tree_Helper here as the
-                     --  outer degree, which is used to calculate the entry in
-                     --  the inner node from the VBA is set at compile-time.)
-                     --
-                     Write_Back.Update (
-                        Obj.Write_Back_Obj,
-                        PBA, Virtual_Block_Device.Get_Tree_Helper (Obj.VBD),
-                        Data, Update_Data);
-
-                     Obj.Cache_Data (Update_Index) := Update_Data;
-                  end Declare_Update_Data;
-
-                  --
-                  --  Make the potentially new entry as dirty so it gets
-                  --  flushed next time
-                  --
-                  Cache.Mark_Dirty (Obj.Cache_Obj, Update_PBA);
-
-               end Declare_Indices;
-            end Declare_PBAs;
-
-         end Declare_Prim_9;
-         Progress := True;
+         end Declare_PBAs;
 
       end loop Loop_WB_Generated_Cache_Prims;
 
@@ -1382,62 +1783,6 @@ is
 
       end loop Loop_Crypto_Completed_Prims;
 
-      ----------------------
-      --  Cache handling  --
-      ----------------------
-
-      --
-      --  Pass the Data used by the module in by reference so that it
-      --  can be shared by the other modules. The method will internally
-      --  copy read job Data into the chosen entry. In doing so it might
-      --  evict an already populated entry.
-      --
-      Cache.Fill_Cache (
-         Obj.Cache_Obj, Obj.Cache_Data, Obj.Cache_Job_Data, Now);
-
-      if Cache.Execute_Progress (Obj.Cache_Obj) then
-         Progress := True;
-      end if;
-
-      --
-      --  Read Data from the block device to fill the Cache.
-      --
-      --  (The Cache module has no 'peek_Completed_Primitive ()' method,
-      --  all modules using the Cache have to poll and might be try to
-      --  submit the same Request multiple times (see its acceptable
-      --  method). It makes sense to change the Cache module so that it
-      --  works the rest of modules. That would require restructing
-      --  the modules, though.)
-      --
-      Loop_Cache_Generated_Prims :
-      loop
-         Declare_Prim_14 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Cache.Peek_Generated_Primitive (Obj.Cache_Obj);
-
-            Data_Idx : Block_IO.Data_Index_Type;
-         begin
-            exit Loop_Cache_Generated_Prims when
-               not Primitive.Valid (Prim) or else
-               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-            Block_IO.Submit_Primitive (
-               Obj.IO_Obj, Primitive.Tag_Cache, Prim, Data_Idx);
-
-            if Primitive.Operation (Prim) = Write then
-               IO_Buf (Data_Idx) := Obj.Cache_Job_Data (
-                  Cache.Cache_Job_Index_Type (
-                     Cache.Peek_Generated_Data_Index (Obj.Cache_Obj, Prim)));
-            end if;
-
-            Cache.Drop_Generated_Primitive (Obj.Cache_Obj, Prim);
-
-         end Declare_Prim_14;
-         Progress := True;
-
-      end loop Loop_Cache_Generated_Prims;
-
       --------------------
       --  I/O handling  --
       --------------------
@@ -1516,18 +1861,20 @@ is
                      end Declare_Data;
                   end if;
 
-               elsif Primitive.Has_Tag_Cache (Prim) then
-                  --
-                  --  FIXME we need a proper method for getting the right
-                  --        Cache job Data index, for now rely on the
-                  --        knowledge that there is only one item
-                  --
-                  Obj.Cache_Job_Data (0) := IO_Buf (Index);
-                  Cache.Mark_Completed_Primitive (Obj.Cache_Obj, Prim);
+               elsif Primitive.Has_Tag_Cache_Blk_IO (Prim) then
 
-               elsif Primitive.Has_Tag_Cache_Flush (Prim) then
-                  Cache_Flusher.Mark_Generated_Primitive_Complete (
-                     Obj.Cache_Flusher_Obj, Prim);
+                  Declare_Slot_Idx :
+                  declare
+                     Slot_Idx : constant Cache.Slots_Index_Type :=
+                        Cache.Slots_Index_Type (Primitive.Index (Prim));
+                  begin
+                     if Primitive.Operation (Prim) = Read then
+                        Obj.Cache_Slots_Data (Slot_Idx) := IO_Buf (Index);
+                     end if;
+                     Cache.Mark_Generated_Primitive_Complete (
+                        Obj.Cache_Obj, Slot_Idx, Primitive.Success (Prim));
+
+                  end Declare_Slot_Idx;
 
                elsif Primitive.Has_Tag_Write_Back (Prim) then
                   Write_Back.Mark_Completed_IO_Primitive (
@@ -1536,25 +1883,8 @@ is
                elsif Primitive.Has_Tag_Sync_SB (Prim) then
                   Sync_Superblock.Mark_Generated_Primitive_Complete (
                      Obj.Sync_SB_Obj, Prim);
-
-               elsif Primitive.Has_Tag_Free_Tree_WB (Prim) then
-                  Free_Tree.Mark_Generated_Primitive_Complete (
-                     Obj.Free_Tree_Obj,
-                     Primitive.Copy_Valid_Object_New_Tag (
-                        Prim, Primitive.Tag_Write_Back));
-
-               elsif Primitive.Has_Tag_Free_Tree_IO (Prim) then
-
-                  --
-                  --  FIXME we need a proper method for getting the right query
-                  --       Data index, for now rely on the knowledge that there
-                  --       is only one item
-                  --
-                  Obj.Free_Tree_Query_Data (0) := IO_Buf (Index);
-                  Free_Tree.Mark_Generated_Primitive_Complete (
-                     Obj.Free_Tree_Obj,
-                     Primitive.Copy_Valid_Object_New_Tag (
-                        Prim, Primitive.Tag_IO));
+               else
+                  raise Program_Error;
                end if;
                exit Loop_IO_Completed_Prims when not Mod_Progress;
 
@@ -1849,293 +2179,22 @@ is
       Data     :        Block_Data_Type;
       Progress :    out Boolean)
    is
-      Prim : constant Primitive.Object_Type := Obj.Wait_For_Front_End.Prim;
+      pragma Unreferenced (Now);
    begin
-      Progress := False;
-
-      --
-      --  For now there is only one Request pending.
-      --
-      if not Request.Equal (Obj.Wait_For_Front_End.Req, Req) then
-         return;
-      end if;
-
-      if Obj.Wait_For_Front_End.Event = Event_Supply_Client_Data_After_FT then
-
-         if not Write_Back.Primitive_Acceptable (Obj.Write_Back_Obj) then
-            return;
-         end if;
-
-         Obj.Free_Tree_Retry_Count := 0;
-
-         --
-         --  Accessing the write-back data in this manner is still a shortcut
-         --  and probably will not work with SPARK - we have to get rid of
-         --  the 'Block_Data' pointer.
-         --
-         declare
-            WB : constant Free_Tree.Write_Back_Data_Type :=
-               Free_Tree.Peek_Completed_WB_Data (Obj.Free_Tree_Obj, Prim);
-         begin
-
-            Write_Back.Submit_Primitive (
-               Obj.Write_Back_Obj, WB.Prim, WB.Gen, WB.VBA, WB.New_PBAs,
-               WB.Old_PBAs, WB.Tree_Max_Level, Data, Obj.Write_Back_Data);
-         end;
-
-         Obj.Superblock.Free_Hash := Free_Tree.Peek_Completed_Root_Hash (
-            Obj.Free_Tree_Obj, Prim);
-
-         Free_Tree.Drop_Completed_Primitive (Obj.Free_Tree_Obj, Prim);
-
-         --  XXX check if default constructor produces invalid object
-         Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+      case Obj.SCD_State is
+      when Inactive =>
+         Obj.SCD_State := Active;
+         Obj.SCD_Data := Data;
+         Obj.SCD_Req := Req;
+         Obj.SCD_Curr_Lvl := 1;
+         Obj.SCD_New_PBAs := (others => 0);
+         Obj.SCD_New_Blocks := 0;
+         Obj.SCD_Free_PBAs := (others => 0);
+         Obj.SCD_Free_Blocks := 0;
          Progress := True;
-         return;
-
-      --
-      --  The VBD module translated a write Request, writing the data
-      --  now to disk involves multiple steps:
-      --
-      --  1. Gathering of all nodes in the branch and looking up the
-      --     volatile ones (those, which belong to theCurr generation
-      --     and will be updated in place).
-      --  2. Allocate new blocks if needed by consulting the FT
-      --  3. Updating all entries in the nodes
-      --  4. Writing the branch back to the block device.
-      --
-      --  Those steps are handled by different modules, depending on
-      --  the allocation of new blocks.
-      --
-      elsif
-         Obj.Wait_For_Front_End.Event = Event_Supply_Client_Data_After_VBD
-      then
-
-         --
-         --  As usual check first we can submit new requests.
-         --
-         if not Free_Tree.Request_Acceptable (Obj.Free_Tree_Obj) or else
-            not Virtual_Block_Device.Trans_Can_Get_Type_1_Node_Walk (
-               Obj.VBD, Prim)
-         then
-            return;
-         end if;
-
-         --
-         --  Then (ab-)use the Translation module and its still pending
-         --  Request to get all old PBAs, whose generation we then check.
-         --  The order of the array items corresponds to the level within
-         --  the tree.
-         --
-         Declare_Old_PBAs : declare
-
-            Old_PBAs : Type_1_Node_Walk_Type := (
-               others => Type_1_Node_Invalid);
-
-            Trans_Max_Level : constant Tree_Level_Index_Type :=
-               Virtual_Block_Device.Tree_Max_Level (Obj.VBD);
-
-            Snap : constant Snapshot_Type :=
-               Obj.Superblock.Snapshots (Curr_Snap (Obj));
-
-            --
-            --  The array of new_PBA will either get populated from the Old_PBA
-            --  content or from newly allocated blocks.
-            --  The order of the array items corresponds to the level within
-            --  the tree.
-            --
-            New_PBAs   : Write_Back.New_PBAs_Type := (others => 0);
-            New_Blocks : Number_Of_Blocks_Type := 0;
-
-            --
-            --  This array contains all blocks that will get freed or rather
-            --  marked as reserved in the FT as they are still referenced by
-            --  an snapshot.
-            --
-            Free_PBAs   : Free_Tree.Free_PBAs_Type := (others => 0);
-            Free_Blocks : Tree_Level_Index_Type := 0;
-
-            --
-            --  Get the corresponding VBA that we use to calculate the index
-            --  for the edge in the node for a given level within the tree.
-            --
-            VBA : constant Virtual_Block_Address_Type :=
-               Virtual_Block_Address_Type (
-                  Virtual_Block_Device.Trans_Get_Virtual_Block_Address (
-                     Obj.VBD, Prim));
-         begin
-
-            Virtual_Block_Device.Trans_Get_Type_1_Node_Walk (
-               Obj.VBD, Old_PBAs);
-
-            --
-            --  Make sure we work with the proper snapshot.
-            --
-            --  (This check may be removed at some point.)
-            --
-            if Old_PBAs (Trans_Max_Level).PBA /= Snap.PBA then
-               raise Program_Error;
-            end if;
-
-            --
-            --  Here only the inner nodes, i.E. all nodes excluding root and
-            --  leaf, are considered. The root node is checked afterwards as
-            --  we need the information of theCurr snapshot for that.
-            --
-            for Level in 1 .. Trans_Max_Level loop
-
-               --
-               --  Use the old PBA to get the node's data from the cache and
-               --  use it check how we have to handle the node.
-               --
-               Declare_Nodes :
-               declare
-                  PBA : constant Physical_Block_Address_Type :=
-                     Old_PBAs (Tree_Level_Index_Type (Level)).PBA;
-
-                  Cache_Idx : Cache.Cache_Index_Type;
-                  Nodes : Type_1_Node_Block_Type;
-               begin
-                  Cache.Data_Index (Obj.Cache_Obj, PBA, Now, Level, Cache_Idx);
-                  Type_1_Node_Block_From_Block_Data (
-                     Nodes, Obj.Cache_Data (Cache_Idx));
-
-                  Declare_Generation :
-                  declare
-                     Child_Idx : constant Tree_Child_Index_Type :=
-                        Virtual_Block_Device.Index_For_Level (
-                           Obj.VBD, VBA, Tree_Level_Index_Type (Level));
-
-                     Gen : constant Generation_Type :=
-                        Nodes (Natural (Child_Idx)).Gen;
-                  begin
-                     --
-                     --  In case the generation of the entry is the same as the
-                     --  Curr generation OR if the generation is 0 (which means
-                     --  it was never used before) the block is volatile and we
-                     --  change it in place and store it directly in the
-                     --  new_PBA array.
-                     --
-                     pragma Debug (Debug.Print_String ("PBA: "
-                        & Debug.To_String (Debug.Uint64_Type (PBA)) & " "
-                        & "Gen: "
-                        & Debug.To_String (Debug.Uint64_Type (Gen)) & " "
-                        & "Cur_Gen: "
-                        & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))
-                        & " Npba: "
-                        & Debug.To_String (Debug.Uint64_Type (
-                           Nodes (Natural (Child_Idx)).PBA))));
-                     if Gen = Obj.Cur_Gen or else Gen = 0 then
-
-                        New_PBAs (Tree_Level_Index_Type (Level - 1)) :=
-                           Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
-
-                     --
-                     --  Otherwise add the block to the free_PBA array so that
-                     --  the FT will reserved it and note that we need another
-                     --  new block.
-                     --
-                     else
-                        Free_PBAs (Free_Blocks) :=
-                           Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
-
-                        Free_Blocks := Free_Blocks + 1;
-                        New_Blocks  := New_Blocks  + 1;
-
-                        pragma Debug (Debug.Print_String ("New_Blocks: "
-                           & Debug.To_String (Debug.Uint64_Type (New_Blocks))
-                           & " Free_PBA: "
-                           & Debug.To_String (Debug.Uint64_Type (
-                              Free_PBAs (Free_Blocks))) & " "
-                           & Debug.To_String (Debug.Uint64_Type (
-                              Old_PBAs (
-                                 Tree_Level_Index_Type (Level - 1)).PBA))));
-                     end if;
-                  end Declare_Generation;
-               end Declare_Nodes;
-            end loop;
-
-            pragma Debug (Debug.Print_String ("Snap.Gen: "
-               & Debug.To_String (Debug.Uint64_Type (Snap.Gen)) & " "
-               & "Cur_Gen: "
-               & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))
-               & " root PBA: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Old_PBAs (Trans_Max_Level - 1).PBA))
-               & " Gen: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Old_PBAs (Trans_Max_Level - 1).Gen))));
-
-            --  check root node
-            if Old_PBAs (Trans_Max_Level).Gen = 0
-               or else Old_PBAs (Trans_Max_Level).Gen = Obj.Cur_Gen
-            then
-               pragma Debug (Debug.Print_String ("Change root PBA in place"));
-               New_PBAs (Trans_Max_Level) :=
-                  Old_PBAs (Trans_Max_Level).PBA;
-            else
-               pragma Debug (Debug.Print_String ("New root PBA"));
-               Free_PBAs (Free_Blocks) := Old_PBAs (Trans_Max_Level).PBA;
-               New_Blocks := New_Blocks  + 1;
-            end if;
-
-            --
-            --  Since there are blocks we cannot change in place, use the
-            --  FT module to allocate the blocks. As we have to reserve
-            --  the blocks we implicitly will free (free_PBA items), pass
-            --  on theCurr generation.
-            --
-            if New_Blocks > 0 then
-               Free_Tree.Submit_Request (
-                  Obj            => Obj.Free_Tree_Obj,
-                  Curr_Gen       => Obj.Cur_Gen,
-                  Nr_Of_Blks     => New_Blocks,
-                  New_PBAs       => New_PBAs,
-                  Old_PBAs       => Old_PBAs,
-                  Tree_Max_Level => Trans_Max_Level,
-                  Fr_PBAs        => Free_PBAs,
-                  Req_Prim       => Prim,
-                  VBA            => VBA);
-            else
-               --
-               --  The complete branch is still part of theCurr generation,
-               --  call the Write_Back module directly.
-               --
-               --  (We would have to check if the module can acutally accept
-               --  the Request...)
-               --
-               Write_Back.Submit_Primitive (
-                  Obj      => Obj.Write_Back_Obj,
-                  Prim     => Prim,
-                  Gen      => Obj.Cur_Gen,
-                  VBA      => VBA,
-                  New_PBAs => New_PBAs,
-                  Old_PBAs => Old_PBAs,
-                  N        => Trans_Max_Level,
-                  Data     => Data,
-                  WB_Data  => Obj.Write_Back_Data);
-            end if;
-
-            Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
-
-            Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
-
-            --
-            --  Inhibit translation which effectively will suspend the
-            --  Translation modules operation and will stall all other
-            --  pending requests to make sure all following Request will
-            --  use the newest tree.
-            --
-            --  (It stands to reasons whether we can remove this check
-            --  if we make sure that only the requests belonging to
-            --  the same branch are serialized.)
-            --
-            Virtual_Block_Device.Trans_Inhibit_Translation (Obj.VBD);
-            Obj.Stall_Snapshot_Creation := True;
-            Progress := True;
-            return;
-         end Declare_Old_PBAs;
-      end if;
+      when others =>
+         raise Program_Error;
+      end case;
    end Supply_Client_Data;
 
    procedure Crypto_Cipher_Data_Required (
