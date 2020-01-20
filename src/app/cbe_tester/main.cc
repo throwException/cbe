@@ -629,6 +629,17 @@ struct Cbe::Block_session_component
 		_test_in_progress.destruct();
 	}
 
+	bool cbe_request_next() const
+	{
+		bool result = false;
+		_test_queue.head([&] (Test &test) {
+			result |= test.type == Test::REQUEST;
+			result |= test.type == Test::CREATE_SNAPSHOT;
+			result |= test.type == Test::DISCARD_SNAPSHOT;
+		});
+		return result;
+	}
+
 	template <typename FN>
 	void with_check(FN const &fn)
 	{
@@ -796,7 +807,19 @@ class Cbe::Main
 {
 	private:
 
-		enum State { CBE, CBE_INIT, CBE_CHECK, CBE_DUMP };
+		enum State { INVALID, CBE, CBE_INIT, CBE_CHECK, CBE_DUMP };
+
+		static char const *state_to_string(State s)
+		{
+			switch (s) {
+			case CBE: return "CBE";
+			case CBE_INIT: return "INIT";
+			case CBE_CHECK: return "CHECK";
+			case CBE_DUMP: return "DUMP";
+			case INVALID: return "INVALID";
+			default: throw -1;
+			}
+		}
 
 		enum { TX_BUF_SIZE = Block::Session::TX_QUEUE_SIZE * BLOCK_SIZE, };
 
@@ -818,7 +841,7 @@ class Cbe::Main
 		Crypto_plain_buffer                     _crypto_plain_buf        { };
 		Crypto_cipher_buffer                    _crypto_cipher_buf       { };
 		External::Crypto                        _crypto                  { };
-		State                                   _state                   { CBE };
+		State                                   _state                   { INVALID };
 		Cbe::Superblocks                        _super_blocks            { };
 		uint64_t                                _nr_of_sbs_requested     { 0 };
 		uint64_t                                _nr_of_sbs_available     { 0 };
@@ -935,7 +958,7 @@ class Cbe::Main
 					_block_session->check_done(
 						req.success == Cbe::Request::Success::TRUE ?
 							true : false);
-					_state = CBE;
+					_state = INVALID;
 				}
 			}
 		}
@@ -1050,7 +1073,7 @@ class Cbe::Main
 					_block_session->dump_done(
 						req.success == Cbe::Request::Success::TRUE ?
 							true : false);
-					_state = CBE;
+					_state = INVALID;
 				}
 			}
 		}
@@ -1164,13 +1187,14 @@ class Cbe::Main
 					_block_session->initialize_done(
 						req.success == Cbe::Request::Success::TRUE ?
 							true : false);
-					_state = CBE;
+					_state = INVALID;
 				}
 			}
 		}
 
 		void _execute_cbe (bool &progress)
 		{
+			if (_state == INVALID || _state == CBE)
 			_block_session->with_requests([&] (Block::Request request) {
 				using namespace Genode;
 
@@ -1193,6 +1217,7 @@ class Cbe::Main
 				Cbe::Request req = convert_to(request);
 				_cbe->submit_client_request(req, 0);
 
+				_state = CBE;
 				progress |= true;
 				return Block_session_component::Response::ACCEPTED;
 			});
@@ -1212,6 +1237,12 @@ class Cbe::Main
 
 				ack.submit(request);
 
+				if (_block_session->cbe_request_next()) {
+					_state = CBE;
+				} else {
+					_state = INVALID;
+				}
+
 				progress |= true;
 			});
 
@@ -1221,6 +1252,7 @@ class Cbe::Main
 					if (_creating_snapshot_id.value != cs.id) {
 						_block_session->create_snapshot_done(false);
 						_creating_snapshot_id = Snapshot_ID { 0, false };
+						// XXX state change?
 					}
 					progress |= true;
 				});
@@ -1230,6 +1262,11 @@ class Cbe::Main
 				if (_cbe->snapshot_creation_complete(_creating_snapshot_id)) {
 					_block_session->create_snapshot_done(true);
 					_creating_snapshot_id = Snapshot_ID { 0, false };
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
+					}
 					progress |= true;
 				}
 			}
@@ -1241,6 +1278,11 @@ class Cbe::Main
 						_block_session->discard_snapshot_done(true);
 					} else {
 						_block_session->discard_snapshot_done(false);
+					}
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
 					}
 					_discarding_snapshot_id = { 0, false };
 					progress |= true;
@@ -1472,6 +1514,14 @@ class Cbe::Main
 				_cbe->supply_crypto_plain_data(data_index, request.success == Request::Success::TRUE);
 				progress |= true;
 			}
+
+			if (!_blk_req.valid()) {
+				if (_block_session->cbe_request_next()) {
+					_state = CBE;
+				} else {
+					_state = INVALID;
+				}
+			}
 		}
 
 		void _execute_cbe_construction(bool &progress)
@@ -1576,6 +1626,7 @@ class Cbe::Main
 
 				progress = false;
 
+				if (_state == INVALID)
 				_block_session->with_initialize([&] (Cbe_init::Configuration const &cfg) {
 
 					if (!_cbe_init.client_request_acceptable()) {
@@ -1596,6 +1647,8 @@ class Cbe::Main
 					_state = CBE_INIT;
 					progress = true;
 				});
+
+				if (_state == INVALID)
 				_block_session->with_check([&] () {
 
 					if (!_cbe_check.client_request_acceptable()) {
@@ -1610,6 +1663,8 @@ class Cbe::Main
 					_state = CBE_CHECK;
 					progress = true;
 				});
+
+				if (_state == INVALID)
 				_block_session->with_dump([&] (Cbe_dump::Configuration const &cfg) {
 
 					if (!_cbe_dump.client_request_acceptable()) {
@@ -1625,6 +1680,7 @@ class Cbe::Main
 					_state = CBE_DUMP;
 					progress = true;
 				});
+
 				if (_state == CBE_INIT) {
 					if (_cbe.constructed()) {
 						_execute_cbe_destruction(progress);
@@ -1644,6 +1700,13 @@ class Cbe::Main
 						_execute_cbe_dump(progress);
 					}
 				} else if (_state == CBE) {
+					if (!_cbe.constructed()) {
+						_execute_cbe_construction(progress);
+					} else {
+						_execute_cbe(progress);
+					}
+				} else if (_state == INVALID) {
+					// XXX
 					if (!_cbe.constructed()) {
 						_execute_cbe_construction(progress);
 					} else {
