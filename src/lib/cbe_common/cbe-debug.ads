@@ -77,6 +77,12 @@ is
    function To_String (PBA : Physical_Block_Address_Type)
    return String;
 
+   function To_String (VBA : Virtual_Block_Address_Type)
+   return String;
+
+   function To_String (G : Generation_Type)
+   return String;
+
    function To_String (Blk : Block_Data_Type)
    return String;
 

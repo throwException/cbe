@@ -267,6 +267,12 @@ is
    function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Free_Tree_WB);
 
+   function Has_Tag_FT_MT (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_FT_MT);
+
+   function Has_Tag_MT_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_MT_Cache);
+
    ----------------------
    --  Read Accessors  --
    ----------------------

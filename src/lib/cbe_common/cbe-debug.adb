@@ -82,6 +82,18 @@ is
       else
          To_String (Uint64_Type (PBA)));
 
+   function To_String (VBA : Virtual_Block_Address_Type)
+   return String
+   is (
+      if VBA = Virtual_Block_Address_Type'Last then
+         "Invalid"
+      else
+         To_String (Uint64_Type (VBA)));
+
+   function To_String (G : Generation_Type)
+   return String
+   is (To_String (Uint64_Type (G)));
+
    function To_String (Blk : Block_Data_Type)
    return String
    is (

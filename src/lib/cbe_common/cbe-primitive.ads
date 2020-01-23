@@ -61,7 +61,9 @@ is
       Tag_SCD_Cache,
       Tag_Free_Tree_Query,
       Tag_Free_Tree_IO,
-      Tag_Free_Tree_WB);
+      Tag_Free_Tree_WB,
+      Tag_FT_MT,
+      Tag_MT_Cache);
 
    function To_String (Tag : Tag_Type)
    return String
@@ -112,7 +114,9 @@ is
       when Tag_SCD_Cache => "SCD_Cache",
       when Tag_Free_Tree_Query => "Free_Tree_Query",
       when Tag_Free_Tree_IO => "Free_Tree_IO",
-      when Tag_Free_Tree_WB => "Free_Tree_WB");
+      when Tag_Free_Tree_WB => "Free_Tree_WB",
+      when Tag_FT_MT => "FT_MT",
+      when Tag_MT_Cache => "MT_Cache");
 
    type Index_Type  is range 0 .. 2**32 - 1;
    type Object_Type is private;
@@ -283,6 +287,8 @@ is
    function Has_Tag_SCD_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean;
+   function Has_Tag_FT_MT (Obj : Object_Type) return Boolean;
+   function Has_Tag_MT_Cache (Obj : Object_Type) return Boolean;
 
 private
 

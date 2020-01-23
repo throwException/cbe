@@ -19,6 +19,8 @@ with CBE.Block_IO;
 with CBE.Request;
 with CBE.Primitive;
 with CBE.Cache;
+with CBE.New_Free_Tree;
+with CBE.Meta_Tree;
 
 package CBE.Library
 with SPARK_Mode
@@ -377,10 +379,10 @@ private
       Write_Back_Obj               : Write_Back.Object_Type;
       Write_Back_Data              : Write_Back.Data_Type;
       Sync_SB_Obj                  : Sync_Superblock.Object_Type;
-      Free_Tree_Obj                : Free_Tree.Object_Type;
+      New_Free_Tree_Obj            : New_Free_Tree.Object_Type;
       Free_Tree_Retry_Count        : Free_Tree_Retry_Count_Type;
-      Free_Tree_Trans_Data         : Translation_Data_Type;
-      Free_Tree_Query_Data         : Query_Data_Type;
+      New_Free_Tree_Prim           : Primitive.Object_Type;
+      Meta_Tree_Obj                : Meta_Tree.Object_Type;
       Cur_SB                       : Superblocks_Index_Type;
       Cur_Gen                      : Generation_Type;
       Last_Secured_Generation      : Generation_Type;
@@ -495,6 +497,10 @@ private
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
+
+   procedure Execute_Meta_Tree (
+      Obj      : in out Object_Type;
+      Progress :    out Boolean);
 
    procedure Execute_SCD (
       Obj      : in out Object_Type;

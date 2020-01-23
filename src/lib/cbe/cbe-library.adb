@@ -293,17 +293,11 @@ is
          raise Program_Error;
       end if;
 
-      Obj.Free_Tree_Obj           := Free_Tree.Initialized_Object (
-         SBs (Curr_SB).Free_Number,
-         SBs (Curr_SB).Free_Gen,
-         SBs (Curr_SB).Free_Hash,
-         SBs (Curr_SB).Free_Max_Level,
-         SBs (Curr_SB).Free_Degree,
-         SBs (Curr_SB).Free_Leafs);
+      New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
+      Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
+      Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
 
       Obj.Free_Tree_Retry_Count   := 0;
-      Obj.Free_Tree_Trans_Data    := (others => (others => 0));
-      Obj.Free_Tree_Query_Data    := (others => (others => 0));
 
       Obj.Secure_Superblock            := False;
       Obj.Wait_For_Front_End           := Wait_For_Event_Invalid;
@@ -485,35 +479,15 @@ is
       --  Free-tree handling  --
       --------------------------
 
-      --
-      --  The FT meta-module uses the Translation module internally and
-      --  needs access to the Cache since it wants to use its data.
-      --  Because accessing a Cache entry will update its LRU value, the
-      --  Cache must be mutable (that is also the reason we need the
-      --  time object).
-      --
-      --  Since it might need to reuse reserved blocks, we have to hand
-      --  over all active snapshots as well as the last secured generation.
-      --  Both are needed for doing the reuse check.
-      --
-      --
-      --  (Rather than passing the Cache module itself to the FT it might
-      --  be better to use a different interface for that purpose as I
-      --  do not know how well the current solution works with SPARK...)
-      --
-      Free_Tree.Execute (
-         Obj.Free_Tree_Obj,
+      New_Free_Tree.Execute (
+         Obj.New_Free_Tree_Obj,
          Obj.Superblock.Snapshots,
          Obj.Last_Secured_Generation,
-         Obj.Free_Tree_Trans_Data);
-
-      if Free_Tree.Execute_Progress (Obj.Free_Tree_Obj) then
-         Progress := True;
-      end if;
+         Progress);
 
       Loop_Generated_Cache_Prims :
       loop
-         Prim := Free_Tree.Peek_Generated_Cache_Primitive (Obj.Free_Tree_Obj);
+         Prim := New_Free_Tree.Peek_Generated_Cache_Primitive (Obj.New_Free_Tree_Obj);
 
          exit Loop_Generated_Cache_Prims when
             not Primitive.Valid (Prim) or else
@@ -523,15 +497,125 @@ is
 
          if Primitive.Operation (Prim) = Write then
             Obj.Cache_Jobs_Data (Job_Idx) :=
-               Free_Tree.Peek_Generated_Cache_Data (Obj.Free_Tree_Obj);
+               New_Free_Tree.Peek_Generated_Cache_Data (Obj.New_Free_Tree_Obj,
+                  Prim);
          end if;
-         Free_Tree.Drop_Generated_Cache_Primitive (
-            Obj.Free_Tree_Obj, Prim);
+         New_Free_Tree.Drop_Generated_Cache_Primitive (
+            Obj.New_Free_Tree_Obj, Prim);
 
          Progress := True;
 
       end loop Loop_Generated_Cache_Prims;
+
+      Loop_Free_Tree_Generated_Meta_Tree_Prims :
+      loop
+         Declare_Free_Tree_Generated_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               New_Free_Tree.Peek_Generated_Meta_Tree_Primitive (
+                  Obj.New_Free_Tree_Obj);
+         begin
+            exit Loop_Free_Tree_Generated_Meta_Tree_Prims when
+               not Primitive.Valid (Prim);
+            exit Loop_Free_Tree_Generated_Meta_Tree_Prims when
+               not Meta_Tree.Request_Acceptable (Obj.Meta_Tree_Obj);
+
+            Meta_Tree.Submit_Request (Obj.Meta_Tree_Obj,
+               (PBA => Obj.Superblock.Meta_Number,
+                Gen => Obj.Superblock.Meta_Gen,
+                Hash => Obj.Superblock.Meta_Hash),
+               (Max_Level => Obj.Superblock.Meta_Max_Level,
+                Edges     => Obj.Superblock.Meta_Degree,
+                Leafs     => Obj.Superblock.Meta_Leafs),
+               Obj.Cur_Gen,
+               Physical_Block_Address_Type (Primitive.Block_Number (Prim)));
+
+            New_Free_Tree.Drop_Generated_Meta_Tree_Primitive (
+               Obj.New_Free_Tree_Obj, Prim);
+            Obj.New_Free_Tree_Prim := Prim;
+            Progress := True;
+         end Declare_Free_Tree_Generated_Prim;
+      end loop Loop_Free_Tree_Generated_Meta_Tree_Prims;
    end Execute_Free_Tree;
+
+   procedure Execute_Meta_Tree (
+      Obj      : in out Object_Type;
+      Progress :    out Boolean)
+   is
+      Job_Idx : Cache.Jobs_Index_Type;
+   begin
+      Progress := False;
+
+      Meta_Tree.Execute (Obj.Meta_Tree_Obj, Progress);
+
+      Loop_Generated_Meta_Tree_Primitives :
+      loop
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Meta_Tree.Peek_Generated_Cache_Primitive (Obj.Meta_Tree_Obj);
+         begin
+            exit Loop_Generated_Meta_Tree_Primitives when
+               not Primitive.Valid (Prim) or else
+               not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+            Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Job_Idx);
+
+            if Primitive.Operation (Prim) = Write then
+               Obj.Cache_Jobs_Data (Job_Idx) :=
+                  Meta_Tree.Peek_Generated_Cache_Data (Obj.Meta_Tree_Obj,
+                  Prim);
+            end if;
+
+            Meta_Tree.Drop_Generated_Cache_Primitive (
+               Obj.Meta_Tree_Obj, Prim);
+
+            exit Loop_Generated_Meta_Tree_Primitives;
+         end;
+      end loop Loop_Generated_Meta_Tree_Primitives;
+
+      Loop_Completed_Meta_Tree_Primitives :
+      loop
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Meta_Tree.Peek_Completed_Primitive (Obj.Meta_Tree_Obj);
+         begin
+            exit Loop_Completed_Meta_Tree_Primitives when
+               not Primitive.Valid (Prim);
+
+            Debug.Print_String ("Loop_Completed_Meta_Tree_Primitives: "
+               & Primitive.To_String (Prim));
+
+            if Primitive.Has_Tag_FT_MT (Prim) then
+               declare
+                  Node : constant Type_1_Node_Type :=
+                     Meta_Tree.Peek_Completed_Root_Node (Obj.Meta_Tree_Obj,
+                        Prim);
+               begin
+                  Obj.Superblock.Meta_Gen    := Node.Gen;
+                  Obj.Superblock.Meta_Number := Node.PBA;
+                  Obj.Superblock.Meta_Hash   := Node.Hash;
+
+                  Debug.Print_String ("Loop_Completed_Meta_Tree_Primitives: "
+                     & " Node: " & Debug.To_String (Node.PBA)
+                     & " Prim: " & Primitive.To_String (Prim));
+               end;
+
+               Primitive.Success (Obj.New_Free_Tree_Prim,
+                  Primitive.Success (Prim));
+
+               New_Free_Tree.Mark_Generated_Meta_Tree_Primitive_Complete (
+                  Obj.New_Free_Tree_Obj, Obj.New_Free_Tree_Prim,
+                  Physical_Block_Address_Type (Primitive.Block_Number (Prim)));
+
+               Meta_Tree.Drop_Completed_Primitive (
+                  Obj.Meta_Tree_Obj, Prim);
+               Progress := True;
+            else
+               raise Program_Error;
+            end if;
+         end;
+      end loop Loop_Completed_Meta_Tree_Primitives;
+   end Execute_Meta_Tree;
 
    procedure Execute_SCD (
       Obj      : in out Object_Type;
@@ -563,19 +647,24 @@ is
          Obj.Free_Tree_Retry_Count := 0;
 
          declare
-            WB : constant Free_Tree.Write_Back_Data_Type :=
-               Free_Tree.Peek_Completed_WB_Data (Obj.Free_Tree_Obj, Prim);
+            WB : constant New_Free_Tree.Write_Back_Data_Type :=
+               New_Free_Tree.Peek_Completed_WB_Data (Obj.New_Free_Tree_Obj, Prim);
+
+            FT_Root_Node : constant Type_1_Node_Type :=
+               New_Free_Tree.Peek_Completed_Root_Node (Obj.New_Free_Tree_Obj,
+                  Prim);
          begin
 
             Write_Back.Submit_Primitive (
                Obj.Write_Back_Obj, WB.Prim, WB.Gen, WB.VBA, WB.New_PBAs,
                WB.Old_PBAs, WB.Tree_Max_Level, Data, Obj.Write_Back_Data);
+
+            Obj.Superblock.Free_Hash   := FT_Root_Node.Hash;
+            Obj.Superblock.Free_Number := FT_Root_Node.PBA;
+            Obj.Superblock.Free_Gen    := FT_Root_Node.Gen;
          end;
 
-         Obj.Superblock.Free_Hash := Free_Tree.Peek_Completed_Root_Hash (
-            Obj.Free_Tree_Obj, Prim);
-
-         Free_Tree.Drop_Completed_Primitive (Obj.Free_Tree_Obj, Prim);
+         New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj, Prim);
 
          Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
          Progress := True;
@@ -603,8 +692,8 @@ is
          --
          --  As usual check first we can submit new requests.
          --
-         if not Free_Tree.Request_Acceptable (Obj.Free_Tree_Obj) or else
-            not Virtual_Block_Device.Trans_Can_Get_Type_1_Node_Walk (
+         if not New_Free_Tree.Request_Acceptable (Obj.New_Free_Tree_Obj)
+            or else not Virtual_Block_Device.Trans_Can_Get_Type_1_Node_Walk (
                Obj.VBD, Prim)
          then
             return;
@@ -798,16 +887,23 @@ is
             --  on theCurr generation.
             --
             if Obj.SCD_New_Blocks > 0 then
-               Free_Tree.Submit_Request (
-                  Obj            => Obj.Free_Tree_Obj,
-                  Curr_Gen       => Obj.Cur_Gen,
-                  Nr_Of_Blks     => Obj.SCD_New_Blocks,
-                  New_PBAs       => Obj.SCD_New_PBAs,
-                  Old_PBAs       => Old_PBAs,
-                  Tree_Max_Level => Trans_Max_Level,
-                  Fr_PBAs        => Obj.SCD_Free_PBAs,
-                  Req_Prim       => Prim,
-                  VBA            => VBA);
+               New_Free_Tree.Submit_Request (
+                  Obj              => Obj.New_Free_Tree_Obj,
+                  Root_Node        => (
+                     PBA  => Obj.Superblock.Free_Number,
+                     Gen  => Obj.Superblock.Free_Gen,
+                     Hash => Obj.Superblock.Free_Hash),
+                  Tree_Geom        => (
+                     Max_Level => Obj.Superblock.Free_Max_Level,
+                     Edges     => Obj.Superblock.Free_Degree,
+                     Leafs     => Obj.Superblock.Free_Leafs),
+                  Current_Gen    => Obj.Cur_Gen,
+                  Requested_Blocks => Obj.SCD_New_Blocks,
+                  New_Blocks       => Obj.SCD_New_PBAs,
+                  Old_Blocks       => Old_PBAs,
+                  Max_Level        => Trans_Max_Level,
+                  Req_Prim         => Prim,
+                  VBA              => VBA);
             else
                --
                --  The complete branch is still part of theCurr generation,
@@ -989,8 +1085,15 @@ is
 
          when Primitive.Tag_FT_Cache =>
 
-            Free_Tree.Mark_Generated_Cache_Primitive_Complete (
-               Obj.Free_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+            New_Free_Tree.Mark_Generated_Cache_Primitive_Complete (
+               Obj.New_Free_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
+         when Primitive.Tag_MT_Cache =>
+
+            Meta_Tree.Mark_Generated_Cache_Primitive_Complete (
+               Obj.Meta_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
 
@@ -1071,7 +1174,20 @@ is
       end if;
 
       Execute_Cache (Obj, IO_Buf, Progress);
-      Execute_Free_Tree (Obj, Progress);
+
+      declare
+         Local_Progress : Boolean := False;
+      begin
+         Execute_Free_Tree (Obj, Local_Progress);
+         Progress := Progress or else Local_Progress;
+      end;
+
+      declare
+         Local_Progress : Boolean := False;
+      begin
+         Execute_Meta_Tree (Obj, Local_Progress);
+         Progress := Progress or else Local_Progress;
+      end;
 
       --
       --  A complete primitive was either successful or has failed.
@@ -1093,7 +1209,7 @@ is
          Declare_Prim_1 :
          declare
             Prim : constant Primitive.Object_Type :=
-               Free_Tree.Peek_Completed_Primitive (Obj.Free_Tree_Obj);
+               New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
          begin
             exit Loop_Free_Tree_Completed_Prims when
                not Primitive.Valid (Prim) or else
@@ -1123,8 +1239,10 @@ is
                      --  'drop_Completed_Primitive' as this will clear the
                      --  Request.)
                      --
-                     Free_Tree.Retry_Allocation (Obj.Free_Tree_Obj);
-
+                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
+                  else
+                     Debug.Print_String ("Retry_Allocation failed");
+                     raise Program_Error;
                   end if;
                end Declare_Could_Discard_Snap;
                exit Loop_Free_Tree_Completed_Prims;
@@ -1135,7 +1253,8 @@ is
             --  FIXME
             Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
             Obj.Stall_Snapshot_Creation := False;
-            Free_Tree.Drop_Completed_Primitive (Obj.Free_Tree_Obj, Prim);
+            New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj,
+            Prim);
 
          end Declare_Prim_1;
          Progress := True;
@@ -2161,7 +2280,7 @@ is
       --
       declare
          Prim : constant Primitive.Object_Type :=
-            Free_Tree.Peek_Completed_Primitive (Obj.Free_Tree_Obj);
+            New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
       begin
          if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
             Start_Waiting_For_Front_End (
