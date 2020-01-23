@@ -30,6 +30,7 @@ is
       Obj.Snap_Idx := Snapshots_Index_Type'First;
       Obj.VBD := Type_1_Node_Invalid;
       Obj.FT := Type_1_Node_Invalid;
+      Obj.MT := Type_1_Node_Invalid;
       Obj.Generated_Prim := Primitive.Invalid_Object;
    end Initialize_Object;
 
@@ -280,6 +281,39 @@ is
 
             end if;
 
+            if Obj.Submitted_Cfg.Meta_Tree then
+
+               Debug.Print_String_Buffered (
+                  Debug.Tabulator &
+                  Meta_Tree_XML_Tag_Open (
+                     Obj.SB_Slot, Obj.Submitted_Cfg.Hashes) &
+                  Debug.Line_Feed);
+
+               Obj.Generated_Prim :=
+                  Primitive.Valid_Object_No_Pool_Idx (
+                     Read, False, Primitive.Tag_SB_Dump_MT_Dump,
+                     Block_Number_Type (Obj.SB_Slot.Free_Number), 0);
+
+               Obj.SB_Slot_State := MT_Dump_Started;
+               Obj.Execute_Progress := True;
+
+            else
+
+               Obj.SB_Slot_State := Done;
+               Obj.Execute_Progress := True;
+
+            end if;
+
+         when MT_Dump_Done =>
+
+            if Obj.Submitted_Cfg.Meta_Tree then
+
+               Debug.Print_String_Buffered (
+                  Debug.Tabulator &
+                  Meta_Tree_XML_Tag_Close & Debug.Line_Feed);
+
+            end if;
+
                Debug.Print_String_Buffered (
                   Superblock_XML_Tag_Close & Debug.Line_Feed);
 
@@ -317,6 +351,7 @@ is
       when Read_Started => Obj.Generated_Prim,
       when VBD_Dump_Started => Obj.Generated_Prim,
       when FT_Dump_Started => Obj.Generated_Prim,
+      when MT_Dump_Started => Obj.Generated_Prim,
       when others => Primitive.Invalid_Object);
 
    function Peek_Generated_Root (
@@ -346,6 +381,16 @@ is
             Obj.SB_Slot.Free_Gen,
             Obj.SB_Slot.Free_Hash);
 
+      when MT_Dump_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return (
+            Obj.SB_Slot.Meta_Number,
+            Obj.SB_Slot.Meta_Gen,
+            Obj.SB_Slot.Meta_Hash);
+
       when others =>
 
          raise Program_Error;
@@ -373,6 +418,13 @@ is
             raise Program_Error;
          end if;
          return Obj.SB_Slot.Free_Max_Level;
+
+      when MT_Dump_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.SB_Slot.Meta_Max_Level;
 
       when others =>
 
@@ -402,6 +454,13 @@ is
          end if;
          return Tree_Child_Index_Type (Obj.SB_Slot.Free_Degree - 1);
 
+      when MT_Dump_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Tree_Child_Index_Type (Obj.SB_Slot.Meta_Degree - 1);
+
       when others =>
 
          raise Program_Error;
@@ -430,6 +489,13 @@ is
          end if;
          return Obj.SB_Slot.Free_Leafs;
 
+      when MT_Dump_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.SB_Slot.Meta_Leafs;
+
       when others =>
 
          raise Program_Error;
@@ -456,6 +522,13 @@ is
             raise Program_Error;
          end if;
          Obj.SB_Slot_State := FT_Dump_Dropped;
+
+      when MT_Dump_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := MT_Dump_Dropped;
 
       when VBD_Dump_Started =>
 
@@ -527,6 +600,14 @@ is
          end if;
          Obj.FT := FT;
          Obj.SB_Slot_State := FT_Dump_Done;
+
+      when MT_Dump_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.MT := FT;
+         Obj.SB_Slot_State := MT_Dump_Done;
 
       when others =>
 

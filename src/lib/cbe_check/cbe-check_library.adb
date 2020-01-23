@@ -150,6 +150,28 @@ is
 
                end if;
 
+            elsif Primitive.Has_Tag_SB_Check_MT_Check (Prim) then
+
+               if Free_Tree_Check.Primitive_Acceptable (Obj.FT_Chk) then
+
+                  Free_Tree_Check.Submit_Primitive (
+                     Obj.FT_Chk, Prim,
+                     Superblock_Check.Peek_Generated_Max_Lvl_Idx (
+                        Obj.SB_Chk, Prim),
+                     Superblock_Check.Peek_Generated_Max_Child_Idx (
+                        Obj.SB_Chk, Prim),
+                     Superblock_Check.Peek_Generated_Nr_Of_Leafs (
+                        Obj.SB_Chk, Prim),
+                     Superblock_Check.Peek_Generated_Root (
+                        Obj.SB_Chk, Prim));
+
+                  Superblock_Check.Drop_Generated_Primitive (
+                     Obj.SB_Chk, Prim);
+
+                  Obj.Execute_Progress := True;
+
+               end if;
+
             else
                raise Program_Error;
             end if;
@@ -309,6 +331,15 @@ is
                not Primitive.Valid (Prim);
 
             if Primitive.Has_Tag_SB_Check_FT_Check (Prim) then
+
+               Superblock_Check.
+                  Mark_Generated_FT_Check_Primitive_Complete (
+                     Obj.SB_Chk, Prim,
+                     Free_Tree_Check.Peek_Completed_Root (
+                        Obj.FT_Chk, Prim));
+
+               Obj.Execute_Progress := True;
+            elsif Primitive.Has_Tag_SB_Check_MT_Check (Prim) then
 
                Superblock_Check.
                   Mark_Generated_FT_Check_Primitive_Complete (

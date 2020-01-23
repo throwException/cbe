@@ -350,7 +350,9 @@ is
 
       elsif Child_State = Check_Hash then
 
-         if Hash_Of_Type_1_Node_Block (Child_Lvl.Children) = Child.Hash then
+         if Child.Gen = 0 or else
+            Hash_Of_Type_1_Node_Block (Child_Lvl.Children) = Child.Hash
+         then
 
             Child_State := Done;
             Progress := True;
@@ -498,7 +500,9 @@ is
 
       elsif Child_State = Check_Hash then
 
-         if Hash_Of_Type_2_Node_Block (Child_Lvl.Children) = Child.Hash then
+         if Child.Gen = 0 or else
+            Hash_Of_Type_2_Node_Block (Child_Lvl.Children) = Child.Hash
+         then
 
             Child_State := Done;
             Progress := True;

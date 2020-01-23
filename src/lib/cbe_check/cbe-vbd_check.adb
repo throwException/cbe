@@ -287,7 +287,9 @@ is
                   ", done, uninitialized leaf, leafs left " &
                   Debug.To_String (Debug.Uint64_Type (Nr_Of_Leafs))));
 
-         elsif Hash_Of_Block_Data (Child_Lvl) = Child.Hash then
+         elsif Child.Gen = 0 or else
+            Hash_Of_Block_Data (Child_Lvl) = Child.Hash
+         then
 
             Nr_Of_Leafs := Nr_Of_Leafs - 1;
             Child_State := Done;
@@ -433,7 +435,9 @@ is
 
       elsif Child_State = Check_Hash then
 
-         if Hash_Of_Type_1_Node_Block (Child_Lvl.Children) = Child.Hash then
+         if Child.Gen = 0 or else
+            Hash_Of_Type_1_Node_Block (Child_Lvl.Children) = Child.Hash
+         then
 
             Child_State := Done;
             Progress := True;

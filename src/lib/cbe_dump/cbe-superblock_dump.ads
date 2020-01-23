@@ -93,6 +93,9 @@ private
       FT_Dump_Started,
       FT_Dump_Dropped,
       FT_Dump_Done,
+      MT_Dump_Started,
+      MT_Dump_Dropped,
+      MT_Dump_Done,
       Done);
 
    type State_Type is (Inspect_SBs, Dump_SBs);
@@ -108,6 +111,7 @@ private
       Snap_Idx            : Snapshots_Index_Type;
       VBD                 : Type_1_Node_Type;
       FT                  : Type_1_Node_Type;
+      MT                  : Type_1_Node_Type;
       Generated_Prim      : Primitive.Object_Type;
       Submitted_Prim      : Primitive.Object_Type;
       Submitted_Cfg       : Dump_Configuration_Type;

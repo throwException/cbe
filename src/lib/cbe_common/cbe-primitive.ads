@@ -20,6 +20,7 @@ is
       Tag_Lib_SB_Init,
       Tag_SB_Init_VBD_Init,
       Tag_SB_Init_FT_Init,
+      Tag_SB_Init_MT_Init,
       Tag_SB_Init_Blk_IO,
       Tag_VBD_Init_Blk_Alloc,
       Tag_VBD_Init_Blk_IO,
@@ -28,6 +29,7 @@ is
       Tag_Lib_SB_Check,
       Tag_SB_Check_VBD_Check,
       Tag_SB_Check_FT_Check,
+      Tag_SB_Check_MT_Check,
       Tag_SB_Check_Blk_IO,
       Tag_VBD_Check_Blk_Alloc,
       Tag_VBD_Check_Blk_IO,
@@ -36,6 +38,7 @@ is
       Tag_Lib_SB_Dump,
       Tag_SB_Dump_VBD_Dump,
       Tag_SB_Dump_FT_Dump,
+      Tag_SB_Dump_MT_Dump,
       Tag_SB_Dump_Blk_IO,
       Tag_VBD_Dump_Blk_Alloc,
       Tag_VBD_Dump_Blk_IO,
@@ -68,6 +71,7 @@ is
       when Tag_Lib_SB_Init => "Lib_SB_Init",
       when Tag_SB_Init_VBD_Init => "SB_Init_VBD_Init",
       when Tag_SB_Init_FT_Init => "SB_Init_FT_Init",
+      when Tag_SB_Init_MT_Init => "SB_Init_MT_Init",
       when Tag_SB_Init_Blk_IO => "SB_Init_Blk_IO",
       when Tag_VBD_Init_Blk_Alloc => "VBD_Init_Blk_Alloc",
       when Tag_VBD_Init_Blk_IO => "VBD_Init_Blk_IO",
@@ -76,6 +80,7 @@ is
       when Tag_Lib_SB_Check => "Lib_SB_Check",
       when Tag_SB_Check_VBD_Check => "SB_Check_VBD_Check",
       when Tag_SB_Check_FT_Check => "SB_Check_FT_Check",
+      when Tag_SB_Check_MT_Check => "SB_Check_MT_Check",
       when Tag_SB_Check_Blk_IO => "SB_Check_Blk_IO",
       when Tag_VBD_Check_Blk_Alloc => "VBD_Check_Blk_Alloc",
       when Tag_VBD_Check_Blk_IO => "VBD_Check_Blk_IO",
@@ -84,6 +89,7 @@ is
       when Tag_Lib_SB_Dump => "Lib_SB_Dump",
       when Tag_SB_Dump_VBD_Dump => "SB_Dump_VBD_Dump",
       when Tag_SB_Dump_FT_Dump => "SB_Dump_FT_Dump",
+      when Tag_SB_Dump_MT_Dump => "SB_Dump_MT_Dump",
       when Tag_SB_Dump_Blk_IO => "SB_Dump_Blk_IO",
       when Tag_VBD_Dump_Blk_Alloc => "VBD_Dump_Blk_Alloc",
       when Tag_VBD_Dump_Blk_IO => "VBD_Dump_Blk_IO",
@@ -236,6 +242,7 @@ is
    function Has_Tag_Lib_SB_Init (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Init_VBD_Init (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Init_FT_Init (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Init_MT_Init (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Init_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Init_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Init_Blk_IO (Obj : Object_Type) return Boolean;
@@ -244,6 +251,7 @@ is
    function Has_Tag_Lib_SB_Check (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Check_VBD_Check (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Check_FT_Check (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Check_MT_Check (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Check_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Check_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Check_Blk_IO (Obj : Object_Type) return Boolean;
@@ -252,6 +260,7 @@ is
    function Has_Tag_Lib_SB_Dump (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Dump_VBD_Dump (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Dump_FT_Dump (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Dump_MT_Dump (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Dump_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Dump_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Dump_Blk_IO (Obj : Object_Type) return Boolean;

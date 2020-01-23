@@ -52,6 +52,10 @@ is
          VBD_Nr_Of_Leafs,
          FT_Max_Lvl_Idx,
          FT_Degree,
+         FT_Nr_Of_Leafs,
+         --  calculate MT data
+         FT_Max_Lvl_Idx,
+         FT_Degree,
          FT_Nr_Of_Leafs);
 
       Obj.Client_Req := Req;
@@ -155,6 +159,26 @@ is
                end if;
 
             elsif Primitive.Has_Tag_SB_Init_FT_Init (Prim) then
+
+               if Free_Tree_Initializer.Primitive_Acceptable (Obj.FT_Init) then
+
+                  Free_Tree_Initializer.Submit_Primitive (
+                     Obj.FT_Init, Prim,
+                     Superblock_Initializer.Peek_Generated_Max_Lvl_Idx (
+                        Obj.SB_Init, Prim),
+                     Superblock_Initializer.Peek_Generated_Max_Child_Idx (
+                        Obj.SB_Init, Prim),
+                     Superblock_Initializer.Peek_Generated_Nr_Of_Leafs (
+                        Obj.SB_Init, Prim));
+
+                  Superblock_Initializer.Drop_Generated_Primitive (
+                     Obj.SB_Init, Prim);
+
+                  Obj.Execute_Progress := True;
+
+               end if;
+
+            elsif Primitive.Has_Tag_SB_Init_MT_Init (Prim) then
 
                if Free_Tree_Initializer.Primitive_Acceptable (Obj.FT_Init) then
 
@@ -385,6 +409,17 @@ is
                         Obj.FT_Init, Prim));
 
                Obj.Execute_Progress := True;
+
+            elsif Primitive.Has_Tag_SB_Init_MT_Init (Prim) then
+
+               Superblock_Initializer.
+                  Mark_Generated_FT_Init_Primitive_Complete (
+                     Obj.SB_Init, Prim,
+                     Free_Tree_Initializer.Peek_Completed_Root (
+                        Obj.FT_Init, Prim));
+
+               Obj.Execute_Progress := True;
+
             else
                raise Program_Error;
             end if;
@@ -396,7 +431,6 @@ is
       end loop Loop_FT_Init_Completed_Prims;
 
    end Execute_Free_Tree_Initializer;
-
    procedure Execute_Block_Allocator (Obj : in out Object_Type)
    is
    begin
@@ -480,6 +514,7 @@ is
 
                Free_Tree_Initializer.Mark_Generated_Primitive_Complete (
                   Obj.FT_Init, Prim);
+
             else
                raise Program_Error;
             end if;

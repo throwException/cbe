@@ -30,7 +30,10 @@ is
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
       FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
       FT_Degree       :        Tree_Degree_Type;
-      FT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type);
+      FT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type;
+      MT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      MT_Degree       :        Tree_Degree_Type;
+      MT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type);
 
    function Peek_Completed_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
@@ -85,6 +88,11 @@ is
       Prim :        Primitive.Object_Type;
       FT   :        Type_1_Node_Type);
 
+   procedure Mark_Generated_MT_Init_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      MT   :        Type_1_Node_Type);
+
 private
 
    function Valid_Snap_Slot (Obj : Object_Type)
@@ -101,6 +109,9 @@ private
       FT_Request_Started,
       FT_Request_Dropped,
       FT_Request_Done,
+      MT_Request_Started,
+      MT_Request_Dropped,
+      MT_Request_Done,
       Write_Request_Started,
       Write_Request_Dropped,
       Write_Request_Done,
@@ -119,6 +130,10 @@ private
       FT_Max_Lvl_Idx   : Tree_Level_Index_Type;
       FT_Degree        : Tree_Degree_Type;
       FT_Nr_Of_Leafs   : Tree_Number_Of_Leafs_Type;
+      MT               : Type_1_Node_Type;
+      MT_Max_Lvl_Idx   : Tree_Level_Index_Type;
+      MT_Degree        : Tree_Degree_Type;
+      MT_Nr_Of_Leafs   : Tree_Number_Of_Leafs_Type;
       Generated_Prim   : Primitive.Object_Type;
       Submitted_Prim   : Primitive.Object_Type;
    end record;

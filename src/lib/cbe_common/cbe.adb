@@ -79,6 +79,32 @@ is
    return String
    is ("</ft>");
 
+   function Meta_Tree_XML_Tag_Open (
+      SB        : Superblock_Type;
+      Show_Hash : Boolean)
+   return String
+   is (
+      "<mt pba=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Meta_Number)) &
+      """ gen=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Meta_Gen)) &
+      """ lvls=""" &
+      Debug.To_String (Debug.Uint64_Type (Integer (SB.Meta_Max_Level) + 1)) &
+      """ degr=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Meta_Degree)) &
+      """ leafs=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Meta_Leafs)) &
+      (if Show_Hash then
+         """ hash=""" &
+         Debug.Hash_To_Hex_String (SB.Meta_Hash) &
+         """>"
+       else
+         """>"));
+
+   function Meta_Tree_XML_Tag_Close
+   return String
+   is ("</mt>");
+
    function Superblock_XML_Tag_Open (SB : Superblock_Type)
    return String
    is (
@@ -195,12 +221,18 @@ is
       Result.Last_Secured_Generation := Generation_Type'Last;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
       Result.Degree                  := Tree_Degree_Type'First;
-      Result.Free_Gen                := Generation_Type'First;
       Result.Free_Number             := Physical_Block_Address_Type'First;
       Result.Free_Hash               := (others => Byte_Type'First);
       Result.Free_Max_Level          := Tree_Level_Index_Type'First;
       Result.Free_Degree             := Tree_Degree_Type'First;
       Result.Free_Leafs              := Tree_Number_Of_Leafs_Type'First;
+      Result.Free_Gen                := Generation_Type'First;
+      Result.Meta_Number             := Physical_Block_Address_Type'First;
+      Result.Meta_Hash               := (others => Byte_Type'First);
+      Result.Meta_Max_Level          := Tree_Level_Index_Type'First;
+      Result.Meta_Degree             := Tree_Degree_Type'First;
+      Result.Meta_Leafs              := Tree_Number_Of_Leafs_Type'First;
+      Result.Meta_Gen                := Generation_Type'First;
       return Result;
    end Superblock_Invalid;
 
@@ -514,6 +546,29 @@ is
 
       SB.Free_Leafs :=
          Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Gen :=
+         Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Number := Physical_Block_Address_Type (
+         Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Hash := Hash_From_Block_Data (Data, Off);
+      Off := Off + Hash_Size_Bytes;
+
+      SB.Meta_Max_Level :=
+         Tree_Level_Index_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Meta_Degree :=
+         Tree_Degree_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Meta_Leafs :=
+         Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
    end Superblock_From_Block_Data;
 
    function Type_2_Node_From_Block_Data (
@@ -730,6 +785,24 @@ is
       Off := Off + 4;
 
       Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Free_Leafs));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Meta_Gen));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Meta_Number));
+      Off := Off + 8;
+
+      Block_Data_From_Hash (Data, Off, SB.Meta_Hash);
+      Off := Off + Hash_Size_Bytes;
+
+      Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Meta_Max_Level));
+      Off := Off + 4;
+
+      Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Meta_Degree));
+      Off := Off + 4;
+
+      Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Meta_Leafs));
    end Block_Data_From_Superblock;
 
    function Pool_Idx_Slot_Valid (Cont : Pool_Index_Type)

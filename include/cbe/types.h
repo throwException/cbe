@@ -607,7 +607,13 @@ namespace Cbe {
 		Height                 free_height;
 		Degree                 free_degree;
 		Number_of_leaves       free_leaves;
-		char                   padding[416];
+		Generation             meta_gen;
+		Physical_block_address meta_number;
+		Hash                   meta_hash;
+		Height                 meta_height;
+		Degree                 meta_degree;
+		Number_of_leaves       meta_leaves;
+		char                   padding[352];
 
 		void print(Genode::Output &out) const
 		{
@@ -618,7 +624,12 @@ namespace Cbe {
 			              "free_gen: ", free_gen, " "
 			              "free_number: ", Genode::Hex(free_number), " "
 			              "free_degree: ", free_degree, " "
-			              "free_leaves: ", free_leaves);
+			              "free_leaves: ", free_leaves, " "
+			              "meta_height: ", meta_height, " "
+			              "meta_gen: ",    meta_gen, " "
+			              "meta_number: ", meta_number, " "
+			              "meta_degree: ", meta_degree, " "
+			              "meta_leaves: ", meta_leaves);
 		}
 
 		/**

@@ -66,6 +66,7 @@ is
       VBD_VBA_Filter_Enabled : CXX_Bool_Type;
       VBD_VBA_Filter         : CXX_UInt64_Type;
       Free_Tree              : CXX_Bool_Type;
+      Meta_Tree              : CXX_Bool_Type;
       Hashes                 : CXX_Bool_Type;
    end record;
    pragma Pack (CXX_Dump_Configuration_Type);
@@ -169,6 +170,7 @@ is
       VBD_VBA_Filter_Enabled => CXX_Bool_To_SPARK (Cfg.VBD_VBA_Filter_Enabled),
       VBD_VBA_Filter => Virtual_Block_Address_Type (Cfg.VBD_VBA_Filter),
       Free_Tree => CXX_Bool_To_SPARK (Cfg.Free_Tree),
+      Meta_Tree => CXX_Bool_To_SPARK (Cfg.Meta_Tree),
       Hashes => CXX_Bool_To_SPARK (Cfg.Hashes));
 
 end CBE.CXX;

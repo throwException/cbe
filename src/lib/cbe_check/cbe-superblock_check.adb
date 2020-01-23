@@ -20,6 +20,9 @@ is
    begin
       Obj.Submitted_Prim := Primitive.Invalid_Object;
       Obj.Execute_Progress := False;
+      Obj.State := Inspect_SBs;
+      Obj.Highest_SB_ID := Generation_Type'First;
+      Obj.Highest_Gen := Generation_Type'First;
       Obj.SB_Slot_State := Init;
       Obj.SB_Slot_Idx := Superblocks_Index_Type'First;
       Obj.SB_Slot := Superblock_Invalid;
@@ -57,7 +60,6 @@ is
    is
    begin
       if not Primitive.Valid (Obj.Submitted_Prim) or else
-         Obj.SB_Slot_Idx < Superblocks_Index_Type'Last or else
          Obj.SB_Slot_State /= Done
       then
          return Primitive.Invalid_Object;
@@ -72,7 +74,6 @@ is
    begin
       if not Primitive.Valid (Obj.Submitted_Prim) or else
          not Primitive.Equal (Obj.Submitted_Prim, Prim) or else
-         Obj.SB_Slot_Idx < Superblocks_Index_Type'Last or else
          Obj.SB_Slot_State /= Done
       then
          raise Program_Error;
@@ -90,46 +91,162 @@ is
          return;
       end if;
 
-      case Obj.SB_Slot_State is
-      when Init =>
+      case Obj.State is
+      when Inspect_SBs =>
 
-         Obj.SB_Slot_State := Read_Started;
-         Obj.Generated_Prim :=
-            Primitive.Valid_Object_No_Pool_Idx (
-               Read, False, Primitive.Tag_SB_Check_Blk_IO,
-               Block_Number_Type (Obj.SB_Slot_Idx), 0);
+         case Obj.SB_Slot_State is
+         when Init =>
 
-         Obj.Execute_Progress := True;
+            Obj.SB_Slot_State := Read_Started;
+            Obj.Generated_Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Read, False, Primitive.Tag_SB_Check_Blk_IO,
+                  Block_Number_Type (Obj.SB_Slot_Idx), 0);
 
-         pragma Debug (
-            Debug.Print_String (
-               "[sb_check] slot " &
-               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-               ", read started"));
+            Obj.Execute_Progress := True;
 
-      when Read_Done =>
+         when Read_Done =>
 
-         if Superblock_Valid (Obj.SB_Slot) then
+            if Obj.SB_Slot.Superblock_ID > Obj.Highest_SB_ID then
+               Obj.Highest_SB_ID := Obj.SB_Slot.Superblock_ID;
+               Obj.Highest_Gen :=
+                  Obj.SB_Slot.Snapshots (Obj.SB_Slot.Curr_Snap).Gen;
+               Obj.Last_SB_Slot_Idx := Obj.SB_Slot_Idx;
+            end if;
+            if Obj.SB_Slot_Idx < Superblocks_Index_Type'Last then
+               Obj.SB_Slot_Idx := Obj.SB_Slot_Idx + 1;
+               Obj.SB_Slot_State := Init;
+               Obj.Execute_Progress := True;
+            else
+               Obj.State := Check_SB;
+               Obj.SB_Slot_Idx := Obj.Last_SB_Slot_Idx;
+               Obj.SB_Slot_State := Init;
+               Obj.Execute_Progress := True;
 
-            if Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Valid then
+               pragma Debug (
+                  Debug.Print_String (
+                     "[sb_check] check slot " &
+                     Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx))));
+            end if;
 
-               Obj.SB_Slot_State := VBD_Check_Started;
-               Obj.Generated_Prim :=
-                  Primitive.Valid_Object_No_Pool_Idx (
-                     Read, False, Primitive.Tag_SB_Check_VBD_Check,
-                     Block_Number_Type (
-                        Obj.SB_Slot.Snapshots (Obj.Snap_Idx).PBA),
-                     0);
+         when others =>
 
+            null;
+
+         end case;
+
+      when Check_SB =>
+
+         case Obj.SB_Slot_State is
+         when Init =>
+
+            Obj.SB_Slot_State := Read_Started;
+            Obj.Generated_Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Read, False, Primitive.Tag_SB_Check_Blk_IO,
+                  Block_Number_Type (Obj.SB_Slot_Idx), 0);
+
+            Obj.Execute_Progress := True;
+
+            pragma Debug (
+               Debug.Print_String (
+                  "[sb_check] slot " &
+                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                  ", read started"));
+
+         when Read_Done =>
+
+            if Superblock_Valid (Obj.SB_Slot) then
+
+               if Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Valid
+                  and then Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Gen /= 0
+               then
+
+                  Obj.SB_Slot_State := VBD_Check_Started;
+                  Obj.Generated_Prim :=
+                     Primitive.Valid_Object_No_Pool_Idx (
+                        Read, False, Primitive.Tag_SB_Check_VBD_Check,
+                        Block_Number_Type (
+                           Obj.SB_Slot.Snapshots (Obj.Snap_Idx).PBA),
+                        0);
+
+                  Obj.Execute_Progress := True;
+
+                  pragma Debug (
+                     Debug.Print_String (
+                        "[sb_check] slot " &
+                        Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                        ", snap " &
+                        Debug.To_String (Debug.Uint64_Type (Obj.Snap_Idx)) &
+                        " started"));
+
+               else
+
+                  pragma Debug (
+                     Debug.Print_String (
+                        "[sb_check] slot " &
+                        Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                        ", snap " &
+                        Debug.To_String (Debug.Uint64_Type (Obj.Snap_Idx)) &
+                        " done, not in use"));
+
+                  Obj.SB_Slot_State := VBD_Check_Done;
+                  Obj.Execute_Progress := True;
+
+               end if;
+
+            else
+
+               Obj.SB_Slot_State := Done;
                Obj.Execute_Progress := True;
 
                pragma Debug (
                   Debug.Print_String (
                      "[sb_check] slot " &
                      Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                     ", snap " &
-                     Debug.To_String (Debug.Uint64_Type (Obj.Snap_Idx)) &
-                     " started"));
+                     ", done, not in use"));
+
+            end if;
+
+         when VBD_Check_Done =>
+
+            if Obj.Snap_Idx < Snapshots_Index_Type'Last then
+
+               Obj.Snap_Idx := Obj.Snap_Idx + 1;
+               Obj.SB_Slot_State := Read_Done;
+               Obj.Execute_Progress := True;
+
+            else
+
+               Obj.Snap_Idx := Snapshots_Index_Type'First;
+               Obj.Generated_Prim :=
+                  Primitive.Valid_Object_No_Pool_Idx (
+                     Read, False, Primitive.Tag_SB_Check_FT_Check,
+                     Block_Number_Type (Obj.SB_Slot.Free_Number), 0);
+
+               Obj.SB_Slot_State := FT_Check_Started;
+               Obj.Execute_Progress := True;
+
+               pragma Debug (
+                  Debug.Print_String (
+                     "[sb_check] slot " &
+                     Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                     ", ft started"));
+
+            end if;
+
+         when FT_Check_Done =>
+
+            if Obj.FT.Hash = Obj.SB_Slot.Free_Hash then
+
+               Obj.SB_Slot_State := MT_Check_Started;
+               Obj.Execute_Progress := True;
+
+               pragma Debug (
+                  Debug.Print_String (
+                     "[sb_check] slot " &
+                     Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                     ", done"));
 
             else
 
@@ -137,99 +254,46 @@ is
                   Debug.Print_String (
                      "[sb_check] slot " &
                      Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                     ", snap " &
-                     Debug.To_String (Debug.Uint64_Type (Obj.Snap_Idx)) &
-                     " done, not in use"));
+                     ", ft hash mismatch"));
 
-               Obj.SB_Slot_State := VBD_Check_Done;
-               Obj.Execute_Progress := True;
+               raise Program_Error;
 
             end if;
 
-         else
+         when MT_Check_Done =>
 
-            Obj.SB_Slot_State := Done;
-            Obj.Execute_Progress := True;
+            if Obj.MT.Hash = Obj.SB_Slot.Meta_Hash then
 
-            pragma Debug (
-               Debug.Print_String (
-                  "[sb_check] slot " &
-                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                  ", done, not in use"));
+               Obj.SB_Slot_State := Done;
+               Obj.Execute_Progress := True;
 
-         end if;
+               pragma Debug (
+                  Debug.Print_String (
+                     "[sb_check] slot " &
+                     Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                     ", done"));
 
-      when VBD_Check_Done =>
+            else
 
-         if Obj.Snap_Idx < Snapshots_Index_Type'Last then
+               pragma Debug (
+                  Debug.Print_String (
+                     "[sb_check] slot " &
+                     Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+                     ", mt hash mismatch"));
 
-            Obj.Snap_Idx := Obj.Snap_Idx + 1;
-            Obj.SB_Slot_State := Read_Done;
-            Obj.Execute_Progress := True;
+               raise Program_Error;
 
-         else
+            end if;
 
-            Obj.Snap_Idx := Snapshots_Index_Type'First;
-            Obj.Generated_Prim :=
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Read, False, Primitive.Tag_SB_Check_FT_Check,
-                  Block_Number_Type (Obj.SB_Slot.Free_Number), 0);
+         when Done =>
 
-            Obj.SB_Slot_State := FT_Check_Started;
-            Obj.Execute_Progress := True;
+            null;
 
-            pragma Debug (
-               Debug.Print_String (
-                  "[sb_check] slot " &
-                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                  ", ft started"));
+         when others =>
 
-         end if;
+            null;
 
-      when FT_Check_Done =>
-
-         if Obj.FT.Hash = Obj.SB_Slot.Free_Hash then
-
-            Obj.SB_Slot_State := Done;
-            Obj.Execute_Progress := True;
-
-            pragma Debug (
-               Debug.Print_String (
-                  "[sb_check] slot " &
-                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                  ", done"));
-
-         else
-
-            pragma Debug (
-               Debug.Print_String (
-                  "[sb_check] slot " &
-                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                  ", ft hash mismatch"));
-
-            raise Program_Error;
-
-         end if;
-
-      when Done =>
-
-         if Obj.SB_Slot_Idx < Superblocks_Index_Type'Last then
-
-            Obj.SB_Slot_Idx := Obj.SB_Slot_Idx + 1;
-            Obj.SB_Slot_State := Init;
-            Obj.Execute_Progress := True;
-
-            pragma Debug (
-               Debug.Print_String (
-                  "[sb_check] slot " &
-                  Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-                  ", init"));
-
-         end if;
-
-      when others =>
-
-         null;
+         end case;
 
       end case;
 
@@ -246,6 +310,7 @@ is
       when Read_Started => Obj.Generated_Prim,
       when VBD_Check_Started => Obj.Generated_Prim,
       when FT_Check_Started => Obj.Generated_Prim,
+      when MT_Check_Started => Obj.Generated_Prim,
       when others => Primitive.Invalid_Object);
 
    function Peek_Generated_Root (
@@ -275,6 +340,16 @@ is
             Obj.SB_Slot.Free_Gen,
             Obj.SB_Slot.Free_Hash);
 
+      when MT_Check_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return (
+            Obj.SB_Slot.Meta_Number,
+            Obj.SB_Slot.Meta_Gen,
+            Obj.SB_Slot.Meta_Hash);
+
       when others =>
 
          raise Program_Error;
@@ -302,6 +377,13 @@ is
             raise Program_Error;
          end if;
          return Obj.SB_Slot.Free_Max_Level;
+
+      when MT_Check_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.SB_Slot.Meta_Max_Level;
 
       when others =>
 
@@ -331,6 +413,13 @@ is
          end if;
          return Tree_Child_Index_Type (Obj.SB_Slot.Free_Degree - 1);
 
+      when MT_Check_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Tree_Child_Index_Type (Obj.SB_Slot.Meta_Degree - 1);
+
       when others =>
 
          raise Program_Error;
@@ -358,6 +447,13 @@ is
             raise Program_Error;
          end if;
          return Obj.SB_Slot.Free_Leafs;
+
+      when MT_Check_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.SB_Slot.Meta_Leafs;
 
       when others =>
 
@@ -397,6 +493,19 @@ is
                "[sb_check] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", ft dropped"));
+
+      when MT_Check_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := MT_Check_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_check] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt dropped"));
 
       when VBD_Check_Started =>
 
@@ -496,6 +605,20 @@ is
                "[sb_check] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", ft done"));
+
+      when MT_Check_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.MT := FT;
+         Obj.SB_Slot_State := MT_Check_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_check] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt done"));
 
       when others =>
 

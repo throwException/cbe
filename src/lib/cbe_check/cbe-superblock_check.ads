@@ -92,16 +92,26 @@ private
       FT_Check_Started,
       FT_Check_Dropped,
       FT_Check_Done,
+      MT_Check_Started,
+      MT_Check_Dropped,
+      MT_Check_Done,
       Done);
+
+   type State_Type is (Inspect_SBs, Check_SB);
 
    type Object_Type is record
       Execute_Progress : Boolean;
+      State            : State_Type;
+      Highest_SB_ID    : Generation_Type;
+      Highest_Gen      : Generation_Type;
+      Last_SB_Slot_Idx : Superblocks_Index_Type;
       SB_Slot_State    : SB_Slot_State_Type;
       SB_Slot_Idx      : Superblocks_Index_Type;
       SB_Slot          : Superblock_Type;
       Snap_Idx         : Snapshots_Index_Type;
       VBD              : Type_1_Node_Type;
       FT               : Type_1_Node_Type;
+      MT               : Type_1_Node_Type;
       Generated_Prim   : Primitive.Object_Type;
       Submitted_Prim   : Primitive.Object_Type;
    end record;

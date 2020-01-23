@@ -87,6 +87,12 @@ is
    type Hash_Index_Type is range 0 .. Hash_Size_Bytes - 1;
    type Hash_Type is array (Hash_Index_Type) of Byte_Type;
 
+   type Tree_Geometry_Type is record
+      Max_Level : Tree_Level_Index_Type;
+      Edges     : Tree_Degree_Type;
+      Leafs     : Tree_Number_Of_Leafs_Type;
+   end record;
+
    type Type_1_Node_Type is record
       PBA      : Physical_Block_Address_Type;
       Gen      : Generation_Type;
@@ -158,6 +164,7 @@ is
       VBD_VBA_Filter_Enabled : Boolean;
       VBD_VBA_Filter         : Virtual_Block_Address_Type;
       Free_Tree              : Boolean;
+      Meta_Tree              : Boolean;
       Hashes                 : Boolean;
    end record;
 
@@ -173,6 +180,7 @@ is
       VBD_VBA_Filter_Enabled => False,
       VBD_VBA_Filter => 0,
       Free_Tree => True,
+      Meta_Tree => True,
       Hashes => True);
 
    function Type_1_Node_Invalid
@@ -181,6 +189,15 @@ is
       PBA  => 0,
       Gen  => 0,
       Hash => (others => 0));
+
+   function Type_2_Node_Invalid return Type_2_Node_Type
+   is (
+      PBA         => 0,
+      Last_VBA    => 0,
+      Alloc_Gen   => 0,
+      Free_Gen    => 0,
+      Last_Key_ID => 0,
+      Reserved    => False);
 
    function Initial_Generation return Generation_Type
    is (0);
@@ -241,6 +258,7 @@ is
       --
       --  FIXME w/o snapshots about 265 bytes,
       --       snapshots about 68 bytes each, all in all 3529 bytes
+      --       + meta tree
       --
 
       --
@@ -265,6 +283,12 @@ is
       Free_Max_Level          : Tree_Level_Index_Type;
       Free_Degree             : Tree_Degree_Type;
       Free_Leafs              : Tree_Number_Of_Leafs_Type;
+      Meta_Gen                : Generation_Type;
+      Meta_Number             : Physical_Block_Address_Type;
+      Meta_Hash               : Hash_Type;
+      Meta_Max_Level          : Tree_Level_Index_Type;
+      Meta_Degree             : Tree_Degree_Type;
+      Meta_Leafs              : Tree_Number_Of_Leafs_Type;
    end record;
 
    function Superblock_Invalid
@@ -345,6 +369,14 @@ is
    return String;
 
    function Free_Tree_XML_Tag_Close
+   return String;
+
+   function Meta_Tree_XML_Tag_Open (
+      SB        : Superblock_Type;
+      Show_Hash : Boolean)
+   return String;
+
+   function Meta_Tree_XML_Tag_Close
    return String;
 
    procedure Block_Data_From_Type_1_Node_Block (

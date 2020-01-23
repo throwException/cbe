@@ -21,7 +21,7 @@ namespace Cbe_init {
 
 }
 
-struct Cbe_init::Library : Cbe::Spark_object<41904>
+struct Cbe_init::Library : Cbe::Spark_object<60960> // XXX check size
 {
 	Library();
 

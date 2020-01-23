@@ -62,6 +62,12 @@ is
       SB.Free_Max_Level          := Obj.FT_Max_Lvl_Idx;
       SB.Free_Degree             := Obj.FT_Degree;
       SB.Free_Leafs              := Obj.FT_Nr_Of_Leafs;
+      SB.Meta_Gen                := 0;
+      SB.Meta_Number             := Obj.MT.PBA;
+      SB.Meta_Hash               := Obj.MT.Hash;
+      SB.Meta_Max_Level          := Obj.MT_Max_Lvl_Idx;
+      SB.Meta_Degree             := Obj.MT_Degree;
+      SB.Meta_Leafs              := Obj.MT_Nr_Of_Leafs;
       return SB;
 
    end Valid_SB_Slot;
@@ -82,6 +88,10 @@ is
       Obj.FT_Max_Lvl_Idx := Tree_Level_Index_Type'First;
       Obj.FT_Degree := Tree_Degree_Type'First;
       Obj.FT_Nr_Of_Leafs := Tree_Number_Of_Leafs_Type'First;
+      Obj.MT := Type_1_Node_Invalid;
+      Obj.MT_Max_Lvl_Idx := Tree_Level_Index_Type'First;
+      Obj.MT_Degree := Tree_Degree_Type'First;
+      Obj.MT_Nr_Of_Leafs := Tree_Number_Of_Leafs_Type'First;
       Obj.Generated_Prim := Primitive.Invalid_Object;
    end Initialize_Object;
 
@@ -97,7 +107,10 @@ is
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
       FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
       FT_Degree       :        Tree_Degree_Type;
-      FT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type)
+      FT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type;
+      MT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      MT_Degree       :        Tree_Degree_Type;
+      MT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type)
    is
    begin
       if Primitive.Valid (Obj.Submitted_Prim) then
@@ -111,6 +124,9 @@ is
       Obj.FT_Max_Lvl_Idx := FT_Max_Lvl_Idx;
       Obj.FT_Degree := FT_Degree;
       Obj.FT_Nr_Of_Leafs := FT_Nr_Of_Leafs;
+      Obj.MT_Max_Lvl_Idx := MT_Max_Lvl_Idx;
+      Obj.MT_Degree := MT_Degree;
+      Obj.MT_Nr_Of_Leafs := MT_Nr_Of_Leafs;
 
       pragma Debug (
          Debug.Print_String (
@@ -216,6 +232,23 @@ is
          Obj.SB_Slot := Valid_SB_Slot (Obj);
          Obj.Generated_Prim :=
             Primitive.Valid_Object_No_Pool_Idx (
+               Write, False, Primitive.Tag_SB_Init_MT_Init,
+               Block_Number_Type (Obj.SB_Slot_Idx), 0);
+
+         Obj.SB_Slot_State := MT_Request_Started;
+         Obj.Execute_Progress := True;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt started"));
+
+      when MT_Request_Done =>
+
+         Obj.SB_Slot := Valid_SB_Slot (Obj);
+         Obj.Generated_Prim :=
+            Primitive.Valid_Object_No_Pool_Idx (
                Write, False, Primitive.Tag_SB_Init_Blk_IO,
                Block_Number_Type (Obj.SB_Slot_Idx), 0);
 
@@ -274,6 +307,7 @@ is
       when Write_Request_Started => Obj.Generated_Prim,
       when VBD_Request_Started => Obj.Generated_Prim,
       when FT_Request_Started => Obj.Generated_Prim,
+      when MT_Request_Started => Obj.Generated_Prim,
       when others => Primitive.Invalid_Object);
 
    function Peek_Generated_Data (
@@ -320,6 +354,13 @@ is
          end if;
          return Obj.FT_Max_Lvl_Idx;
 
+      when MT_Request_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.MT_Max_Lvl_Idx;
+
       when others =>
 
          raise Program_Error;
@@ -348,6 +389,13 @@ is
          end if;
          return Tree_Child_Index_Type (Obj.FT_Degree - 1);
 
+      when MT_Request_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Tree_Child_Index_Type (Obj.MT_Degree - 1);
+
       when others =>
 
          raise Program_Error;
@@ -375,6 +423,13 @@ is
             raise Program_Error;
          end if;
          return Obj.FT_Nr_Of_Leafs;
+
+      when MT_Request_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         return Obj.MT_Nr_Of_Leafs;
 
       when others =>
 
@@ -414,6 +469,19 @@ is
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", ft dropped"));
+
+      when MT_Request_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := MT_Request_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt dropped"));
 
       when VBD_Request_Started =>
 
@@ -510,11 +578,53 @@ is
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", ft done"));
 
+      when MT_Request_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.MT := FT;
+         Obj.SB_Slot_State := MT_Request_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt done"));
+
       when others =>
 
          raise Program_Error;
 
       end case;
    end Mark_Generated_FT_Init_Primitive_Complete;
+
+   procedure Mark_Generated_MT_Init_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      MT   :        Type_1_Node_Type)
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when MT_Request_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.MT := MT;
+         Obj.SB_Slot_State := MT_Request_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", mt done"));
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Mark_Generated_MT_Init_Primitive_Complete;
 
 end CBE.Superblock_Initializer;

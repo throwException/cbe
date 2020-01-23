@@ -144,6 +144,9 @@ is
    function Has_Tag_SB_Init_FT_Init (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Init_FT_Init);
 
+   function Has_Tag_SB_Init_MT_Init (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_MT_Init);
+
    function Has_Tag_SB_Init_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Init_Blk_IO);
 
@@ -168,6 +171,9 @@ is
    function Has_Tag_SB_Check_FT_Check (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Check_FT_Check);
 
+   function Has_Tag_SB_Check_MT_Check (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Check_MT_Check);
+
    function Has_Tag_SB_Check_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Check_Blk_IO);
 
@@ -191,6 +197,9 @@ is
 
    function Has_Tag_SB_Dump_FT_Dump (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Dump_FT_Dump);
+
+   function Has_Tag_SB_Dump_MT_Dump (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Dump_MT_Dump);
 
    function Has_Tag_SB_Dump_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Dump_Blk_IO);

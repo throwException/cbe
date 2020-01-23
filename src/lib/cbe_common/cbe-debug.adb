@@ -194,7 +194,7 @@ is
                & " KEEP: "
                & Debug.To_String (SB.Snapshots (I).Keep)
                & " "
-               & Debug.To_String (SB.Snapshots (I).Hash));
+               & Debug.Hash_To_Hex_String (SB.Snapshots (I).Hash));
          end if;
       end loop;
    end Dump_Superblock;
