@@ -309,7 +309,19 @@ class Vfs_cbe::Wrapper
 				Cbe::Virtual_block_address const vba = request.block_number;
 
 				if (vba > _cbe->max_vba()) {
-					warning("reject request with out-of-range virtual block address ", vba);
+					warning("reject request with out-of-range virtual block start address ", vba);
+					_state = ERROR_EOF;
+					return;
+				}
+
+				if (vba + request.count < vba) {
+					warning("reject wraping request", vba);
+					_state = ERROR_EOF;
+					return;
+				}
+
+				if (vba + request.count > (_cbe->max_vba() + 1)) {
+					warning("reject invalid request ", vba, " ", request.count);
 					_state = ERROR_EOF;
 					return;
 				}
