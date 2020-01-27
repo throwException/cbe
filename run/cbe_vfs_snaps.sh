@@ -104,7 +104,6 @@ main() {
 	if [ $WRITE_CREATE_TEST -eq 1 ]; then
 		test_write_1 "$data_file" "16"
 		test_create_snapshot "$cbe_dir"
-		test_info "$cbe_dir"
 	fi
 
 
@@ -117,9 +116,11 @@ main() {
 		test_write_1 "$data_file" "0"
 		test_create_snapshot "$cbe_dir"
 		test_list_snapshots "$cbe_dir"
-		test_discard_snapshot "$cbe_dir" 1
+		test_discard_snapshot "$cbe_dir" 6
 		test_list_snapshots "$cbe_dir"
 	fi
+
+	echo "--- Automated CBE testing finished, shell is yours ---"
 }
 
 main "$@"
