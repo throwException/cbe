@@ -46,7 +46,8 @@ namespace Vfs_cbe {
 }
 
 
-#define ERR(...)  Genode::error(__func__, ":", __LINE__, " ", __VA_ARGS__);
+#define ERR(...) do { Genode::error("CBE: ", __func__, ":", __LINE__, " ", __VA_ARGS__); } while (0)
+#define DBG(...) do { Genode::warning("CBE: ", __func__, ":", __LINE__, " ", __VA_ARGS__); } while (0)
 
 
 extern "C" void adainit();
@@ -90,6 +91,10 @@ class Vfs_cbe::Wrapper
 		Cbe::Request _backend_request { };
 
 		Cbe::Time _time { _env.env() };
+
+		Cbe::Snapshot_ID _snapshot_id       { 0, false };
+		Cbe::Token       _snapshot_token    { 0 };
+		bool             _creating_snapshot { false };
 
 		/* configuration options */
 		bool                 _show_progress { false };
@@ -282,7 +287,7 @@ class Vfs_cbe::Wrapper
 			file_size const offset = handle.seek();
 
 			if ((offset % Cbe::BLOCK_SIZE) != 0) {
-				Genode::error("offset not multiple of block size");
+				Genode::error("offset (", offset, ") not multiple of block size");
 				throw Invalid_Request();
 			}
 
@@ -464,9 +469,9 @@ class Vfs_cbe::Wrapper
 					progress |= true;
 				}
 
-				if (_snapshot_creation_id.valid &&
-				    _cbe->snapshot_creation_complete(_snapshot_creation_id)) {
-					_snapshot_creation_id = Cbe::Snapshot_ID { 0, false };
+				if (_creating_snapshot &&
+				    _cbe->snapshot_creation_complete(_snapshot_token, _snapshot_id)) {
+					_creating_snapshot = false;
 				}
 
 				if (!progress) break;
@@ -496,28 +501,18 @@ class Vfs_cbe::Wrapper
 			handle_request(nullptr, 0);
 		}
 
-		Cbe::Snapshot_ID _snapshot_creation_id { 0, false };
-
 		void create_snapshot(bool quaratine)
 		{
 			if (!_cbe.constructed()) {
 				_initialize_cbe();
 			}
-			if (_snapshot_creation_id.valid) { return; }
+			if (_creating_snapshot) { return; }
 
-			_snapshot_creation_id = _cbe->create_snapshot(quaratine);
-			if (_snapshot_creation_id.valid) {
+			++_snapshot_token.value;
+			_creating_snapshot = _cbe->create_snapshot(_snapshot_token, quaratine);
+			if (_creating_snapshot) {
 				handle_request(nullptr, 0);
 			}
-		}
-
-		bool snapshot_creation_complete() const
-		{
-			if (!_snapshot_creation_id.valid) { return true; }
-
-			if (!_cbe->snapshot_creation_complete(_snapshot_creation_id)) { return false; }
-
-			return true;
 		}
 
 		bool discard_snapshot(Cbe::Snapshot_ID id)
@@ -641,6 +636,36 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 				_w._state = Wrapper::Request_state::NONE;
 				out_count = count;
 				return WRITE_OK;
+			}
+
+			Sync_result sync() override
+			{
+				/* request already pending, try again later */
+				if (!_w.client_request_acceptable() || _w._state != Wrapper::Request_state::NONE) {
+					return SYNC_QUEUED;
+				}
+
+				using Operation = Cbe::Request::Operation;
+				Cbe::Request request {
+					.operation    = Operation::SYNC,
+					.success      = Cbe::Request::Success::FALSE,
+					.block_number = 0,
+					.offset       = 0,
+					.count        = 1,
+				};
+
+				_w.handle_request(&request, _snap_id);
+
+				/* retry on next I/O signal */
+				if (_w._state == Wrapper::Request_state::PENDING) {
+					return SYNC_QUEUED;
+				}
+
+				if (_w._state == Wrapper::Request_state::NONE) {
+					return SYNC_OK;
+				}
+
+				return SYNC_ERR_INVALID;
 			}
 
 			bool read_ready() override { return true; }
@@ -1080,6 +1105,7 @@ class Vfs_cbe::Secure_superblock_file_system : public Vfs::Single_file_system
 
 		Stat_result stat(char const *path, Stat &out) override
 		{
+			DBG("path: '", path, "'");
 			Stat_result result = Single_file_system::stat(path, out);
 			return result;
 		}
@@ -1288,41 +1314,59 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 			:
 				Snap_vfs_handle(ds, fs, alloc, status_flags),
 				_snap_reg(snap_reg), _root_dir(root_dir)
-			{ }
+			{
+				DBG("root_dir: ", root_dir);
+			}
 
 			Read_result read(char *dst, file_size count,
 			                 file_size &out_count) override
 			{
 				out_count = 0;
+				DBG("");
 
 				if (count < sizeof(Dirent))
 					return READ_ERR_INVALID;
 
 				file_size index = seek() / sizeof(Dirent);
 
-				Dirent *out = (Dirent*)dst;
+				Dirent &out = *(Dirent*)dst;
 
 				if (!_root_dir) {
 					if (index < _snap_reg.number_of_snapshots()) {
-						out->fileno = (Genode::addr_t)this | index;
-						out->type = Dirent_type::DIRECTORY;
 						Snapshot_file_system const &fs = _snap_reg.by_index(index);
 						Genode::String<32> name { fs.snapshot_id() };
-						out->name = { name.string() };
+
+						out = {
+							.fileno = (Genode::addr_t)this | index,
+							.type   = Dirent_type::DIRECTORY,
+							.rwx    = Node_rwx::rx(),
+							.name   = { name.string() },
+						};
+						DBG("snap_reg");
 					} else {
-						out->type = Dirent_type::END;
+						DBG("END");
+						out.type = Dirent_type::END;
 					}
 				} else {
 					if (index == 0) {
-						out->fileno = (Genode::addr_t)this;
-						out->type = Dirent_type::DIRECTORY;
-						out->name = { "snapshots" };
+						out = {
+							.fileno = (Genode::addr_t)this,
+							.type   = Dirent_type::DIRECTORY,
+							.rwx    = Node_rwx::rx(),
+							.name   = { "snapshots" }
+						};
+
+						DBG("snapshots");
 					} else {
-						out->type = Dirent_type::END;
+						DBG("END");
+						out.type = Dirent_type::END;
 					}
 				}
 
+				DBG("");
+
 				out_count = sizeof(Dirent);
+				DBG("dst: ", (void*)dst, " count: ", count, " out_count: ", out_count);
 
 				return READ_OK;
 			}
@@ -1347,10 +1391,13 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 			Genode::size_t const name_len = strlen(type_name());
 			if (strcmp(path, type_name(), name_len) != 0) {
+				DBG(": path: '", path, "'");
 				return nullptr;
 			}
 
 			path += name_len;
+
+			DBG(": path: '", path, "'");
 
 			/*
 			 * The first characters of the first path element are equal to
@@ -1361,6 +1408,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				return 0;
 			}
 
+			DBG(": path: '", path, "'");
 			return path;
 		}
 
@@ -1394,12 +1442,14 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 		                 Vfs::Vfs_handle **out_handle,
 		                 Allocator        &alloc) override
 		{
+			DBG(": path: '", path, "'");
 			path = _sub_path(path);
 			if (!path || path[0] != '/') {
 				return OPEN_ERR_UNACCESSIBLE;
 			}
 			path++;
 
+			DBG(": path: '", path, "'");
 			uint32_t id { 0 };
 			Genode::ascii_to(path, id);
 			Snapshot_file_system &fs = _snap_reg.by_id(id);
@@ -1412,14 +1462,16 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 		                       Allocator        &alloc) override
 		{
 			if (create) {
-				return OPENDIR_ERR_PERMISSION_DENIED;;
+				return OPENDIR_ERR_PERMISSION_DENIED;
 			}
 
+			DBG(": path: '", path, "'");
 			bool const root = strcmp(path, "/") == 0;
 			if (_root_dir(path) || root) {
 
 				_snap_reg.update(_vfs_env);
 
+				DBG(": path: '", path, "'");
 				*out_handle = new (alloc) Dir_vfs_handle(*this, *this, alloc, 0, _snap_reg, root);
 				return OPENDIR_OK;
 			}
@@ -1434,12 +1486,15 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 		Stat_result stat(char const *path, Stat &out_stat) override
 		{
+			DBG(": path: '", path, "'");
 			out_stat = Stat { };
 			path = _sub_path(path);
 
 			/* path does not match directory name */
-			if (!path)
+			if (!path) {
+				DBG(": path: '", path, "'");
 				return STAT_ERR_NO_ENTRY;
+			}
 
 			/*
 			 * If path equals directory name, return information about the
@@ -1450,15 +1505,18 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				out_stat.type   = Node_type::DIRECTORY;
 				out_stat.inode  = 1;
 				out_stat.device = (Genode::addr_t)this;
+				DBG(": path: '", path, "'");
 				return STAT_OK;
 			}
 
 			if (!path || path[0] != '/') {
+				DBG(": path: '", path, "'");
 				return STAT_ERR_NO_ENTRY;
 			}
 
 			/* strip / */
 			path++;
+			DBG(": path: '", path, "'");
 
 			uint32_t id { 0 };
 			Genode::ascii_to(path, id);
@@ -1492,6 +1550,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 		char const *leaf_path(char const *path) override
 		{
+			DBG(": path: '", path, "'");
 			path = _sub_path(path);
 			if (!path) { //|| path[0] != '/') {
 				return nullptr;
@@ -1503,6 +1562,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 			path++;
 
+			DBG(": path: '", path, "'");
 			uint32_t id { 0 };
 			Genode::ascii_to(path, id);
 			Snapshot_file_system &fs = _snap_reg.by_id(id);
@@ -1554,7 +1614,6 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 		{
 			return FTRUNCATE_OK;
 		}
-
 };
 
 

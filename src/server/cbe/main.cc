@@ -210,7 +210,8 @@ class Cbe::Main : Rpc_object<Typed_root<Block::Session>>
 		Time::Timestamp _sync_interval;
 		Time::Timestamp _last_sync_time;
 
-		Cbe::Snapshot_ID _creating_snapshot_id { 0, false };
+		Cbe::Token       _snapshot_token { 0 };
+		bool             _snapshot_creation_pending { false };
 
 		void _handle_requests()
 		{
@@ -297,23 +298,31 @@ class Cbe::Main : Rpc_object<Typed_root<Block::Session>>
 				 */
 				Time::Timestamp const now = _time.timestamp();
 				if (now - _last_sync_time >= _sync_interval
-				    && !_creating_snapshot_id.valid)
+				    && !_snapshot_creation_pending)
 				{
-					_creating_snapshot_id = _cbe->create_snapshot(false);
-					LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: ",
-					    _creating_snapshot_id);
+					bool const result = _cbe->create_snapshot(_snapshot_token.value, false);
+					if (result) {
+						LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: token: ",
+						      _snapshot_token);
+						_snapshot_creation_pending = true;
+					}
 				}
 
-				if (_creating_snapshot_id.valid) {
-					if (_cbe->snapshot_creation_complete(_creating_snapshot_id)) {
-						LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: ",
-						    _creating_snapshot_id, " FINISHED");
-						_creating_snapshot_id = Snapshot_ID { 0, false };
+				if (_snapshot_creation_pending) {
+					Cbe::Token token { 0 };
+					Cbe::Snapshot_ID snap_id { 0, false };
+
+					if (_cbe->snapshot_creation_complete(token, snap_id)
+					    && token.value == _snapshot_token.value) {
+						LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: token: ",
+						      _snapshot_token, " ID: ", snap_id, " FINISHED");
+						++_snapshot_token.value;
+						_snapshot_creation_pending = false;
 						_last_sync_time = now;
 						_time.schedule_sync_timeout(_sync_interval);
 					} else {
-						LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: ",
-						    _creating_snapshot_id, " PENDING");
+						LOGIF("\033[36;1m INF ", "CREATING SNAPSHOT: token: ",
+						    _snapshot_token, " PENDING");
 					}
 				}
 

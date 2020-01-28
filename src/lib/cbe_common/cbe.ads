@@ -68,6 +68,7 @@ is
    type Generation_Type is mod 2**64;
    type Block_Number_Type is mod 2**64;
    type Physical_Block_Address_Type is mod 2**64;
+   type Token_Type is mod 2**64;
 
    type Virtual_Block_Address_Type is range 0 .. Tree_Max_Number_Of_Leafs;
    type Timestamp_Type is mod 2**64;

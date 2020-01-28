@@ -52,23 +52,20 @@ is
    --
    --  Create snapshot
    --
-   --  \param snap_id   id of the snapshot
-   --
    procedure Create_Snapshot (
       Obj     : in out Object_Type;
+      Token   :        Token_Type;
       Quara   :        Boolean;
-      Snap_ID :    out Generation_Type;
       Result  :    out Boolean);
 
    --
    --  Check if snapshot creation is complete
    --
-   --  \param snap_id   id of the snapshot
-   --
-   function Snapshot_Creation_Complete (
-      Obj     : Object_Type;
-      Snap_ID : Generation_Type)
-   return Boolean;
+   procedure Snapshot_Creation_Complete (
+      Obj     :     Object_Type;
+      Token   : out Token_Type;
+      Snap_ID : out Generation_Type;
+      Result  : out Boolean);
 
    --
    --  Discard given quaratine snapshot
@@ -394,6 +391,9 @@ private
       Sync_State  : Sync_Request_State_Type;
 
       Sync_Pending : Boolean;
+
+      Snap_Token : Token_Type;
+      Snap_Gen   : Generation_Type;
 
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;

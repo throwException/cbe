@@ -171,13 +171,13 @@ namespace Cbe {
 
 struct Create_snapshot
 {
-	uint64_t id;
-	bool     quarantine;
+	Cbe::Token token;
+	bool       quarantine;
 
-	Create_snapshot(uint64_t id,
-	                bool     quarantine)
+	Create_snapshot(Cbe::Token token,
+	                bool       quarantine)
 	:
-		id         { id },
+		token      { token },
 		quarantine { quarantine }
 	{ }
 };
@@ -331,9 +331,9 @@ struct Cbe::Block_session_component
 	{
 		struct Bad_create_snapshot_node : Exception { };
 		try {
-			uint64_t id { 0 };
+			Cbe::Token token { 0 };
 			bool quarantine { false };
-			if (!node.attribute("id").value(id)) {
+			if (!node.attribute("id").value(token.value)) {
 				error("create-snapshot node has bad id attribute");
 				throw Bad_create_snapshot_node();
 			}
@@ -343,7 +343,7 @@ struct Cbe::Block_session_component
 			}
 			Test &test = *new (_alloc) Test;
 			test.type = Test::CREATE_SNAPSHOT;
-			test.create_snapshot.construct(id, quarantine);
+			test.create_snapshot.construct(token, quarantine);
 			_test_queue.enqueue(test);
 		} catch (Xml_node::Nonexistent_attribute) {
 			error("create-snapshot node misses attribute");
@@ -556,25 +556,39 @@ struct Cbe::Block_session_component
 			_test_in_progress.construct(test);
 			destroy(_alloc, &test);
 		});
-		log("create snapshot started: id ",
-		    _test_in_progress->create_snapshot->id,
+		log("create snapshot started: token ",
+		    _test_in_progress->create_snapshot->token,
 		    ", quarantine ",
 		    _test_in_progress->create_snapshot->quarantine);
 
 		fn(*_test_in_progress->create_snapshot);
 	}
 
-	void create_snapshot_done(bool success)
+	void create_snapshot_failed()
 	{
+		_nr_of_failed_tests++;
+		log("create snapshot failed: token ",
+		    _test_in_progress->create_snapshot->token,
+		    ", quarantine ",
+		    _test_in_progress->create_snapshot->quarantine);
+		_test_in_progress.destruct();
+	}
+
+	void create_snapshot_done(Cbe::Token token, Cbe::Snapshot_ID id)
+	{
+		bool const success =
+			token.value == _test_in_progress->create_snapshot->token.value;
+
 		if (success) {
-			log("create snapshot succeeded: id ",
-			    _test_in_progress->create_snapshot->id,
+			log("create snapshot succeeded: token ",
+			    _test_in_progress->create_snapshot->token,
+			    ", id ", id,
 			    ", quarantine ",
 			    _test_in_progress->create_snapshot->quarantine);
 		} else {
 			_nr_of_failed_tests++;
-			log("create snapshot failed: id ",
-			    _test_in_progress->create_snapshot->id,
+			log("create snapshot failed: token ",
+			    _test_in_progress->create_snapshot->token,
 			    ", quarantine ",
 			    _test_in_progress->create_snapshot->quarantine);
 		}
@@ -847,6 +861,7 @@ class Cbe::Main
 		uint64_t                                _nr_of_sbs_available     { 0 };
 		Signal_handler<Main>                    _request_handler         { _env.ep(), *this, &Main::_execute };
 		Cbe::Snapshot_ID                        _creating_snapshot_id    { 0, false };
+		bool                                    _creating_snapshot       { false };
 		Cbe::Snapshot_ID                        _discarding_snapshot_id  { 0, false };
 
 		void _execute_cbe_check (bool &progress)
@@ -1246,22 +1261,26 @@ class Cbe::Main
 				progress |= true;
 			});
 
-			if (!_creating_snapshot_id.valid) {
+			if (!_creating_snapshot) {
 				_block_session->with_create_snapshot([&] (Create_snapshot const cs) {
-					_creating_snapshot_id = _cbe->create_snapshot(cs.quarantine);
-					if (_creating_snapshot_id.value != cs.id) {
-						_block_session->create_snapshot_done(false);
-						_creating_snapshot_id = Snapshot_ID { 0, false };
+					if (_cbe->create_snapshot(cs.token, cs.quarantine)) {
+						_creating_snapshot = true;
 						// XXX state change?
+					} else {
+						_block_session->create_snapshot_failed();
 					}
 					progress |= true;
 				});
 			}
 
-			if (_creating_snapshot_id.valid) {
-				if (_cbe->snapshot_creation_complete(_creating_snapshot_id)) {
-					_block_session->create_snapshot_done(true);
-					_creating_snapshot_id = Snapshot_ID { 0, false };
+			if (_creating_snapshot) {
+				Cbe::Token       token   { 0 };
+				Cbe::Snapshot_ID snap_id { 0, false };
+
+				if (_cbe->snapshot_creation_complete(token, snap_id)) {
+					_block_session->create_snapshot_done(token, snap_id);
+					_creating_snapshot = false;
+
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;
 					} else {

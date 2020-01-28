@@ -140,12 +140,11 @@ is
 
    procedure Create_Snapshot (
       Obj     : in out Object_Type;
+      Token   :        Token_Type;
       Quara   :        Boolean;
-      Snap_ID :    out Generation_Type;
       Result  :    out Boolean)
    is
    begin
-
       --
       --  Initially assume creation will be unsuccessfull and will
       --  only be changed when a snapshot creation was started.
@@ -170,40 +169,44 @@ is
             if Snap.PBA = Obj.Last_Root_PBA and then
                Snap.Hash = Obj.Last_Root_Hash
             then
-               Snap_ID := Obj.Last_Secured_Generation;
-
                pragma Debug (Debug.Print_String ("Creating_Snapshot: "
-                  & "generation already secured - no new snapshot: "
-                  & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
-               return;
+                  & "generation already secured: " & Debug.To_String (
+                     Debug.Uint64_Type (Obj.Last_Secured_Generation))));
+               Result := False;
+            else
+               Obj.Creating_Snapshot := True;
+               Obj.Creating_Quarantine_Snapshot := Quara;
+
+               Obj.Snap_Token := Token;
+               Obj.Snap_Gen   := Obj.Cur_Gen;
+
+               Result := True;
             end if;
 
-            Obj.Creating_Snapshot := True;
-            Obj.Creating_Quarantine_Snapshot := Quara;
-
-            Result := True;
          end Declare_Current_Snapshot;
       end if;
-      Snap_ID := Obj.Cur_Gen;
-
-      pragma Debug (Debug.Print_String ("Creating_Snapshot: id: "
-         & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
    end Create_Snapshot;
 
-   function Snapshot_Creation_Complete (
-      Obj     : Object_Type;
-      Snap_ID : Generation_Type)
-   return Boolean
+   procedure Snapshot_Creation_Complete (
+      Obj     :     Object_Type;
+      Token   : out Token_Type;
+      Snap_ID : out Generation_Type;
+      Result  : out Boolean)
    is
-      Result : constant Boolean := (Obj.Last_Secured_Generation = Snap_ID);
+      R : constant Boolean := Obj.Last_Secured_Generation = Obj.Snap_Gen;
    begin
-      pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: " &
-         Debug.To_String (Debug.Uint64_Type (Obj.Last_Secured_Generation))
-         & " = "
-         & Debug.To_String (Debug.Uint64_Type (Snap_ID)) & " "
-         & " result: " & Debug.To_String (Result)));
+      pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: "
+         & " result: " & Debug.To_String (R)));
 
-      return Result;
+      if R then
+         Token   := Obj.Snap_Token;
+         Snap_ID := Obj.Last_Secured_Generation;
+      else
+         Token   := 0;
+         Snap_ID := 0;
+      end if;
+
+      Result := R;
    end Snapshot_Creation_Complete;
 
    procedure Discard_Snapshot (

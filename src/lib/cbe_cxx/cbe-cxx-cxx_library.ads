@@ -37,23 +37,24 @@ is
 
    procedure Create_Snapshot (
       Obj     : in out Library.Object_Type;
+      Token   :        CXX_Token_Type;
       Quara   :        CXX_Bool_Type;
-      Snap_id :    out CXX_Snapshot_ID_Type;
       Result  :    out CXX_Bool_Type)
    with
       Export,
       Convention    => C,
-      External_Name => "_ZN3Cbe7Library16_create_snapshotEbRyRb";
+      External_Name => "_ZN3Cbe7Library16_create_snapshotEybRb";
 
-   function Snapshot_Creation_Complete (
-      Obj     : Library.Object_Type;
-      Snap_id : CXX_Snapshot_ID_Type)
-   return CXX_Bool_Type
+   procedure Snapshot_Creation_Complete (
+      Obj     :     Library.Object_Type;
+      Token   : out CXX_Token_Type;
+      Snap_ID : out CXX_Snapshot_ID_Type;
+      Result  : out CXX_Bool_Type)
    with
       Export,
       Convention    => C,
       External_Name =>
-         "_ZNK3Cbe7Library27_snapshot_creation_completeEy";
+         "_ZN3Cbe7Library27_snapshot_creation_completeERyS1_Rb";
 
    procedure Discard_Snapshot (
       Obj     : in out Library.Object_Type;

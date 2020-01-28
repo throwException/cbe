@@ -60,6 +60,18 @@ namespace Cbe {
 		}
 	};
 
+	struct Token
+	{
+		uint64_t value;
+
+		Token(uint64_t value) : value(value) { }
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "[", value, "]");
+		}
+	};
+
 	struct Index {
 		enum { INVALID = 18446744073709551615ULL, };
 		uint64_t value;
