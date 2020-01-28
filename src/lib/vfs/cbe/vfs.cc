@@ -1493,9 +1493,14 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 		char const *leaf_path(char const *path) override
 		{
 			path = _sub_path(path);
-			if (!path || path[0] != '/') {
+			if (!path) { //|| path[0] != '/') {
 				return nullptr;
 			}
+
+			if (strlen(path) == 0) { 
+				return path;
+			}
+
 			path++;
 
 			uint32_t id { 0 };
