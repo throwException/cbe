@@ -38,6 +38,8 @@ is
       Obj.Write_State := Invalid;
       Obj.Sync_State  := Invalid;
 
+      Obj.Sync_Pending := False;
+
       Obj.Execute_Progress        := False;
       Obj.Request_Pool_Obj        := Pool.Initialized_Object;
       Obj.Splitter_Obj            := Splitter.Initialized_Object;
@@ -253,18 +255,33 @@ is
       Req :        Request.Object_Type;
       ID  :        Snapshot_ID_Type)
    is
-      Number_Of_Primitives : constant Number_Of_Primitives_Type :=
-         Splitter.Number_Of_Primitives (Req);
    begin
-      if Number_Of_Primitives = 0 then
-         raise Program_Error;
-      end if;
 
-      Pool.Submit_Request (
-         Obj.Request_Pool_Obj,
-         Req,
-         ID,
-         Number_Of_Primitives);
+      case Request.Operation (Req) is
+      when Read | Write =>
+
+         Declare_Request_Number_Primitives :
+         declare
+            Number_Of_Primitives : constant Number_Of_Primitives_Type :=
+               Splitter.Number_Of_Primitives (Req);
+         begin
+            if Number_Of_Primitives = 0 then
+               raise Program_Error;
+            end if;
+
+            Pool.Submit_Request (
+               Obj.Request_Pool_Obj,
+               Req,
+               ID,
+               Number_Of_Primitives);
+         end Declare_Request_Number_Primitives;
+
+      when Sync =>
+
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID, 1);
+         Obj.Sync_Pending := True;
+      end case;
+
    end Submit_Client_Request;
 
    function Peek_Completed_Client_Request (Obj : Object_Type)

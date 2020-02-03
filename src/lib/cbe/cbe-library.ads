@@ -393,6 +393,8 @@ private
       Write_State : Write_Request_State_Type;
       Sync_State  : Sync_Request_State_Type;
 
+      Sync_Pending : Boolean;
+
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;
       Cache_Jobs_Data              : Cache.Jobs_Data_Type;
