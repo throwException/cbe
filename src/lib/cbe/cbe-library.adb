@@ -269,6 +269,12 @@ is
       Leafs : constant Tree_Number_Of_Leafs_Type :=
          SBs (Curr_SB).Snapshots (Curr_Snap).Nr_Of_Leafs;
    begin
+
+      Obj.State       := Invalid;
+      Obj.Read_State  := Invalid;
+      Obj.Write_State := Invalid;
+      Obj.Sync_State  := Invalid;
+
       Obj.Execute_Progress        := False;
       Obj.Request_Pool_Obj        := Pool.Initialized_Object;
       Obj.Splitter_Obj            := Splitter.Initialized_Object;
@@ -433,8 +439,9 @@ is
    end Update_Snapshot_Hash;
 
    procedure Execute_VBD (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean)
+      Obj              : in out Object_Type;
+      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
+      Progress         : in out Boolean)
    is
       Prim : Primitive.Object_Type;
       Job_Idx : Cache.Jobs_Index_Type;
@@ -465,6 +472,57 @@ is
 
       end loop Loop_Generated_Cache_Prims;
 
+      --
+      --  Submit Block-IO read-primitives for completed primitives of the VBD
+      --
+      Loop_VBD_Completed_Prims :
+      loop
+         declare
+            Prim : Primitive.Object_Type :=
+               Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
+         begin
+            exit Loop_VBD_Completed_Prims when
+               not Primitive.Valid (Prim) or else
+               Primitive.Operation (Prim) /= Read;
+
+            if Virtual_Block_Device.Peek_Completed_Generation (Obj.VBD) =
+               Initial_Generation
+            then
+               --  write all 0 to cache entry
+               --  write all 0 to result buffer
+               --  mark primitive complete at request pool
+
+               exit Loop_VBD_Completed_Prims when
+                  not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
+
+               Declare_Data_Idx :
+               declare
+                  Data_Idx : Crypto.Item_Index_Type;
+               begin
+                  Primitive.Success (Prim, True);
+                  Crypto.Submit_Completed_Primitive (
+                     Obj.Crypto_Obj, Prim, Data_Idx);
+                  Crypto_Plain_Buf (Data_Idx) := (others => 0);
+               end Declare_Data_Idx;
+
+               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
+               Progress := True;
+
+            else
+
+               exit Loop_VBD_Completed_Prims when
+                  not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
+
+               Block_IO.Submit_Primitive_Decrypt (
+                  Obj.IO_Obj, Prim,
+                  Virtual_Block_Device.Peek_Completed_Hash (Obj.VBD));
+
+               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
+               Progress := True;
+
+            end if;
+         end;
+      end loop Loop_VBD_Completed_Prims;
    end Execute_VBD;
 
    procedure Execute_Free_Tree (
@@ -536,16 +594,71 @@ is
             Progress := True;
          end Declare_Free_Tree_Generated_Prim;
       end loop Loop_Free_Tree_Generated_Meta_Tree_Prims;
+
+      Loop_Free_Tree_Completed_Prims :
+      loop
+         Declare_Prim_1 :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
+         begin
+            exit Loop_Free_Tree_Completed_Prims when
+               not Primitive.Valid (Prim) or else
+               Primitive.Success (Prim);
+
+            if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
+               Declare_Could_Discard_Snap :
+               declare
+                  Could_Discard_Snap : Boolean;
+               begin
+                  Try_Discard_Snapshot (
+                     Obj.Superblock.Snapshots,
+                     Curr_Snap (Obj), Could_Discard_Snap);
+                  if Could_Discard_Snap then
+                     Obj.Free_Tree_Retry_Count :=
+                        Obj.Free_Tree_Retry_Count + 1;
+
+                     --
+                     --  Instructing the FT to retry the allocation will
+                     --  lead to clearing its internal 'query branches'
+                     --  state and executing the previously submitted
+                     --  Request again.
+                     --
+                     --  (This retry attempt is a shortcut as we do not have
+                     --  all information available at this point to call
+                     --  'submit_Request' again - so we must not call
+                     --  'drop_Completed_Primitive' as this will clear the
+                     --  Request.)
+                     --
+                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
+                  else
+                     Debug.Print_String ("Retry_Allocation failed");
+                     raise Program_Error;
+                  end if;
+               end Declare_Could_Discard_Snap;
+               exit Loop_Free_Tree_Completed_Prims;
+            end if;
+
+            Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+
+            --  FIXME
+            Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
+            Obj.Stall_Snapshot_Creation := False;
+            New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj,
+            Prim);
+
+         end Declare_Prim_1;
+         Progress := True;
+
+      end loop Loop_Free_Tree_Completed_Prims;
    end Execute_Free_Tree;
 
    procedure Execute_Meta_Tree (
       Obj      : in out Object_Type;
-      Progress :    out Boolean)
+      Progress : in out Boolean)
    is
       Job_Idx : Cache.Jobs_Index_Type;
    begin
-      Progress := False;
-
       Meta_Tree.Execute (Obj.Meta_Tree_Obj, Progress);
 
       Loop_Generated_Meta_Tree_Primitives :
@@ -1121,154 +1234,11 @@ is
 
    end Execute_Cache;
 
-   --
-   --  Execute
-   --
-   procedure Execute (
-      Obj               : in out Object_Type;
-      IO_Buf            : in out Block_IO.Data_Type;
-      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
-      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
-      Now               :        Timestamp_Type)
+   procedure Execute_Request_Pool (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
    is
-      pragma Unreferenced (Now);
-      Progress : Boolean := False;
    begin
-
-      Execute_SCD (Obj, Progress);
-
-      --  pragma Debug (Debug.Print_String (To_String (Obj)));
-
-      -------------------------
-      --  Snapshot handling  --
-      -------------------------
-
-      if Obj.Creating_Snapshot and then
-         not Obj.Secure_Superblock and then
-         not Obj.Stall_Snapshot_Creation
-      then
-         Create_Snapshot_Internal (Obj, Progress);
-      end if;
-
-      --------------------
-      --  Sync handling --
-      --------------------
-
-      if Primitive.Valid (Obj.Sync_Primitive) and then
-         not Obj.Secure_Superblock
-      then
-         if Obj.Cache_Sync_State = Inactive then
-            Declare_Sync_Cache_Dirty :
-            declare
-               Cache_Dirty : Boolean;
-            begin
-
-               Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
-
-               if not Cache_Dirty then
-                  Obj.Secure_Superblock := True;
-               end if;
-               Progress := True;
-            end Declare_Sync_Cache_Dirty;
-         end if;
-      end if;
-
-      Execute_Cache (Obj, IO_Buf, Progress);
-
-      declare
-         Local_Progress : Boolean := False;
-      begin
-         Execute_Free_Tree (Obj, Local_Progress);
-         Progress := Progress or else Local_Progress;
-      end;
-
-      declare
-         Local_Progress : Boolean := False;
-      begin
-         Execute_Meta_Tree (Obj, Local_Progress);
-         Progress := Progress or else Local_Progress;
-      end;
-
-      --
-      --  A complete primitive was either successful or has failed.
-      --
-      --  In the former case we will instruct the Write_Back module to
-      --  write all changed nodes of the VBD back to the block device
-      --  and eventually will leadt to ACKing the block Request.
-      --
-      --  In the later case we will attempt to free reserved blocks in
-      --  the FT by discarding snapshots. Briefly speaking all snapshots
-      --  that were not specifically marked (see FLAG_KEEP) will be
-      --  discarded. A finit number of retries will be performed. If we
-      --  cannot free enough blocks, the write operation is marked as
-      --  failed and will result in an I/O error at the Block session.
-      --
-      --
-      Loop_Free_Tree_Completed_Prims :
-      loop
-         Declare_Prim_1 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
-         begin
-            exit Loop_Free_Tree_Completed_Prims when
-               not Primitive.Valid (Prim) or else
-               Primitive.Success (Prim);
-
-            if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
-               Declare_Could_Discard_Snap :
-               declare
-                  Could_Discard_Snap : Boolean;
-               begin
-                  Try_Discard_Snapshot (
-                     Obj.Superblock.Snapshots,
-                     Curr_Snap (Obj), Could_Discard_Snap);
-                  if Could_Discard_Snap then
-                     Obj.Free_Tree_Retry_Count :=
-                        Obj.Free_Tree_Retry_Count + 1;
-
-                     --
-                     --  Instructing the FT to retry the allocation will
-                     --  lead to clearing its internal 'query branches'
-                     --  state and executing the previously submitted
-                     --  Request again.
-                     --
-                     --  (This retry attempt is a shortcut as we do not have
-                     --  all information available at this point to call
-                     --  'submit_Request' again - so we must not call
-                     --  'drop_Completed_Primitive' as this will clear the
-                     --  Request.)
-                     --
-                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
-                  else
-                     Debug.Print_String ("Retry_Allocation failed");
-                     raise Program_Error;
-                  end if;
-               end Declare_Could_Discard_Snap;
-               exit Loop_Free_Tree_Completed_Prims;
-            end if;
-
-            Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
-
-            --  FIXME
-            Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-            Obj.Stall_Snapshot_Creation := False;
-            New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj,
-            Prim);
-
-         end Declare_Prim_1;
-         Progress := True;
-
-      end loop Loop_Free_Tree_Completed_Prims;
-
-      ---------------------------------
-      --  Put Request into splitter  --
-      ---------------------------------
-
-      --
-      --  An arbitrary sized Block Request will be cut into Block_Size-sized
-      --  primitves by the Splitter module.
-      --
       Loop_Pool_Pending_Requests :
       loop
          Declare_Pool_Idx_Slot :
@@ -1277,19 +1247,19 @@ is
                Pool.Peek_Pending_Request (Obj.Request_Pool_Obj);
          begin
             exit Loop_Pool_Pending_Requests when
-               not Pool_Idx_Slot_Valid (Pool_Idx_Slot) or else
-               not Splitter.Request_Acceptable (Obj.Splitter_Obj);
+            not Pool_Idx_Slot_Valid (Pool_Idx_Slot) or else
+            not Splitter.Request_Acceptable (Obj.Splitter_Obj);
 
             Declare_Pool_Idx :
             declare
                Pool_Idx : constant Pool_Index_Type :=
                   Pool_Idx_Slot_Content (Pool_Idx_Slot);
 
-               Req : constant Request.Object_Type :=
-                  Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
+                  Req : constant Request.Object_Type :=
+                     Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
 
-               Snap_ID : constant Snapshot_ID_Type :=
-                  Pool.Snap_ID_For_Request (Obj.Request_Pool_Obj, Req);
+                     Snap_ID : constant Snapshot_ID_Type :=
+                        Pool.Snap_ID_For_Request (Obj.Request_Pool_Obj, Req);
             begin
 
                if Pool.Overlapping_Request_In_Progress (
@@ -1298,7 +1268,7 @@ is
                then
                   pragma Debug (Pool.Dump_Pool_State (Obj.Request_Pool_Obj));
                   pragma Debug (Debug.Print_String ("Execute: "
-                     & "overlapping request in progress"));
+                  & "overlapping request in progress"));
                   exit Loop_Pool_Pending_Requests;
                end if;
 
@@ -1306,14 +1276,29 @@ is
                Splitter.Submit_Request (
                   Obj.Splitter_Obj, Pool_Idx, Req, Snap_ID);
 
+               case Request.Operation (Req) is
+                  when Read =>
+                     Debug.Print_String ("New Read_Request: " & Request.To_String (Req));
+                     Obj.State := Read_Request;
+                  when Write =>
+                     Debug.Print_String ("New Write_Request: " & Request.To_String (Req));
+                     Obj.State := Write_Request;
+                  when Sync =>
+                     Debug.Print_String ("New Sync_Request: " & Request.To_String (Req));
+                     Obj.State := Sync_Request;
+               end case;
+
             end Declare_Pool_Idx;
          end Declare_Pool_Idx_Slot;
          Progress := True;
       end loop Loop_Pool_Pending_Requests;
+   end Execute_Request_Pool;
 
-      --
-      --  Give primitive to the translation module
-      --
+   procedure Execute_Splitter (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
       Loop_Splitter_Generated_Prims :
       loop
          Declare_Prim_3 :
@@ -1393,13 +1378,15 @@ is
          end Declare_Prim_3;
          Progress := True;
       end loop Loop_Splitter_Generated_Prims;
+   end Execute_Splitter;
 
-      Execute_VBD (Obj, Progress);
-
-      ---------------------------
-      --  Write-back handling  --
-      ---------------------------
-
+   procedure Execute_Writeback (
+      Obj              : in out Object_Type;
+      IO_Buf           : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
+      Progress         : in out Boolean)
+   is
+   begin
       --
       --  The Write_Back module will store a changed branch including its leaf
       --  node on the block device.
@@ -1672,10 +1659,14 @@ is
 
       end loop Loop_WB_Generated_Cache_Prims;
 
-      ----------------------------
-      --  Super-block handling  --
-      ----------------------------
+   end Execute_Writeback;
 
+   procedure Execute_Sync_Superblock (
+      Obj              : in out Object_Type;
+      IO_Buf           : in out Block_IO.Data_Type;
+      Progress         : in out Boolean)
+   is
+   begin
       --
       --  Store the current generation in the current
       --  super-block before it gets secured.
@@ -1711,7 +1702,6 @@ is
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj, Obj.Cur_SB, Obj.Last_Secured_Generation);
          end if;
-
       end if;
 
       --
@@ -1800,6 +1790,9 @@ is
                Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj,
                   Obj.Sync_Primitive);
                Obj.Sync_Primitive := Primitive.Invalid_Object;
+
+               Debug.Print_String ("Complete Sync_Request");
+               Obj.State := Invalid;
             end if;
 
             Obj.Secure_Superblock := False;
@@ -1848,11 +1841,14 @@ is
          Progress := True;
 
       end loop Loop_Sync_SB_Generated_Prims;
+   end Execute_Sync_Superblock;
 
-      -----------------------
-      --  Crypto handling  --
-      -----------------------
-
+   procedure Execute_Crypto (
+      Obj               : in out Object_Type;
+      Crypto_Cipher_Buf : in     Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean)
+   is
+   begin
       --
       --  The Crypto module has its own internal buffer, Data has to be
       --  copied in and copied out.
@@ -1902,10 +1898,15 @@ is
 
       end loop Loop_Crypto_Completed_Prims;
 
-      --------------------
-      --  I/O handling  --
-      --------------------
+   end Execute_Crypto;
 
+   procedure Execute_IO (
+      Obj               : in out Object_Type;
+      IO_Buf            : in     Block_IO.Data_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean)
+   is
+   begin
       --
       --  This module handles all the block backend I/O and has to
       --  work with all most all modules. IT uses the 'Tag' field
@@ -2012,62 +2013,73 @@ is
 
          end Declare_Prim_15;
          Progress := True;
-
       end loop Loop_IO_Completed_Prims;
+   end Execute_IO;
 
-      --
-      --  Submit Block-IO read-primitives for completed primitives of the VBD
-      --
-      Loop_VBD_Completed_Prims :
-      loop
-         declare
-            Prim : Primitive.Object_Type :=
-               Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
-         begin
-            exit Loop_VBD_Completed_Prims when
-               not Primitive.Valid (Prim) or else
-               Primitive.Operation (Prim) /= Read;
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj               : in out Object_Type;
+      IO_Buf            : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Now               :        Timestamp_Type)
+   is
+      pragma Unreferenced (Now);
+      Progress : Boolean := False;
+   begin
 
-            if Virtual_Block_Device.Peek_Completed_Generation (Obj.VBD) =
-               Initial_Generation
-            then
-               --  write all 0 to cache entry
-               --  write all 0 to result buffer
-               --  mark primitive complete at request pool
+      Execute_SCD (Obj, Progress);
 
-               exit Loop_VBD_Completed_Prims when
-                  not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
+      --  pragma Debug (Debug.Print_String (To_String (Obj)));
 
-               Declare_Data_Idx :
-               declare
-                  Data_Idx : Crypto.Item_Index_Type;
-               begin
-                  Primitive.Success (Prim, True);
-                  Crypto.Submit_Completed_Primitive (
-                     Obj.Crypto_Obj, Prim, Data_Idx);
-                  Crypto_Plain_Buf (Data_Idx) := (others => 0);
-               end Declare_Data_Idx;
+      if Obj.Creating_Snapshot and then
+         not Obj.Secure_Superblock and then
+         not Obj.Stall_Snapshot_Creation
+      then
+         Create_Snapshot_Internal (Obj, Progress);
+      end if;
 
-               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
+      if Primitive.Valid (Obj.Sync_Primitive) and then
+         not Obj.Secure_Superblock
+      then
+         if Obj.Cache_Sync_State = Inactive then
+            Declare_Sync_Cache_Dirty :
+            declare
+               Cache_Dirty : Boolean;
+            begin
+
+               Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
+
+               if not Cache_Dirty then
+                  Obj.Secure_Superblock := True;
+               end if;
                Progress := True;
+            end Declare_Sync_Cache_Dirty;
+         end if;
+      end if;
 
-            else
+      Execute_Cache (Obj, IO_Buf, Progress);
 
-               exit Loop_VBD_Completed_Prims when
-                  not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
+      Execute_Free_Tree (Obj, Progress);
+      Execute_Meta_Tree (Obj, Progress);
 
-               Block_IO.Submit_Primitive_Decrypt (
-                  Obj.IO_Obj, Prim,
-                  Virtual_Block_Device.Peek_Completed_Hash (Obj.VBD));
+      Execute_Request_Pool (Obj, Progress);
 
-               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
-               Progress := True;
+      Execute_Splitter (Obj, Progress);
 
-            end if;
-         end;
-      end loop Loop_VBD_Completed_Prims;
+      Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
+
+      Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
+
+      Execute_Sync_Superblock (Obj, IO_Buf, Progress);
+
+      Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
+
+      Execute_IO (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
+
       Obj.Execute_Progress := Progress;
-
    end Execute;
 
    function Client_Request_Acceptable (Obj : Object_Type)
@@ -2103,6 +2115,8 @@ is
    is
    begin
       Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
+      Debug.Print_String ("Completed Request: " & Request.To_String (Req));
+      Obj.State := Invalid;
    end Drop_Completed_Client_Request;
 
    --

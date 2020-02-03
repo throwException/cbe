@@ -184,12 +184,9 @@ is
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean)
+      Progress         : in out Boolean)
    is
-      Local_Progress : Boolean := False;
    begin
-      Progress := False;
-
       if Obj.Meta_Tree_Request.State = Pending
          or else Obj.Meta_Tree_Request.State = In_Progress
       then
@@ -211,27 +208,24 @@ is
             --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: False");
             null;
          when Scan =>
-            Local_Progress := False;
-            Execute_Scan (Obj, Active_Snaps, Last_Secured_Gen, Local_Progress);
-            Progress := Progress or else Local_Progress;
+            Execute_Scan (Obj, Active_Snaps, Last_Secured_Gen, Progress);
             --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
          when Scan_Complete =>
             Obj.State := Update;
-            Progress := Progress or else True;
+            Progress := True;
          when Update =>
             Debug.Print_String ("FT: " & "Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
-            Execute_Update (Obj, Active_Snaps, Last_Secured_Gen, Local_Progress);
-            Progress := Progress or else Local_Progress;
+            Execute_Update (Obj, Active_Snaps, Last_Secured_Gen, Progress);
          when Update_Complete =>
             Debug.Print_String ("FT: " & "Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
             Primitive.Success (Obj.WB_Data.Prim, True);
             Obj.State := Complete;
          when Complete =>
-            Progress := Progress or else True;
+            Progress := True;
          when Not_Enough_Free_Blocks =>
             Primitive.Success (Obj.WB_Data.Prim, False);
             Obj.State := Complete;
-            Progress := Progress or else True;
+            Progress := True;
             --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
          when Tree_Hash_Mismatch =>
             raise Program_Error;
@@ -800,13 +794,11 @@ is
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean)
+      Progress         : in out Boolean)
    is
       End_Of_Tree  : Boolean := False;
       Enough_Found : Boolean := False;
    begin
-      Progress := False;
-
       --  handle level 0
       declare
          Found_Blocks : Number_Of_Blocks_Type := 0;
@@ -973,14 +965,12 @@ is
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean)
+      Progress         : in out Boolean)
    is
       Exchange_Finished : Boolean := False;
       Update_Finished   : Boolean := False;
       Exchanged         : Number_Of_Blocks_Type := 0;
    begin
-      Progress := False;
-
       --  Node_Queue.Dump (Obj.Type_2_Leafs);
 
       --  handle level 0

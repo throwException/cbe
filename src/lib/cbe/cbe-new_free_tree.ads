@@ -62,7 +62,7 @@ is
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean);
+      Progress         : in out Boolean);
 
    --
    --  Check for any completed primitive
@@ -480,7 +480,7 @@ private
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean);
+      Progress         : in out Boolean);
 
    procedure Exchange_Type_2_Leafs (
       Current_Gen :        Generation_Type;
@@ -496,6 +496,6 @@ private
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
-      Progress         :    out Boolean);
+      Progress         : in out Boolean);
 
 end CBE.New_Free_Tree;

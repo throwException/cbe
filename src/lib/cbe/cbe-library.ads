@@ -364,7 +364,32 @@ private
 
    type Cache_Sync_State_Type is (Inactive, Active);
 
+   type Arbiter_State_Type is
+      (Invalid, Read_Request, Write_Request, Sync_Request);
+
+   function To_String (S : Arbiter_State_Type) return String
+   is (
+      case S is
+      when Invalid => "Invalid",
+      when Read_Request => "Read_Request",
+      when Write_Request => "Write_Request",
+      when Sync_Request => "Sync_Request");
+
+   type Read_Request_State_Type is
+      (Invalid, Translate, Decrypt, Complete);
+
+   type Write_Request_State_Type is
+      (Invalid, Translate, Encrypt, Complete);
+
+   type Sync_Request_State_Type is
+      (Invalid, Cache_Writeback, Superblock_Update, Superblock_Writeback);
+
    type Object_Type is record
+      State       : Arbiter_State_Type;
+      Read_State  : Read_Request_State_Type;
+      Write_State : Write_Request_State_Type;
+      Sync_State  : Sync_Request_State_Type;
+
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;
       Cache_Jobs_Data              : Cache.Jobs_Data_Type;
@@ -491,8 +516,9 @@ private
       when Event_Obtain_Client_Data           => "Obtain_Client_Data");
 
    procedure Execute_VBD (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean);
+      Obj              : in out Object_Type;
+      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
+      Progress         : in out Boolean);
 
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
@@ -500,11 +526,41 @@ private
 
    procedure Execute_Meta_Tree (
       Obj      : in out Object_Type;
-      Progress :    out Boolean);
+      Progress : in out Boolean);
 
    procedure Execute_SCD (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
+
+   procedure Execute_Request_Pool (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   procedure Execute_Splitter (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   procedure Execute_Writeback (
+      Obj              : in out Object_Type;
+      IO_Buf           : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
+      Progress         : in out Boolean);
+
+   procedure Execute_Sync_Superblock (
+      Obj              : in out Object_Type;
+      IO_Buf           : in out Block_IO.Data_Type;
+      Progress         : in out Boolean);
+
+   procedure Execute_Crypto (
+      Obj               : in out Object_Type;
+      Crypto_Cipher_Buf : in     Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean);
+
+   procedure Execute_IO (
+      Obj               : in out Object_Type;
+      IO_Buf            : in     Block_IO.Data_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean);
 
    --
    --  Execute_Cache

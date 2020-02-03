@@ -130,12 +130,9 @@ is
    --
    procedure Execute (
       Obj      : in out Object_Type;
-      Progress :    out Boolean)
+      Progress : in out Boolean)
    is
-      Local_Progress : Boolean := False;
    begin
-      Progress := False;
-
       if Obj.Cache_Request.State /= Invalid then
          return;
       end if;
@@ -148,8 +145,7 @@ is
          when Invalid =>
             null;
          when Update =>
-            Execute_Update (Obj, Local_Progress);
-            Progress := Local_Progress;
+            Execute_Update (Obj, Progress);
          when Complete =>
             null;
          when Tree_Hash_Mismatch =>
@@ -742,13 +738,11 @@ is
 
    procedure Execute_Update (
       Obj      : in out Object_Type;
-      Progress :    out Boolean)
+      Progress : in out Boolean)
    is
       Handled_Level_1_Node  : Boolean := False;
       Handled_Level_N_Nodes : Boolean := False;
    begin
-      Progress := False;
-
       Debug.Print_String ("MT: Execute_Update: Leve1: 1 " & To_String (Obj.Level_1_Node));
       Dump_Level_N_Nodes :
       for L in Obj.Level_N_Nodes'Range loop

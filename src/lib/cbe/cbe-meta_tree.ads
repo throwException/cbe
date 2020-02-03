@@ -49,7 +49,7 @@ is
    --
    procedure Execute (
       Obj      : in out Object_Type;
-      Progress :    out Boolean);
+      Progress : in out Boolean);
 
    --
    --  Check for any completed primitive
@@ -273,7 +273,7 @@ private
 
    procedure Execute_Update (
       Obj      : in out Object_Type;
-      Progress :    out Boolean);
+      Progress : in out Boolean);
 
    function Check_Level_0_Usable (
       Gen  : Generation_Type;
