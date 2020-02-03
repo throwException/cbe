@@ -15,246 +15,9 @@ with SHA256_4K;
 package body CBE.Library
 with SPARK_Mode
 is
-   procedure CBE_Hash_From_SHA256_4K_Hash (
-      CBE_Hash : out Hash_Type;
-      SHA_Hash :     SHA256_4K.Hash_Type);
-
-   procedure SHA256_4K_Data_From_CBE_Data (
-      SHA_Data : out SHA256_4K.Data_Type;
-      CBE_Data :     Block_Data_Type);
-
-   procedure CBE_Hash_From_SHA256_4K_Hash (
-      CBE_Hash : out Hash_Type;
-      SHA_Hash :     SHA256_4K.Hash_Type)
-   is
-      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
-   begin
-      for CBE_Idx in CBE_Hash'Range loop
-         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
-         if CBE_Idx < CBE_Hash'Last then
-            SHA_Idx := SHA_Idx + 1;
-         end if;
-      end loop;
-   end CBE_Hash_From_SHA256_4K_Hash;
-
-   procedure SHA256_4K_Data_From_CBE_Data (
-      SHA_Data : out SHA256_4K.Data_Type;
-      CBE_Data :     Block_Data_Type)
-   is
-      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
-   begin
-      for SHA_Idx in SHA_Data'Range loop
-         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
-         if SHA_Idx < SHA_Data'Last then
-            CBE_Idx := CBE_Idx + 1;
-         end if;
-      end loop;
-   end SHA256_4K_Data_From_CBE_Data;
-
-   procedure Try_Discard_Snapshot (
-      Snaps     : in out Snapshots_Type;
-      Keep_Snap :        Snapshots_Index_Type;
-      Success   :    out Boolean)
-   is
-      Discard_Idx       : Snapshots_Index_Type := Snapshots_Index_Type'First;
-      Discard_Idx_Valid : Boolean              := False;
-   begin
-      For_Snapshots :
-      for Idx in Snapshots_Index_Type loop
-         if
-            Idx /= Keep_Snap and then
-            Snaps (Idx).Valid and then
-            not Snaps (Idx).Keep and then (
-               not Discard_Idx_Valid or else
-               Snaps (Idx).ID < Snaps (Discard_Idx).ID)
-         then
-            Discard_Idx       := Idx;
-            Discard_Idx_Valid := True;
-         end if;
-      end loop For_Snapshots;
-      if Discard_Idx_Valid then
-         Snaps (Discard_Idx) := Snapshot_Invalid;
-      end if;
-      Success := Discard_Idx_Valid;
-   end Try_Discard_Snapshot;
-
-   procedure Discard_Snapshot (
-      Obj     : in out Object_Type;
-      Snap_ID :        Generation_Type;
-      Success :    out Boolean)
-   is
-   begin
-      Success := False;
-
-      Loop_Discard_Snapshot :
-      for I in Snapshots_Index_Type loop
-         if Obj.Superblock.Snapshots (I).Valid and then
-            Obj.Superblock.Snapshots (I).Keep and then
-            Obj.Superblock.Snapshots (I).Gen = Snap_ID
-         then
-            Obj.Superblock.Snapshots (I).Valid := False;
-            Success := True;
-            Obj.Secure_Superblock := True;
-            exit Loop_Discard_Snapshot;
-         end if;
-      end loop Loop_Discard_Snapshot;
-   end Discard_Snapshot;
-
-   procedure Try_Flush_Cache_If_Dirty (
-      Obj   : in out Object_Type;
-      Dirty :    out Boolean)
-   is
-   begin
-      Dirty := Cache.Dirty (Obj.Cache_Obj);
-
-      if Dirty and then
-         Obj.Cache_Sync_State = Inactive
-      then
-
-         if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
-
-            Cache.Submit_Primitive_Without_Data (
-               Obj.Cache_Obj,
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Sync, False, Primitive.Tag_Lib_Cache_Sync, 0, 0));
-
-            Obj.Cache_Sync_State := Active;
-
-         end if;
-
-      end if;
-   end Try_Flush_Cache_If_Dirty;
-
-   procedure Create_Snapshot (
-      Obj     : in out Object_Type;
-      Quara   :        Boolean;
-      Snap_ID :    out Generation_Type;
-      Result  :    out Boolean)
-   is
-   begin
-
-      --
-      --  Initially assume creation will be unsuccessfull and will
-      --  only be changed when a snapshot creation was started.
-      --
-      Result := False;
-
-      --
-      --  As long as we are creating a snapshot or
-      --  the superblock the new snapshot belongs to is being
-      --  written we do not allow the creation of a new
-      --  snapshot.
-      --
-      if not Obj.Creating_Snapshot or else
-         not Obj.Secure_Superblock
-      then
-         Declare_Current_Snapshot :
-         declare
-            Snap : constant Snapshot_Type :=
-               Obj.Superblock.Snapshots (Curr_Snap (Obj));
-         begin
-            --  if Obj.Last_Secured_Generation = Obj.Cur_Gen then
-            if Snap.PBA = Obj.Last_Root_PBA and then
-               Snap.Hash = Obj.Last_Root_Hash
-            then
-               Snap_ID := Obj.Last_Secured_Generation;
-
-               pragma Debug (Debug.Print_String ("Creating_Snapshot: "
-                  & "generation already secured - no new snapshot: "
-                  & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
-               return;
-            end if;
-
-            Obj.Creating_Snapshot := True;
-            Obj.Creating_Quarantine_Snapshot := Quara;
-
-            Result := True;
-         end Declare_Current_Snapshot;
-      end if;
-      Snap_ID := Obj.Cur_Gen;
-
-      pragma Debug (Debug.Print_String ("Creating_Snapshot: id: "
-         & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
-   end Create_Snapshot;
-
-   procedure Create_Snapshot_Internal (
-      Obj      : in out Object_Type;
-      Progress :    out Boolean)
-   is
-   begin
-      if Obj.Cache_Sync_State = Active or else
-         Obj.Secure_Superblock
-      then
-         pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
-             & "flusher active: False "
-             & Debug.To_String (Obj.Cache_Sync_State = Active) & " "
-             & "Secure_Superblock: "
-             & Debug.To_String (Obj.Secure_Superblock)));
-         Progress := False;
-         return;
-      end if;
-
-      Declare_Cache_Dirty :
-      declare
-         Cache_Dirty : Boolean;
-      begin
-
-         Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
-
-         --
-         --  In case we have to flush the Cache, wait until we have
-         --  finished doing that.
-         --
-         if not Cache_Dirty then
-            pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
-               & "snapshot created: "
-               & "gen: " & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))));
-
-            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Keep :=
-               Obj.Creating_Quarantine_Snapshot;
-
-            --  Obj.Cur_Gen := Obj.Cur_Gen  + 1;
-            --  trigger securing of suerblock
-            --  Obj.Creating_Snapshot := False;
-            Obj.Secure_Superblock := True;
-         end if;
-         Progress := True;
-      end Declare_Cache_Dirty;
-   end Create_Snapshot_Internal;
-
-   function Snapshot_Creation_Complete (
-      Obj     : Object_Type;
-      Snap_ID : Generation_Type)
-   return Boolean
-   is
-      Result : constant Boolean := (Obj.Last_Secured_Generation = Snap_ID);
-   begin
-      pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: " &
-         Debug.To_String (Debug.Uint64_Type (Obj.Last_Secured_Generation))
-         & " = "
-         & Debug.To_String (Debug.Uint64_Type (Snap_ID)) & " "
-         & " result: " & Debug.To_String (Result)));
-
-      return Result;
-   end Snapshot_Creation_Complete;
-
-   procedure Active_Snapshot_IDs (
-      Obj  :     Object_Type;
-      List : out Active_Snapshot_IDs_Type)
-   is
-   begin
-      For_Snapshots :
-      for Snap_ID in Snapshots_Index_Type loop
-
-         if Obj.Superblock.Snapshots (Snap_ID).Valid and then
-            Obj.Superblock.Snapshots (Snap_ID).Keep
-         then
-            List (Snap_ID) := Obj.Superblock.Snapshots (Snap_ID).Gen;
-         else
-            List (Snap_ID) := Generation_Type (0);
-         end if;
-      end loop For_Snapshots;
-   end Active_Snapshot_IDs;
+   -------------
+   --  public --
+   -------------
 
    procedure Initialize_Object (
       Obj     : out Object_Type;
@@ -372,6 +135,561 @@ is
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
    end Initialize_Object;
+
+   procedure Create_Snapshot (
+      Obj     : in out Object_Type;
+      Quara   :        Boolean;
+      Snap_ID :    out Generation_Type;
+      Result  :    out Boolean)
+   is
+   begin
+
+      --
+      --  Initially assume creation will be unsuccessfull and will
+      --  only be changed when a snapshot creation was started.
+      --
+      Result := False;
+
+      --
+      --  As long as we are creating a snapshot or
+      --  the superblock the new snapshot belongs to is being
+      --  written we do not allow the creation of a new
+      --  snapshot.
+      --
+      if not Obj.Creating_Snapshot or else
+         not Obj.Secure_Superblock
+      then
+         Declare_Current_Snapshot :
+         declare
+            Snap : constant Snapshot_Type :=
+               Obj.Superblock.Snapshots (Curr_Snap (Obj));
+         begin
+            --  if Obj.Last_Secured_Generation = Obj.Cur_Gen then
+            if Snap.PBA = Obj.Last_Root_PBA and then
+               Snap.Hash = Obj.Last_Root_Hash
+            then
+               Snap_ID := Obj.Last_Secured_Generation;
+
+               pragma Debug (Debug.Print_String ("Creating_Snapshot: "
+                  & "generation already secured - no new snapshot: "
+                  & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
+               return;
+            end if;
+
+            Obj.Creating_Snapshot := True;
+            Obj.Creating_Quarantine_Snapshot := Quara;
+
+            Result := True;
+         end Declare_Current_Snapshot;
+      end if;
+      Snap_ID := Obj.Cur_Gen;
+
+      pragma Debug (Debug.Print_String ("Creating_Snapshot: id: "
+         & Debug.To_String (Debug.Uint64_Type (Snap_ID))));
+   end Create_Snapshot;
+
+   function Snapshot_Creation_Complete (
+      Obj     : Object_Type;
+      Snap_ID : Generation_Type)
+   return Boolean
+   is
+      Result : constant Boolean := (Obj.Last_Secured_Generation = Snap_ID);
+   begin
+      pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: " &
+         Debug.To_String (Debug.Uint64_Type (Obj.Last_Secured_Generation))
+         & " = "
+         & Debug.To_String (Debug.Uint64_Type (Snap_ID)) & " "
+         & " result: " & Debug.To_String (Result)));
+
+      return Result;
+   end Snapshot_Creation_Complete;
+
+   procedure Discard_Snapshot (
+      Obj     : in out Object_Type;
+      Snap_ID :        Generation_Type;
+      Success :    out Boolean)
+   is
+   begin
+      Success := False;
+
+      Loop_Discard_Snapshot :
+      for I in Snapshots_Index_Type loop
+         if Obj.Superblock.Snapshots (I).Valid and then
+            Obj.Superblock.Snapshots (I).Keep and then
+            Obj.Superblock.Snapshots (I).Gen = Snap_ID
+         then
+            Obj.Superblock.Snapshots (I).Valid := False;
+            Success := True;
+            Obj.Secure_Superblock := True;
+            exit Loop_Discard_Snapshot;
+         end if;
+      end loop Loop_Discard_Snapshot;
+   end Discard_Snapshot;
+
+   procedure Active_Snapshot_IDs (
+      Obj  :     Object_Type;
+      List : out Active_Snapshot_IDs_Type)
+   is
+   begin
+      For_Snapshots :
+      for Snap_ID in Snapshots_Index_Type loop
+
+         if Obj.Superblock.Snapshots (Snap_ID).Valid and then
+            Obj.Superblock.Snapshots (Snap_ID).Keep
+         then
+            List (Snap_ID) := Obj.Superblock.Snapshots (Snap_ID).Gen;
+         else
+            List (Snap_ID) := Generation_Type (0);
+         end if;
+      end loop For_Snapshots;
+   end Active_Snapshot_IDs;
+
+   function Client_Request_Acceptable (Obj : Object_Type)
+   return Boolean
+   is (Pool.Request_Acceptable (Obj.Request_Pool_Obj));
+
+   procedure Submit_Client_Request (
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type;
+      ID  :        Snapshot_ID_Type)
+   is
+      Number_Of_Primitives : constant Number_Of_Primitives_Type :=
+         Splitter.Number_Of_Primitives (Req);
+   begin
+      if Number_Of_Primitives = 0 then
+         raise Program_Error;
+      end if;
+
+      Pool.Submit_Request (
+         Obj.Request_Pool_Obj,
+         Req,
+         ID,
+         Number_Of_Primitives);
+   end Submit_Client_Request;
+
+   function Peek_Completed_Client_Request (Obj : Object_Type)
+   return Request.Object_Type
+   is (Pool.Peek_Completed_Request (Obj.Request_Pool_Obj));
+
+   procedure Drop_Completed_Client_Request (
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type)
+   is
+   begin
+      Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
+      Debug.Print_String ("Completed Request: " & Request.To_String (Req));
+      Obj.State := Invalid;
+   end Drop_Completed_Client_Request;
+
+   procedure Has_IO_Request (
+      Obj      :     Object_Type;
+      Req      : out Request.Object_Type;
+      Data_Idx : out Block_IO.Data_Index_Type)
+   is
+   begin
+      Req      := Request.Invalid_Object;
+      Data_Idx := 0;
+      declare
+         Prim : constant Primitive.Object_Type :=
+            Block_IO.Peek_Generated_Primitive (Obj.IO_Obj);
+      begin
+         if Primitive.Valid (Prim) then
+            Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.IO_Obj, Prim);
+            Req      := Request.Valid_Object (
+               Op     => Primitive.Operation (Prim),
+               Succ   => False,
+               Blk_Nr => Primitive.Block_Number (Prim),
+               Off    => 0,
+               Cnt    => 1,
+               Tg     => 0);
+         end if;
+      end;
+   end Has_IO_Request;
+
+   procedure IO_Request_In_Progress (
+      Obj      : in out Object_Type;
+      Data_Idx :        Block_IO.Data_Index_Type)
+   is
+   begin
+      Block_IO.Drop_Generated_Primitive_2 (Obj.IO_Obj, Data_Idx);
+   end IO_Request_In_Progress;
+
+   procedure IO_Request_Completed (
+      Obj        : in out Object_Type;
+      Data_Index :        Block_IO.Data_Index_Type;
+      Success    :        Boolean)
+   is
+   begin
+      Block_IO.Mark_Generated_Primitive_Complete (
+         Obj.IO_Obj, Data_Index, Success);
+   end IO_Request_Completed;
+
+   procedure Client_Data_Ready (
+      Obj : in out Object_Type;
+      Req :    out Request.Object_Type)
+   is
+   begin
+      Req := Request.Invalid_Object;
+
+      if Primitive.Valid (Obj.Wait_For_Front_End.Prim) then
+         return;
+      end if;
+
+      --
+      --  When it was a read Request, we need the location to
+      --  where the Crypto should copy the decrypted data.
+      --
+      declare
+         Prim : constant Primitive.Object_Type :=
+            Crypto.Peek_Completed_Primitive (Obj.Crypto_Obj);
+      begin
+         if
+            Primitive.Valid (Prim) and then
+            Primitive.Operation (Prim) = Read
+         then
+            Start_Waiting_For_Front_End (Obj, Prim, Event_Obtain_Client_Data);
+            Req := Obj.Wait_For_Front_End.Req;
+            return;
+         end if;
+      end;
+   end Client_Data_Ready;
+
+   --
+   --  For now there can be only one Request pending.
+   --
+   function Client_Data_Index (
+      Obj : Object_Type;
+      Req : Request.Object_Type)
+   return Primitive.Index_Type
+   is
+   begin
+      if Front_End_Busy_With_Other_Request (Obj, Req) then
+         return Primitive.Invalid_Index;
+      end if;
+
+      return Primitive.Index (Obj.Wait_For_Front_End.Prim);
+   end Client_Data_Index;
+
+   procedure Obtain_Client_Data (
+      Obj              : in out Object_Type;
+      Req              :        Request.Object_Type;
+      Data_Index       :    out Crypto.Plain_Buffer_Index_Type;
+      Data_Index_Valid :    out Boolean)
+   is
+      Prim  : constant Primitive.Object_Type := Obj.Wait_For_Front_End.Prim;
+      Event : constant Event_Type            := Obj.Wait_For_Front_End.Event;
+   begin
+      Data_Index_Valid := False;
+      Data_Index       := Crypto.Plain_Buffer_Index_Type'First;
+
+      if Front_End_Busy_With_Other_Request (Obj, Req) or else
+         Event /= Event_Obtain_Client_Data
+      then
+         return;
+      end if;
+
+      Data_Index := Crypto.Plain_Buffer_Index_Type (
+         Crypto.Data_Index (Obj.Crypto_Obj, Prim));
+
+      Data_Index_Valid := True;
+      Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+      Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+      Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+   end Obtain_Client_Data;
+
+   procedure Client_Data_Required (
+      Obj : in out Object_Type;
+      Req :    out Request.Object_Type)
+   is
+   begin
+      Req := Request.Invalid_Object;
+
+      if Primitive.Valid (Obj.Wait_For_Front_End.Prim) then
+         return;
+      end if;
+
+      --
+      --  A write Request, we need the location from where to read the new
+      --  leaf data.
+      --
+      declare
+         Prim : constant Primitive.Object_Type :=
+            Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
+      begin
+         if Primitive.Valid (Prim) and then Primitive.Operation (Prim) = Write
+         then
+            Start_Waiting_For_Front_End (
+               Obj, Prim, Event_Supply_Client_Data_After_VBD);
+            Req := Obj.Wait_For_Front_End.Req;
+            return;
+         end if;
+      end;
+
+      --
+      --  The free-tree needs the data to give to the Write_Back module.
+      --
+      declare
+         Prim : constant Primitive.Object_Type :=
+            New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
+      begin
+         if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
+            Start_Waiting_For_Front_End (
+               Obj, Prim, Event_Supply_Client_Data_After_FT);
+            Req := Obj.Wait_For_Front_End.Req;
+            return;
+         end if;
+      end;
+   end Client_Data_Required;
+
+   procedure Supply_Client_Data (
+      Obj      : in out Object_Type;
+      Now      :        Timestamp_Type;
+      Req      :        Request.Object_Type;
+      Data     :        Block_Data_Type;
+      Progress :    out Boolean)
+   is
+      pragma Unreferenced (Now);
+   begin
+      case Obj.SCD_State is
+      when Inactive =>
+         Obj.SCD_State := Active;
+         Obj.SCD_Data := Data;
+         Obj.SCD_Req := Req;
+         Obj.SCD_Curr_Lvl := 1;
+         Obj.SCD_New_PBAs := (others => 0);
+         Obj.SCD_New_Blocks := 0;
+         Obj.SCD_Free_PBAs := (others => 0);
+         Obj.SCD_Free_Blocks := 0;
+         Progress := True;
+      when others =>
+         raise Program_Error;
+      end case;
+   end Supply_Client_Data;
+
+   procedure Crypto_Cipher_Data_Required (
+      Obj        :     Object_Type;
+      Req        : out Request.Object_Type;
+      Data_Index : out Crypto.Plain_Buffer_Index_Type)
+   is
+      Item_Index : Crypto.Item_Index_Type;
+      Prim       : Primitive.Object_Type;
+   begin
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
+      Data_Index := Crypto.Plain_Buffer_Index_Type (Item_Index);
+      if not Primitive.Valid (Prim) or else
+         Primitive.Operation (Prim) /= Write
+      then
+         Req := Request.Invalid_Object;
+         return;
+      end if;
+      Req := Request.Valid_Object (
+         Op     => CBE.Write,
+         Succ   => False,
+         Blk_Nr => Primitive.Block_Number (Prim),
+         Off    => 0,
+         Cnt    => 1,
+         Tg     => 0);
+   end Crypto_Cipher_Data_Required;
+
+   procedure Crypto_Cipher_Data_Requested (
+      Obj        : in out Library.Object_Type;
+      Data_Index :        Crypto.Plain_Buffer_Index_Type)
+   is
+   begin
+      Crypto.Drop_Generated_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
+   end Crypto_Cipher_Data_Requested;
+
+   procedure Supply_Crypto_Cipher_Data (
+      Obj        : in out Object_Type;
+      Data_Index :        Crypto.Cipher_Buffer_Index_Type;
+      Data_Valid :        Boolean)
+   is
+   begin
+      Crypto.Mark_Completed_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
+   end Supply_Crypto_Cipher_Data;
+
+   procedure Crypto_Plain_Data_Required (
+      Obj        :     Object_Type;
+      Req        : out Request.Object_Type;
+      Data_Index : out Crypto.Cipher_Buffer_Index_Type)
+   is
+      Item_Index : Crypto.Item_Index_Type;
+      Prim       : Primitive.Object_Type;
+   begin
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
+      Data_Index := Crypto.Cipher_Buffer_Index_Type (Item_Index);
+      if not Primitive.Valid (Prim) or else
+         Primitive.Operation (Prim) /= Read
+      then
+         Req := Request.Invalid_Object;
+         return;
+      end if;
+      Req := Request.Valid_Object (
+         Op     => CBE.Read,
+         Succ   => False,
+         Blk_Nr => Primitive.Block_Number (Prim),
+         Off    => 0,
+         Cnt    => 1,
+         Tg     => 0);
+   end Crypto_Plain_Data_Required;
+
+   procedure Crypto_Plain_Data_Requested (
+      Obj        : in out Library.Object_Type;
+      Data_Index :        Crypto.Cipher_Buffer_Index_Type)
+   is
+   begin
+      Crypto.Drop_Generated_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
+   end Crypto_Plain_Data_Requested;
+
+   procedure Supply_Crypto_Plain_Data (
+      Obj        : in out Object_Type;
+      Data_Index :        Crypto.Plain_Buffer_Index_Type;
+      Data_Valid :        Boolean)
+   is
+   begin
+      Crypto.Mark_Completed_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
+   end Supply_Crypto_Plain_Data;
+
+   --------------
+   --  private --
+   --------------
+
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type);
+
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type);
+
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type)
+   is
+      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
+   begin
+      for CBE_Idx in CBE_Hash'Range loop
+         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
+         if CBE_Idx < CBE_Hash'Last then
+            SHA_Idx := SHA_Idx + 1;
+         end if;
+      end loop;
+   end CBE_Hash_From_SHA256_4K_Hash;
+
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type)
+   is
+      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
+   begin
+      for SHA_Idx in SHA_Data'Range loop
+         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
+         if SHA_Idx < SHA_Data'Last then
+            CBE_Idx := CBE_Idx + 1;
+         end if;
+      end loop;
+   end SHA256_4K_Data_From_CBE_Data;
+
+   procedure Try_Discard_Snapshot (
+      Snaps     : in out Snapshots_Type;
+      Keep_Snap :        Snapshots_Index_Type;
+      Success   :    out Boolean)
+   is
+      Discard_Idx       : Snapshots_Index_Type := Snapshots_Index_Type'First;
+      Discard_Idx_Valid : Boolean              := False;
+   begin
+      For_Snapshots :
+      for Idx in Snapshots_Index_Type loop
+         if
+            Idx /= Keep_Snap and then
+            Snaps (Idx).Valid and then
+            not Snaps (Idx).Keep and then (
+               not Discard_Idx_Valid or else
+               Snaps (Idx).ID < Snaps (Discard_Idx).ID)
+         then
+            Discard_Idx       := Idx;
+            Discard_Idx_Valid := True;
+         end if;
+      end loop For_Snapshots;
+      if Discard_Idx_Valid then
+         Snaps (Discard_Idx) := Snapshot_Invalid;
+      end if;
+      Success := Discard_Idx_Valid;
+   end Try_Discard_Snapshot;
+
+   procedure Try_Flush_Cache_If_Dirty (
+      Obj   : in out Object_Type;
+      Dirty :    out Boolean)
+   is
+   begin
+      Dirty := Cache.Dirty (Obj.Cache_Obj);
+
+      if Dirty and then
+         Obj.Cache_Sync_State = Inactive
+      then
+
+         if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
+
+            Cache.Submit_Primitive_Without_Data (
+               Obj.Cache_Obj,
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Sync, False, Primitive.Tag_Lib_Cache_Sync, 0, 0));
+
+            Obj.Cache_Sync_State := Active;
+
+         end if;
+
+      end if;
+   end Try_Flush_Cache_If_Dirty;
+
+   procedure Create_Snapshot_Internal (
+      Obj      : in out Object_Type;
+      Progress :    out Boolean)
+   is
+   begin
+      if Obj.Cache_Sync_State = Active or else
+         Obj.Secure_Superblock
+      then
+         pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
+             & "flusher active: False "
+             & Debug.To_String (Obj.Cache_Sync_State = Active) & " "
+             & "Secure_Superblock: "
+             & Debug.To_String (Obj.Secure_Superblock)));
+         Progress := False;
+         return;
+      end if;
+
+      Declare_Cache_Dirty :
+      declare
+         Cache_Dirty : Boolean;
+      begin
+
+         Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
+
+         --
+         --  In case we have to flush the Cache, wait until we have
+         --  finished doing that.
+         --
+         if not Cache_Dirty then
+            pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
+               & "snapshot created: "
+               & "gen: " & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))));
+
+            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Keep :=
+               Obj.Creating_Quarantine_Snapshot;
+
+            --  Obj.Cur_Gen := Obj.Cur_Gen  + 1;
+            --  trigger securing of suerblock
+            --  Obj.Creating_Snapshot := False;
+            Obj.Secure_Superblock := True;
+         end if;
+         Progress := True;
+      end Declare_Cache_Dirty;
+   end Create_Snapshot_Internal;
 
    function Curr_Snap (Obj : Object_Type)
    return Snapshots_Index_Type
@@ -1667,6 +1985,26 @@ is
       Progress         : in out Boolean)
    is
    begin
+
+      if Primitive.Valid (Obj.Sync_Primitive) and then
+         not Obj.Secure_Superblock
+      then
+         if Obj.Cache_Sync_State = Inactive then
+            Declare_Sync_Cache_Dirty :
+            declare
+               Cache_Dirty : Boolean;
+            begin
+
+               Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
+
+               if not Cache_Dirty then
+                  Obj.Secure_Superblock := True;
+               end if;
+               Progress := True;
+            end Declare_Sync_Cache_Dirty;
+         end if;
+      end if;
+
       --
       --  Store the current generation in the current
       --  super-block before it gets secured.
@@ -1850,11 +2188,6 @@ is
    is
    begin
       --
-      --  The Crypto module has its own internal buffer, Data has to be
-      --  copied in and copied out.
-      --
-
-      --
       --  Only writes primitives (encrypted Data) are handled here,
       --  read primitives (decrypred Data) are handled in 'give_Read_Data'.
       --
@@ -1895,9 +2228,7 @@ is
 
          end Declare_Prim_12;
          Progress := True;
-
       end loop Loop_Crypto_Completed_Prims;
-
    end Execute_Crypto;
 
    procedure Execute_IO (
@@ -2032,8 +2363,6 @@ is
 
       Execute_SCD (Obj, Progress);
 
-      --  pragma Debug (Debug.Print_String (To_String (Obj)));
-
       if Obj.Creating_Snapshot and then
          not Obj.Secure_Superblock and then
          not Obj.Stall_Snapshot_Creation
@@ -2041,205 +2370,22 @@ is
          Create_Snapshot_Internal (Obj, Progress);
       end if;
 
-      if Primitive.Valid (Obj.Sync_Primitive) and then
-         not Obj.Secure_Superblock
-      then
-         if Obj.Cache_Sync_State = Inactive then
-            Declare_Sync_Cache_Dirty :
-            declare
-               Cache_Dirty : Boolean;
-            begin
+      Execute_Request_Pool (Obj, Progress);
+      Execute_Splitter     (Obj, Progress);
+      Execute_VBD          (Obj, Crypto_Plain_Buf, Progress);
 
-               Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
-
-               if not Cache_Dirty then
-                  Obj.Secure_Superblock := True;
-               end if;
-               Progress := True;
-            end Declare_Sync_Cache_Dirty;
-         end if;
-      end if;
-
-      Execute_Cache (Obj, IO_Buf, Progress);
+      Execute_Cache  (Obj, IO_Buf, Progress);
+      Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
+      Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
 
       Execute_Free_Tree (Obj, Progress);
       Execute_Meta_Tree (Obj, Progress);
-
-      Execute_Request_Pool (Obj, Progress);
-
-      Execute_Splitter (Obj, Progress);
-
-      Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
-
       Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
 
       Execute_Sync_Superblock (Obj, IO_Buf, Progress);
 
-      Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
-
-      Execute_IO (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
-
       Obj.Execute_Progress := Progress;
    end Execute;
-
-   function Client_Request_Acceptable (Obj : Object_Type)
-   return Boolean
-   is (Pool.Request_Acceptable (Obj.Request_Pool_Obj));
-
-   procedure Submit_Client_Request (
-      Obj : in out Object_Type;
-      Req :        Request.Object_Type;
-      ID  :        Snapshot_ID_Type)
-   is
-      Number_Of_Primitives : constant Number_Of_Primitives_Type :=
-         Splitter.Number_Of_Primitives (Req);
-   begin
-      if Number_Of_Primitives = 0 then
-         raise Program_Error;
-      end if;
-
-      Pool.Submit_Request (
-         Obj.Request_Pool_Obj,
-         Req,
-         ID,
-         Number_Of_Primitives);
-   end Submit_Client_Request;
-
-   function Peek_Completed_Client_Request (Obj : Object_Type)
-   return Request.Object_Type
-   is (Pool.Peek_Completed_Request (Obj.Request_Pool_Obj));
-
-   procedure Drop_Completed_Client_Request (
-      Obj : in out Object_Type;
-      Req :        Request.Object_Type)
-   is
-   begin
-      Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
-      Debug.Print_String ("Completed Request: " & Request.To_String (Req));
-      Obj.State := Invalid;
-   end Drop_Completed_Client_Request;
-
-   --
-   --  For now there can be only one Request pending.
-   --
-   function Front_End_Busy_With_Other_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Boolean
-   is (not Request.Equal (Obj.Wait_For_Front_End.Req, Req));
-
-   procedure Has_IO_Request (
-      Obj      :     Object_Type;
-      Req      : out Request.Object_Type;
-      Data_Idx : out Block_IO.Data_Index_Type)
-   is
-   begin
-      Req      := Request.Invalid_Object;
-      Data_Idx := 0;
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Block_IO.Peek_Generated_Primitive (Obj.IO_Obj);
-      begin
-         if Primitive.Valid (Prim) then
-            Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.IO_Obj, Prim);
-            Req      := Request.Valid_Object (
-               Op     => Primitive.Operation (Prim),
-               Succ   => False,
-               Blk_Nr => Primitive.Block_Number (Prim),
-               Off    => 0,
-               Cnt    => 1,
-               Tg     => 0);
-         end if;
-      end;
-   end Has_IO_Request;
-
-   procedure IO_Request_In_Progress (
-      Obj      : in out Object_Type;
-      Data_Idx :        Block_IO.Data_Index_Type)
-   is
-   begin
-      Block_IO.Drop_Generated_Primitive_2 (Obj.IO_Obj, Data_Idx);
-   end IO_Request_In_Progress;
-
-   procedure IO_Request_Completed (
-      Obj        : in out Object_Type;
-      Data_Index :        Block_IO.Data_Index_Type;
-      Success    :        Boolean)
-   is
-   begin
-      Block_IO.Mark_Generated_Primitive_Complete (
-         Obj.IO_Obj, Data_Index, Success);
-   end IO_Request_Completed;
-
-   procedure Client_Data_Ready (
-      Obj : in out Object_Type;
-      Req :    out Request.Object_Type)
-   is
-   begin
-      Req := Request.Invalid_Object;
-
-      if Primitive.Valid (Obj.Wait_For_Front_End.Prim) then
-         return;
-      end if;
-
-      --
-      --  When it was a read Request, we need the location to
-      --  where the Crypto should copy the decrypted data.
-      --
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Crypto.Peek_Completed_Primitive (Obj.Crypto_Obj);
-      begin
-         if
-            Primitive.Valid (Prim) and then
-            Primitive.Operation (Prim) = Read
-         then
-            Start_Waiting_For_Front_End (Obj, Prim, Event_Obtain_Client_Data);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
-         end if;
-      end;
-   end Client_Data_Ready;
-
-   function Client_Data_Index (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Primitive.Index_Type
-   is
-   begin
-      if Front_End_Busy_With_Other_Request (Obj, Req) then
-         return Primitive.Invalid_Index;
-      end if;
-
-      return Primitive.Index (Obj.Wait_For_Front_End.Prim);
-   end Client_Data_Index;
-
-   procedure Obtain_Client_Data (
-      Obj              : in out Object_Type;
-      Req              :        Request.Object_Type;
-      Data_Index       :    out Crypto.Plain_Buffer_Index_Type;
-      Data_Index_Valid :    out Boolean)
-   is
-      Prim  : constant Primitive.Object_Type := Obj.Wait_For_Front_End.Prim;
-      Event : constant Event_Type            := Obj.Wait_For_Front_End.Event;
-   begin
-      Data_Index_Valid := False;
-      Data_Index       := Crypto.Plain_Buffer_Index_Type'First;
-
-      if Front_End_Busy_With_Other_Request (Obj, Req) or else
-         Event /= Event_Obtain_Client_Data
-      then
-         return;
-      end if;
-
-      Data_Index := Crypto.Plain_Buffer_Index_Type (
-         Crypto.Data_Index (Obj.Crypto_Obj, Prim));
-
-      Data_Index_Valid := True;
-      Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
-      Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
-      Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
-   end Obtain_Client_Data;
 
    procedure Start_Waiting_For_Front_End (
       Obj   : in out Object_Type;
@@ -2256,167 +2402,6 @@ is
          Event       => Event,
          In_Progress => False);
    end Start_Waiting_For_Front_End;
-
-   --
-   --  FIXME move Wait_For_Front_End allocation into execute,
-   --       turn procedure into function
-   --
-   procedure Client_Data_Required (
-      Obj : in out Object_Type;
-      Req :    out Request.Object_Type)
-   is
-   begin
-      Req := Request.Invalid_Object;
-
-      if Primitive.Valid (Obj.Wait_For_Front_End.Prim) then
-         return;
-      end if;
-
-      --
-      --  A write Request, we need the location from where to read the new
-      --  leaf data.
-      --
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
-      begin
-         if Primitive.Valid (Prim) and then Primitive.Operation (Prim) = Write
-         then
-            Start_Waiting_For_Front_End (
-               Obj, Prim, Event_Supply_Client_Data_After_VBD);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
-         end if;
-      end;
-
-      --
-      --  The free-tree needs the data to give to the Write_Back module.
-      --
-      declare
-         Prim : constant Primitive.Object_Type :=
-            New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
-      begin
-         if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
-            Start_Waiting_For_Front_End (
-               Obj, Prim, Event_Supply_Client_Data_After_FT);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
-         end if;
-      end;
-   end Client_Data_Required;
-
-   procedure Supply_Client_Data (
-      Obj      : in out Object_Type;
-      Now      :        Timestamp_Type;
-      Req      :        Request.Object_Type;
-      Data     :        Block_Data_Type;
-      Progress :    out Boolean)
-   is
-      pragma Unreferenced (Now);
-   begin
-      case Obj.SCD_State is
-      when Inactive =>
-         Obj.SCD_State := Active;
-         Obj.SCD_Data := Data;
-         Obj.SCD_Req := Req;
-         Obj.SCD_Curr_Lvl := 1;
-         Obj.SCD_New_PBAs := (others => 0);
-         Obj.SCD_New_Blocks := 0;
-         Obj.SCD_Free_PBAs := (others => 0);
-         Obj.SCD_Free_Blocks := 0;
-         Progress := True;
-      when others =>
-         raise Program_Error;
-      end case;
-   end Supply_Client_Data;
-
-   procedure Crypto_Cipher_Data_Required (
-      Obj        :     Object_Type;
-      Req        : out Request.Object_Type;
-      Data_Index : out Crypto.Plain_Buffer_Index_Type)
-   is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
-   begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
-      Data_Index := Crypto.Plain_Buffer_Index_Type (Item_Index);
-      if not Primitive.Valid (Prim) or else
-         Primitive.Operation (Prim) /= Write
-      then
-         Req := Request.Invalid_Object;
-         return;
-      end if;
-      Req := Request.Valid_Object (
-         Op     => CBE.Write,
-         Succ   => False,
-         Blk_Nr => Primitive.Block_Number (Prim),
-         Off    => 0,
-         Cnt    => 1,
-         Tg     => 0);
-   end Crypto_Cipher_Data_Required;
-
-   procedure Crypto_Cipher_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        Crypto.Plain_Buffer_Index_Type)
-   is
-   begin
-      Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
-   end Crypto_Cipher_Data_Requested;
-
-   procedure Supply_Crypto_Cipher_Data (
-      Obj        : in out Object_Type;
-      Data_Index :        Crypto.Cipher_Buffer_Index_Type;
-      Data_Valid :        Boolean)
-   is
-   begin
-      Crypto.Mark_Completed_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
-   end Supply_Crypto_Cipher_Data;
-
-   procedure Crypto_Plain_Data_Required (
-      Obj        :     Object_Type;
-      Req        : out Request.Object_Type;
-      Data_Index : out Crypto.Cipher_Buffer_Index_Type)
-   is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
-   begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
-      Data_Index := Crypto.Cipher_Buffer_Index_Type (Item_Index);
-      if not Primitive.Valid (Prim) or else
-         Primitive.Operation (Prim) /= Read
-      then
-         Req := Request.Invalid_Object;
-         return;
-      end if;
-      Req := Request.Valid_Object (
-         Op     => CBE.Read,
-         Succ   => False,
-         Blk_Nr => Primitive.Block_Number (Prim),
-         Off    => 0,
-         Cnt    => 1,
-         Tg     => 0);
-   end Crypto_Plain_Data_Required;
-
-   procedure Crypto_Plain_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        Crypto.Cipher_Buffer_Index_Type)
-   is
-   begin
-      Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
-   end Crypto_Plain_Data_Requested;
-
-   procedure Supply_Crypto_Plain_Data (
-      Obj        : in out Object_Type;
-      Data_Index :        Crypto.Plain_Buffer_Index_Type;
-      Data_Valid :        Boolean)
-   is
-   begin
-      Crypto.Mark_Completed_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
-   end Supply_Crypto_Plain_Data;
 
    function Execute_Progress (Obj : Object_Type)
    return Boolean
