@@ -204,6 +204,11 @@ private
       function Full (Obj : Index_Queue_Type)
       return Boolean;
 
+      function Avail (
+         Obj : Index_Queue_Type;
+         Num : Natural)
+      return Boolean;
+
    private
 
          type Index_Queue_Type is record

@@ -134,9 +134,20 @@ is
    --
    --  Request_Acceptable
    --
-   function Request_Acceptable (Obj : Object_Type) return Boolean is
-   (not Index_Queue.Full (Obj.Indices) and then (
-      for some I of Obj.Items => Item.Invalid (I)));
+   function Request_Acceptable (Obj : Object_Type) return Boolean
+   is
+   begin
+      if not Index_Queue.Full (Obj.Indices)
+         and then Index_Queue.Avail (Obj.Indices, 2)
+      then
+         return True;
+      else
+         return False;
+      end if;
+   end Request_Acceptable;
+
+   --  (not Index_Queue.Full (Obj.Indices) and then (
+   --     for some I of Obj.Items => Item.Invalid (I)));
 
    --
    --  Submit_Request
@@ -394,6 +405,19 @@ is
       function Full (Obj : Index_Queue_Type)
       return Boolean
       is (Obj.Used = Used_Type'Last);
+
+      function Avail (
+         Obj : Index_Queue_Type;
+         Num : Natural)
+      return Boolean
+      is
+      begin
+         if Obj.Used <= Used_Type'Last - Used_Type (Num) then
+            return True;
+         else
+            return False;
+         end if;
+      end Avail;
    end Index_Queue;
 
 end CBE.Pool;
