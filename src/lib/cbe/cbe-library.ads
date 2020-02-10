@@ -420,11 +420,9 @@ private
       Last_Root_Hash               : Hash_Type;
       Secure_Superblock            : Boolean;
       Wait_For_Front_End           : Wait_For_Event_Type;
-      Creating_Snapshot            : Boolean;
       Creating_Quarantine_Snapshot : Boolean;
       Stall_Snapshot_Creation      : Boolean;
       Superblock                   : Superblock_Type;
-      Sync_Primitive               : Primitive.Object_Type;
 
       SCD_State    : SCD_State_Type;
       SCD_Req      : Request.Object_Type;

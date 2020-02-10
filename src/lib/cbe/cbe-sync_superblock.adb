@@ -1,5 +1,5 @@
 --
---  Copyright (C) 2019 Genode Labs GmbH, Componolit GmbH, secunet AG
+--  Copyright (C) 2020 Genode Labs GmbH, Componolit GmbH, secunet AG
 --
 --  This file is part of the Consistent Block Encrypter project, which is
 --  distributed under the terms of the GNU Affero General Public License
@@ -15,116 +15,58 @@ pragma Unreferenced (CBE.Debug);
 package body CBE.Sync_Superblock
 with SPARK_Mode
 is
-   package body Item
-   with SPARK_Mode
-   is
-      --
-      --  Pending_Item
-      --
-      function Invalid_Item
-      return Item_Type
-      is (
-         Sta => Invalid,
-         Idx => 0,
-         Gen => 0);
-
-      --
-      --  Pending_Item
-      --
-      procedure Pending_Item (
-         Obj : out Item_Type;
-         Idx :     Superblocks_Index_Type;
-         Gen :     Generation_Type)
-      is
-      begin
-         Obj.Sta := Pending;
-         Obj.Idx := Idx;
-         Obj.Gen := Gen;
-      end Pending_Item;
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Invalid     (Obj : Item_Type) return Boolean
-      is (Obj.Sta = Invalid);
-
-      function Pending     (Obj : Item_Type) return Boolean
-      is (Obj.Sta = Pending);
-
-      function In_Progress (Obj : Item_Type) return Boolean
-      is (Obj.Sta = In_Progress);
-
-      function Complete    (Obj : Item_Type) return Boolean
-      is (Obj.Sta = Complete);
-
-      function State      (Obj : Item_Type) return State_Type
-      is (Obj.Sta);
-
-      function Index      (Obj : Item_Type) return Superblocks_Index_Type
-      is (Obj.Idx);
-
-      function Generation (Obj : Item_Type) return Generation_Type
-      is (Obj.Gen);
-
-      procedure Set_State (
-         Obj : in out Item_Type;
-         Sta :        State_Type)
-      is
-      begin
-         Obj.Sta := Sta;
-      end Set_State;
-   end Item;
-
-   --
-   --  Initialize_Object
-   --
    procedure Initialize_Object (Obj : out Object_Type)
    is
    begin
-      Obj := Initialized_Object;
+      Obj.State           := Invalid;
+      Obj.Index           := 0;
+      Obj.Pool_Index_Slot := Pool_Idx_Slot_Invalid;
+      Obj.Gen             := 0;
+      Obj.Success         := False;
    end Initialize_Object;
 
-   --
-   --  Initialized_Object
-   --
-   function Initialized_Object
-   return Object_Type
-   is (
-      Current_Item      => Item.Invalid_Item,
-      Current_Primitive => Primitive.Invalid_Object);
-
-   --
-   --  Request_Acceptable
-   --
    function Request_Acceptable (Obj : Object_Type)
-   return Boolean
-   is
-   begin
-      return not Primitive.Valid (Obj.Current_Primitive);
-   end Request_Acceptable;
+   return Boolean is (Obj.State = Invalid);
 
    --
    --  Submit_Request
    --
    procedure Submit_Request (
-      Obj : out Object_Type;
-      Idx :     Superblocks_Index_Type;
-      Gen :     Generation_Type)
+      Obj        : out Object_Type;
+      Pool_Index :     Pool_Index_Type;
+      Idx        :     Superblocks_Index_Type;
+      Gen        :     Generation_Type)
    is
    begin
-      pragma Debug (Debug.Print_String ("Sync_Superblock.Submit_Request: "
-         & " Gen: " & Debug.To_String (Debug.Uint64_Type (Gen))));
-
-      Item.Pending_Item (Obj.Current_Item, Idx, Gen);
-      Obj.Current_Primitive := Primitive.Valid_Object_No_Pool_Idx (
-         Op     => Write,
-         Succ   => Request.Success_Type (False),
-         Tg     => Primitive.Tag_Sync_SB,
-         --  there is currently a 1:1 mapping between SB slot and pba
-         Blk_Nr => Block_Number_Type (Item.Index (Obj.Current_Item)),
-         Idx    => 0);
+      Obj.State           := Cache_Flush_Pending;
+      Obj.Index           := Idx;
+      Obj.Pool_Index_Slot := Pool_Idx_Slot_Valid (Pool_Index);
+      Obj.Gen             := Gen;
+      Obj.Success         := False;
    end Submit_Request;
+
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      case Obj.State is
+      when Cache_Flush_Pending | Cache_Flush_In_Progress =>
+         null;
+      when Cache_Flush_Complete =>
+         Obj.State := Write_SB_Pending;
+         Progress := True;
+      when Write_SB_Pending | Write_SB_In_Progress =>
+         null;
+      when Write_SB_Complete =>
+         Obj.State := Sync_Pending;
+         Progress := True;
+      when Sync_Pending | Sync_In_Progress =>
+         null;
+      when Invalid | Sync_Complete =>
+         null;
+      end case;
+   end Execute;
 
    --
    --  Peek_Completed_Primitive
@@ -133,11 +75,17 @@ is
    return Primitive.Object_Type
    is
    begin
-      if Item.Complete (Obj.Current_Item)
-      then
-         return Obj.Current_Primitive;
+      if Obj.State = Sync_Complete then
+         return Primitive.Valid_Object (
+            Op     => Sync,
+            Succ   => Obj.Success,
+            Tg     => Primitive.Tag_Sync_SB_Sync,
+            Pl_Idx => Pool_Idx_Slot_Content (Obj.Pool_Index_Slot),
+            Blk_Nr => 0, --  XXX add proper block number
+            Idx    => 0);
+      else
+         return Primitive.Invalid_Object;
       end if;
-      return Primitive.Invalid_Object;
    end Peek_Completed_Primitive;
 
    --
@@ -149,13 +97,13 @@ is
    return Generation_Type
    is
    begin
-      if Item.Complete (Obj.Current_Item) and then
-         Primitive.Block_Number (Obj.Current_Primitive) =
-            Primitive.Block_Number (Prim)
+      if Obj.State = Sync_Complete
+         and then Primitive.Pool_Idx_Slot (Prim) = Obj.Pool_Index_Slot
       then
-         return Item.Generation (Obj.Current_Item);
+         return Obj.Gen;
+      else
+         raise Program_Error;
       end if;
-      return Generation_Type (0);
    end Peek_Completed_Generation;
 
    --
@@ -166,13 +114,12 @@ is
       Prim :        Primitive.Object_Type)
    is
    begin
-      if Item.Complete (Obj.Current_Item) and then
-         Primitive.Block_Number (Obj.Current_Primitive) =
-            Primitive.Block_Number (Prim)
+      if Obj.State = Sync_Complete
+         and then Primitive.Pool_Idx_Slot (Prim) = Obj.Pool_Index_Slot
       then
-         Obj.Current_Item := Item.Invalid_Item;
-         Obj.Current_Primitive := Primitive.Invalid_Object;
-         return;
+         Obj.State := Invalid;
+      else
+         raise Program_Error;
       end if;
    end Drop_Completed_Primitive;
 
@@ -183,12 +130,32 @@ is
    return Primitive.Object_Type
    is
    begin
-      if Item.Pending (Obj.Current_Item)
-      then
-         return Obj.Current_Primitive;
-      end if;
-
-      return Primitive.Invalid_Object;
+      case Obj.State is
+      when Cache_Flush_Pending =>
+         return Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_Sync_SB_Cache_Flush,
+            Blk_Nr => 0,
+            Idx    => 0);
+      when Write_SB_Pending =>
+         return Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => Request.Success_Type (False),
+            Tg     => Primitive.Tag_Sync_SB_Write_SB,
+            --  there is currently a 1:1 mapping between SB slot and pba
+            Blk_Nr => Block_Number_Type (Obj.Index),
+            Idx    => 0);
+      when Sync_Pending =>
+         return Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => Request.Success_Type (False),
+            Tg     => Primitive.Tag_Sync_SB_Sync,
+            Blk_Nr => 0,
+            Idx    => 0);
+      when others =>
+         return Primitive.Invalid_Object;
+      end case;
    end Peek_Generated_Primitive;
 
    --
@@ -200,11 +167,9 @@ is
    return Superblocks_Index_Type
    is
    begin
-      if Item.Pending (Obj.Current_Item) and then
-         Primitive.Block_Number (Obj.Current_Primitive) =
-            Primitive.Block_Number (Prim)
+      if Obj.State = Write_SB_Pending
       then
-         return Item.Index (Obj.Current_Item);
+         return Obj.Index;
       end if;
       raise Program_Error;
    end Peek_Generated_Index;
@@ -217,13 +182,16 @@ is
       Prim :        Primitive.Object_Type)
    is
    begin
-      if Item.Pending (Obj.Current_Item) and then
-         Primitive.Block_Number (Obj.Current_Primitive) =
-            Primitive.Block_Number (Prim)
-      then
-         Item.Set_State (Obj.Current_Item, Item.In_Progress);
-         return;
-      end if;
+      case Obj.State is
+      when Cache_Flush_Pending =>
+         Obj.State := Cache_Flush_In_Progress;
+      when Write_SB_Pending =>
+         Obj.State := Write_SB_In_Progress;
+      when Sync_Pending =>
+         Obj.State := Sync_In_Progress;
+      when others =>
+         raise Program_Error;
+      end case;
    end Drop_Generated_Primitive;
 
    --
@@ -234,13 +202,22 @@ is
       Prim :        Primitive.Object_Type)
    is
    begin
-      if Item.In_Progress (Obj.Current_Item) and then
-         Primitive.Block_Number (Obj.Current_Primitive) =
-            Primitive.Block_Number (Prim)
-      then
-         Item.Set_State (Obj.Current_Item, Item.Complete);
-         Primitive.Success (Obj.Current_Primitive, Primitive.Success (Prim));
-         return;
+      case Obj.State is
+      when Cache_Flush_In_Progress =>
+         Obj.State := Cache_Flush_Complete;
+      when Write_SB_In_Progress =>
+         Obj.State := Write_SB_Complete;
+      when Sync_In_Progress =>
+         Obj.State := Sync_Complete;
+      when others =>
+         raise Program_Error;
+      end case;
+
+      Obj.Success := Primitive.Success (Prim);
+
+      --  shortcut in case any primitive was unsuccessful
+      if not Obj.Success then
+         Obj.State := Sync_Complete;
       end if;
    end Mark_Generated_Primitive_Complete;
 end CBE.Sync_Superblock;

@@ -1,5 +1,5 @@
 --
---  Copyright (C) 2019 Genode Labs GmbH, Componolit GmbH, secunet AG
+--  Copyright (C) 2020 Genode Labs GmbH, Componolit GmbH, secunet AG
 --
 --  This file is part of the Consistent Block Encrypter project, which is
 --  distributed under the terms of the GNU Affero General Public License
@@ -20,15 +20,7 @@ is
    --
    --  Initialize_Object
    --
-   --  FIXME will not be used anymore when the library module is in spark
-   --
    procedure Initialize_Object (Obj : out Object_Type);
-
-   --
-   --  Initialized_Object
-   --
-   function Initialized_Object
-   return Object_Type;
 
    --
    --  Request_Acceptable
@@ -40,9 +32,17 @@ is
    --  Submit_Request
    --
    procedure Submit_Request (
-      Obj : out Object_Type;
-      Idx :     Superblocks_Index_Type;
-      Gen :     Generation_Type);
+      Obj        : out Object_Type;
+      Pool_Index :     Pool_Index_Type;
+      Idx        :     Superblocks_Index_Type;
+      Gen        :     Generation_Type);
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
 
    --
    --  Peek_Completed_Primitive
@@ -101,65 +101,38 @@ is
 
 private
 
-   --
-   --  Item
-   --
-   package Item
-   with SPARK_Mode
-   is
-      type State_Type is (Invalid, Pending, In_Progress, Complete);
-      type Item_Type  is private;
+   type State_Type is (
+      Invalid,
+      Cache_Flush_Pending,
+      Cache_Flush_In_Progress,
+      Cache_Flush_Complete,
+      Write_SB_Pending,
+      Write_SB_In_Progress,
+      Write_SB_Complete,
+      Sync_Pending,
+      Sync_In_Progress,
+      Sync_Complete);
 
-      --
-      --  Invalid_Item
-      --
-      function Invalid_Item
-      return Item_Type;
+   function To_String (State : State_Type) return String
+   is (
+      case State is
+      when Invalid                 => "Invalid",
+      when Cache_Flush_Pending     => "Cache_Flush_Pending",
+      when Cache_Flush_In_Progress => "Cache_Flush_In_Progress",
+      when Cache_Flush_Complete    => "Cache_Flush_Complete",
+      when Write_SB_Pending        => "Write_SB_Pending",
+      when Write_SB_In_Progress    => "Write_SB_In_Progress",
+      when Write_SB_Complete       => "Write_SB_Complete",
+      when Sync_Pending            => "Sync_Pending",
+      when Sync_In_Progress        => "Sync_In_Progress",
+      when Sync_Complete           => "Sync_Complete");
 
-      --
-      --  Pending_Item
-      --
-      procedure Pending_Item (
-         Obj : out Item_Type;
-         Idx :     Superblocks_Index_Type;
-         Gen :     Generation_Type);
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Invalid     (Obj : Item_Type) return Boolean;
-      function Pending     (Obj : Item_Type) return Boolean;
-      function In_Progress (Obj : Item_Type) return Boolean;
-      function Complete    (Obj : Item_Type) return Boolean;
-
-      function State      (Obj : Item_Type) return State_Type;
-      function Index      (Obj : Item_Type) return Superblocks_Index_Type;
-      function Generation (Obj : Item_Type) return Generation_Type;
-
-      procedure Set_State (
-         Obj : in out Item_Type;
-         Sta :        State_Type);
-
-   private
-
-      --
-      --  Item_Type
-      --
-      type Item_Type is record
-         Idx : Superblocks_Index_Type;
-         Gen : Generation_Type;
-         Sta : State_Type;
-      end record;
-
-   end Item;
-
-   --
-   --  Object_Type
-   --
    type Object_Type is record
-      Current_Primitive : Primitive.Object_Type;
-      Current_Item      : Item.Item_Type;
+      State           : State_Type;
+      Index           : Superblocks_Index_Type;
+      Pool_Index_Slot : Pool_Index_Slot_Type;
+      Gen             : Generation_Type;
+      Success         : Boolean;
    end record;
 
 end CBE.Sync_Superblock;

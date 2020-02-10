@@ -246,8 +246,14 @@ is
    function Has_Tag_Encrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Encrypt);
 
-   function Has_Tag_Sync_SB (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_Sync_SB);
+   function Has_Tag_Sync_SB_Cache_Flush (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Sync_SB_Cache_Flush);
+
+   function Has_Tag_Sync_SB_Write_SB (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Sync_SB_Write_SB);
+
+   function Has_Tag_Sync_SB_Sync (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Sync_SB_Sync);
 
    function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Cache);
