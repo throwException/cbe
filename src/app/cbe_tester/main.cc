@@ -1386,6 +1386,9 @@ class Cbe::Main
 					case Request::Operation::WRITE:
 						op = Block::Packet_descriptor::WRITE;
 						break;
+					case Cbe::Request::Operation::SYNC:
+						op = Block::Packet_descriptor::SYNC;
+						break;
 					default:
 						throw Invalid_io_request();
 					}
@@ -1419,8 +1422,13 @@ class Cbe::Main
 
 				bool const read  = packet.operation() == Block::Packet_descriptor::READ;
 				bool const write = packet.operation() == Block::Packet_descriptor::WRITE;
-				bool const op_match = (read && _blk_req.read())
-								   || (write && _blk_req.write());
+				bool const sync  = packet.operation() == Block::Packet_descriptor::SYNC;
+
+				bool const op_match =
+					(read && _blk_req.read()) ||
+					(write && _blk_req.write()) ||
+					(sync && _blk_req.sync());
+
 				bool const bn_match = packet.block_number() == _blk_req.block_number;
 				// assert packet descriptor belongs to stored backend request
 				if (!bn_match || !op_match) { break; }
