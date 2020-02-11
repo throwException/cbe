@@ -38,6 +38,8 @@ is
       Obj.Write_State := Invalid;
       Obj.Sync_State  := Invalid;
 
+      Obj.Write_Stalled := False;
+
       Obj.Sync_Pending := False;
 
       Obj.Execute_Progress        := False;
@@ -77,7 +79,6 @@ is
 
       Obj.Superblock := SBs (Curr_SB);
       Obj.Superblock.Superblock_ID := Obj.Superblock.Superblock_ID + 1;
-      Obj.Last_Secured_Generation := Obj.Superblock.Last_Secured_Generation;
       Obj.Cur_Gen :=
          Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen + 1;
       Obj.Last_Root_PBA :=
@@ -86,6 +87,11 @@ is
          Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Hash;
       Obj.Cur_SB := Curr_SB;
       Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
+
+      --  XXX partially unused as long as snapshot creation is disabled
+      Obj.Last_Secured_Generation := 0;
+      Obj.Snap_Gen := 0;
+      Obj.Snap_Token := 0;
 
       Obj.SCD_State       := Inactive;
       Obj.SCD_Req         := Request.Invalid_Object;
@@ -116,23 +122,23 @@ is
 
       Obj.WB_Prim := Primitive.Invalid_Object;
 
-      declare
-         Next_Snap : constant Snapshots_Index_Type :=
-            Next_Snap_Slot (Obj);
-      begin
-         Obj.Superblock.Snapshots (Next_Snap) :=
-            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
-         --
-         --  Clear flags to prevent creating a quarantine snapshot
-         --  unintentionally.
-         --
-         Obj.Superblock.Snapshots (Next_Snap).Keep := False;
-         Obj.Superblock.Snapshots (Next_Snap).Gen := Obj.Cur_Gen;
-         Obj.Superblock.Curr_Snap := Next_Snap;
-      end;
+      --  declare
+      --     Next_Snap : constant Snapshots_Index_Type :=
+      --        Next_Snap_Slot (Obj);
+      --  begin
+      --     Obj.Superblock.Snapshots (Next_Snap) :=
+      --        Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
+      --     --
+      --     --  Clear flags to prevent creating a quarantine snapshot
+      --     --  unintentionally.
+      --     --
+      --     Obj.Superblock.Snapshots (Next_Snap).Keep := False;
+      --     Obj.Superblock.Snapshots (Next_Snap).Gen := Obj.Cur_Gen;
+      --     Obj.Superblock.Curr_Snap := Next_Snap;
+      --  end;
 
-      Debug.Print_String ("Initial SB state: ");
-      Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock);
+      pragma Debug (Debug.Print_String ("Initial SB state: "));
+      pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
    end Initialize_Object;
 
@@ -159,14 +165,15 @@ is
       Snap_ID : out Generation_Type;
       Result  : out Boolean)
    is
-      R : constant Boolean := Obj.Last_Secured_Generation = Obj.Snap_Gen;
+      R : constant Boolean :=
+         Obj.Superblock.Last_Secured_Generation = Obj.Snap_Gen;
    begin
       pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: "
          & " result: " & Debug.To_String (R)));
 
       if R then
          Token   := Obj.Snap_Token;
-         Snap_ID := Obj.Last_Secured_Generation;
+         Snap_ID := Obj.Superblock.Last_Secured_Generation;
       else
          Token   := 0;
          Snap_ID := 0;
@@ -263,7 +270,8 @@ is
    is
    begin
       Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
-      Debug.Print_String ("Completed Request: " & Request.To_String (Req));
+      pragma Debug (Debug.Print_String ("Completed Request: "
+         & Request.To_String (Req)));
       Obj.State := Invalid;
    end Drop_Completed_Client_Request;
 
@@ -380,6 +388,9 @@ is
       Data_Index_Valid := True;
       Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
       Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+      pragma Debug (Debug.Print_String (
+         "========> Pool.Mark_Completed_Primitive: "
+         & Primitive.To_String (Prim)));
       Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
    end Obtain_Client_Data;
 
@@ -734,9 +745,9 @@ is
       PBA : constant Physical_Block_Address_Type :=
          Write_Back.Peek_Completed_Root (WB, Prim);
    begin
-      Debug.Print_String ("Update_Snapshot_Hash: "
+      pragma Debug (Debug.Print_String ("Update_Snapshot_Hash: "
          & " Gen: " & Debug.To_String (Curr_Gen)
-         & " PBA: " & Debug.To_String (PBA));
+         & " PBA: " & Debug.To_String (PBA)));
 
       Snap.Gen := Curr_Gen;
       Snap.PBA := PBA;
@@ -845,12 +856,13 @@ is
       New_Free_Tree.Execute (
          Obj.New_Free_Tree_Obj,
          Obj.Superblock.Snapshots,
-         Obj.Last_Secured_Generation,
+         Obj.Superblock.Last_Secured_Generation,
          Progress);
 
       Loop_Generated_Cache_Prims :
       loop
-         Prim := New_Free_Tree.Peek_Generated_Cache_Primitive (Obj.New_Free_Tree_Obj);
+         Prim := New_Free_Tree.Peek_Generated_Cache_Primitive (
+            Obj.New_Free_Tree_Obj);
 
          exit Loop_Generated_Cache_Prims when
             not Primitive.Valid (Prim) or else
@@ -912,36 +924,30 @@ is
                Primitive.Success (Prim);
 
             if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
-               Declare_Could_Discard_Snap :
-               declare
-                  Could_Discard_Snap : Boolean;
-               begin
-                  Try_Discard_Snapshot (
-                     Obj.Superblock.Snapshots,
-                     Curr_Snap (Obj), Could_Discard_Snap);
-                  if Could_Discard_Snap then
-                     Obj.Free_Tree_Retry_Count :=
-                        Obj.Free_Tree_Retry_Count + 1;
+               Obj.Free_Tree_Retry_Count := Obj.Free_Tree_Retry_Count + 1;
 
-                     --
-                     --  Instructing the FT to retry the allocation will
-                     --  lead to clearing its internal 'query branches'
-                     --  state and executing the previously submitted
-                     --  Request again.
-                     --
-                     --  (This retry attempt is a shortcut as we do not have
-                     --  all information available at this point to call
-                     --  'submit_Request' again - so we must not call
-                     --  'drop_Completed_Primitive' as this will clear the
-                     --  Request.)
-                     --
-                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
-                  else
-                     Debug.Print_String ("Retry_Allocation failed");
-                     raise Program_Error;
-                  end if;
-               end Declare_Could_Discard_Snap;
+               if not Obj.Write_Stalled then
+
+                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+
+                  Sync_Superblock.Submit_Request (
+                     Obj.Sync_SB_Obj, 1, Obj.Cur_SB, Obj.Cur_Gen);
+
+                  pragma Debug (Debug.Print_String (
+                     "Write_Stalled Sync_Request"));
+                  Obj.Write_Stalled := True;
+                  Obj.State := Sync_Request;
+               else
+                  Obj.Write_Stalled := False;
+                  pragma Debug (Debug.Print_String ("Retry FT allocation"));
+                  New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
+               end if;
+
                exit Loop_Free_Tree_Completed_Prims;
+            else
+               pragma Debug (Debug.Print_String (
+                  "Retry FT allocation failed"));
+               --  raise Program_Error;
             end if;
 
             Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
@@ -1000,8 +1006,9 @@ is
             exit Loop_Completed_Meta_Tree_Primitives when
                not Primitive.Valid (Prim);
 
-            Debug.Print_String ("Loop_Completed_Meta_Tree_Primitives: "
-               & Primitive.To_String (Prim));
+            pragma Debug (Debug.Print_String (
+               "Loop_Completed_Meta_Tree_Primitives: "
+               & Primitive.To_String (Prim)));
 
             if Primitive.Has_Tag_FT_MT (Prim) then
                declare
@@ -1013,9 +1020,10 @@ is
                   Obj.Superblock.Meta_Number := Node.PBA;
                   Obj.Superblock.Meta_Hash   := Node.Hash;
 
-                  Debug.Print_String ("Loop_Completed_Meta_Tree_Primitives: "
+                  pragma Debug (Debug.Print_String (
+                     "Loop_Completed_Meta_Tree_Primitives: "
                      & " Node: " & Debug.To_String (Node.PBA)
-                     & " Prim: " & Primitive.To_String (Prim));
+                     & " Prim: " & Primitive.To_String (Prim)));
                end;
 
                Primitive.Success (Obj.New_Free_Tree_Prim,
@@ -1066,7 +1074,8 @@ is
 
          declare
             WB : constant New_Free_Tree.Write_Back_Data_Type :=
-               New_Free_Tree.Peek_Completed_WB_Data (Obj.New_Free_Tree_Obj, Prim);
+               New_Free_Tree.Peek_Completed_WB_Data (Obj.New_Free_Tree_Obj,
+                  Prim);
 
             FT_Root_Node : constant Type_1_Node_Type :=
                New_Free_Tree.Peek_Completed_Root_Node (Obj.New_Free_Tree_Obj,
@@ -1582,7 +1591,8 @@ is
                      Obj.Request_Pool_Obj,
                      Request.Block_Number (Req))
                   then
-                     pragma Debug (Pool.Dump_Pool_State (Obj.Request_Pool_Obj));
+                     pragma Debug (Pool.Dump_Pool_State (
+                        Obj.Request_Pool_Obj));
                      pragma Debug (Debug.Print_String ("Execute: "
                      & "overlapping request in progress"));
                      exit Loop_Pool_Pending_Requests;
@@ -1593,10 +1603,12 @@ is
 
                   case Request.Operation (Req) is
                      when Read =>
-                        Debug.Print_String ("New Read_Request: " & Request.To_String (Req));
+                        pragma Debug (Debug.Print_String ("New Read_Request: "
+                           & Request.To_String (Req)));
                         Obj.State := Read_Request;
                      when Write =>
-                        Debug.Print_String ("New Write_Request: " & Request.To_String (Req));
+                        pragma Debug (Debug.Print_String ("New Write_Request: "
+                           & Request.To_String (Req)));
                         Obj.State := Write_Request;
                      when others =>
                         raise Program_Error;
@@ -1609,10 +1621,13 @@ is
                      exit Loop_Pool_Pending_Requests;
                   end if;
 
+                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+
                   Sync_Superblock.Submit_Request (
                      Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
 
-                  Debug.Print_String ("New Sync_Request: " & Request.To_String (Req));
+                  pragma Debug (Debug.Print_String ("New Sync_Request: "
+                     & Request.To_String (Req)));
                   Obj.State := Sync_Request;
                end case;
 
@@ -1656,7 +1671,7 @@ is
                Snap_Slot_Index := Curr_Snap (Obj);
             end if;
 
-            Debug.Print_String ("Execute: "
+            pragma Debug (Debug.Print_String ("Execute: "
                & "submit VBD: "
                & "Snap_ID: " & Debug.To_String (Debug.Uint64_Type (Snap_ID))
                & " Prim: " & Primitive.To_String (Prim)
@@ -1670,7 +1685,7 @@ is
                   Obj.Superblock.Snapshots (Snap_Slot_Index).Gen))
                & " "
                & Debug.To_String (Obj.Superblock.Snapshots (
-                  Snap_Slot_Index).Hash));
+                  Snap_Slot_Index).Hash)));
 
             --
             --  For every new Request, we have to use the currlently active
@@ -1742,6 +1757,10 @@ is
             --  within the Cache, acknowledge the primitive.
             --
             Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+
+            pragma Debug (Debug.Print_String (
+               "========> Pool.Mark_Completed_Primitive: "
+               & Primitive.To_String (Prim)));
 
          end Declare_Prim_6;
          Progress := True;
@@ -1997,16 +2016,22 @@ is
 
             --  handle state
             Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
-            Obj.Last_Secured_Generation :=
-               Sync_Superblock.Peek_Completed_Generation (
-                  Obj.Sync_SB_Obj, Prim);
-            Debug.Print_String ("Old Cur_Gen: " & Debug.To_String (Obj.Cur_Gen));
+            --  Obj.Superblock.Last_Secured_Generation :=
+            --     Sync_Superblock.Peek_Completed_Generation (
+            --        Obj.Sync_SB_Obj, Prim);
+            pragma Debug (Debug.Print_String ("Old Cur_Gen: "
+               & Debug.To_String (Obj.Cur_Gen)));
             Obj.Cur_Gen := Obj.Cur_Gen + 1;
-            Debug.Print_String ("New Cur_Gen: " & Debug.To_String (Obj.Cur_Gen));
+            pragma Debug (Debug.Print_String ("New Cur_Gen: "
+               & Debug.To_String (Obj.Cur_Gen)));
             Obj.Superblock.Superblock_ID := Obj.Superblock.Superblock_ID + 1;
 
-            Debug.Print_String (" Cur_Gen: " & Debug.To_String (Obj.Cur_Gen)
-               & " Curr_Snap: " & Debug.To_String (Debug.Uint64_Type (Curr_Snap (Obj))));
+            pragma Debug (Debug.Print_String (" Cur_Gen: "
+               & Debug.To_String (Obj.Cur_Gen)
+               & " Curr_Snap: " & Debug.To_String (
+                  Debug.Uint64_Type (Curr_Snap (Obj)))));
+
+            pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
             Obj.Superblock.Snapshots (Curr_Snap (Obj)).Valid := True;
             Obj.Superblock.Snapshots (Curr_Snap (Obj)).Gen := Obj.Cur_Gen;
@@ -2015,16 +2040,21 @@ is
                "Loop_Sync_SB_Completed_Prims "
                & " Obj.Last_Secured_Generation: "
                & Debug.To_String (Debug.Uint64_Type (
-                  Obj.Last_Secured_Generation))));
+                  Obj.Superblock.Last_Secured_Generation))));
 
-            Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+            pragma Debug (Debug.Print_String ("Complete Sync_Request"));
 
-            Debug.Print_String ("Complete Sync_Request");
-            Obj.State := Invalid;
+            if not Obj.Write_Stalled then
+               Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+               pragma Debug (Debug.Print_String (
+                  "========> Pool.Mark_Completed_Primitive: "
+                  & Primitive.To_String (Prim)));
+               Obj.State := Invalid;
+            else
+               Obj.State := Write_Request;
+            end if;
 
             Obj.Secure_Superblock := False;
-
-            Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock);
 
             Sync_Superblock.Drop_Completed_Primitive (Obj.Sync_SB_Obj, Prim);
 
@@ -2074,13 +2104,8 @@ is
                exit Loop_Sync_SB_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
 
-               Declare_Dummy_Sync_Index :
-               declare
-                  Data_Idx : Block_IO.Data_Index_Type;
-               begin
-                  Block_IO.Submit_Primitive (
-                     Obj.IO_Obj, Primitive.Tag_Sync_SB_Sync, Prim, Data_Idx);
-               end Declare_Dummy_Sync_Index;
+               Block_IO.Submit_Primitive (
+                  Obj.IO_Obj, Primitive.Tag_Sync_SB_Sync, Prim);
 
             end if;
 
@@ -2293,9 +2318,11 @@ is
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
 
-      Execute_Free_Tree (Obj, Progress);
-      Execute_Meta_Tree (Obj, Progress);
-      Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
+      if Obj.State = Write_Request then
+         Execute_Free_Tree (Obj, Progress);
+         Execute_Meta_Tree (Obj, Progress);
+         Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
+      end if;
 
       if Obj.State = Sync_Request then
          Execute_Sync_Superblock (Obj, IO_Buf, Progress);

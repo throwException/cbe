@@ -390,6 +390,8 @@ private
       Write_State : Write_Request_State_Type;
       Sync_State  : Sync_Request_State_Type;
 
+      Write_Stalled : Boolean;
+
       Sync_Pending : Boolean;
 
       Snap_Token : Token_Type;
