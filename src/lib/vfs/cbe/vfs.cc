@@ -106,6 +106,18 @@ class Vfs_cbe::Wrapper
 			_sync_interval   = config.attribute_value("sync_interval", 5u) * 1000;
 			_secure_interval = config.attribute_value("secure_interval", 30u) * 1000;
 			_block_device    = config.attribute_value("block", _block_device);
+
+			using Passphrase = Genode::String<32+1>;
+			Passphrase passphrase = config.attribute_value("passphrase", Passphrase());
+
+			if (passphrase.valid()) {
+
+				External::Crypto::Key_data key { }; // XXX clear key material
+				Genode::memset(key.value, 0xa5, sizeof (key.value));
+				Genode::memcpy(key.value, passphrase.string(), passphrase.length()-1);
+
+				set_key(0, 0, key);
+			}
 		}
 
 		Cbe::Superblocks_index _read_superblocks(Cbe::Superblocks &sbs)
