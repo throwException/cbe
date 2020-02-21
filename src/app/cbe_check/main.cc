@@ -34,6 +34,9 @@ class Main
 		Cbe::Io_buffer        _blk_buf     { };
 		Cbe_check::Library    _cbe_check    { };
 
+		Genode::size_t        _blk_ratio   {
+			Cbe::BLOCK_SIZE / _blk.info().block_size };
+
 		void _execute()
 		{
 			for (bool progress { true }; progress; ) {
@@ -87,7 +90,8 @@ class Main
 						}
 						Block::Packet_descriptor packet {
 							_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-							request.block_number, request.count };
+							request.block_number * _blk_ratio,
+							request.count * _blk_ratio };
 
 						if (request.operation == Cbe::Request::Operation::WRITE) {
 							*reinterpret_cast<Cbe::Block_data*>(
@@ -124,7 +128,7 @@ class Main
 						(write && _blk_req.write());
 
 					bool const bn_match =
-						packet.block_number() == _blk_req.block_number;
+						packet.block_number() / _blk_ratio == _blk_req.block_number;
 
 					if (!bn_match || !op_match) {
 						break;
@@ -157,6 +161,12 @@ class Main
 		:
 			_env { env }
 		{
+			if (_blk_ratio == 0) {
+				error("backend block size not supported");
+				_env.parent().exit(-1);
+				return;
+			}
+
 			if (!_cbe_check.client_request_acceptable()) {
 				error("failed to submit request");
 				_env.parent().exit(-1);
