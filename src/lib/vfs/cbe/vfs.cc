@@ -428,40 +428,25 @@ class Vfs_cbe::Wrapper
 			return *_cbe;
 		}
 
-		enum Request_state { NONE, PENDING, COMPLETE, ERROR, ERROR_EOF };
-		Request_state _state { NONE };
-
 		struct Invalid_Request : Genode::Exception { };
 
-		Cbe::Request cbe_request(Vfs_handle &handle,
-		                         char *data, file_size count,
-		                         Cbe::Request::Operation operation)
+		struct Helper_request
 		{
-			file_size const offset = handle.seek();
+			enum { BLOCK_SIZE = 512, };
+			enum State { NONE, PENDING, IN_PROGRESS, COMPLETE, ERROR };
 
-			if ((offset % Cbe::BLOCK_SIZE) != 0) {
-				Genode::warning("offset (", offset, ") not multiple of block size");
-				throw Invalid_Request();
-			}
+			State state { NONE };
 
-			if (count < Cbe::BLOCK_SIZE) {
-				Genode::warning("count less than block size");
-				throw Invalid_Request();
-			}
+			Cbe::Block_data block_data  { };
+			Cbe::Request    cbe_request { };
 
-			if ((count % Cbe::BLOCK_SIZE) != 0) {
-				Genode::warning("count (", count, ") not multiple of block siz");
-				throw Invalid_Request();
-			}
+			bool pending()     const { return state == PENDING; }
+			bool in_progress() const { return state == IN_PROGRESS; }
+			bool complete()    const { return state == COMPLETE; }
+		};
 
-			return Cbe::Request {
-				.operation    = operation,
-				.success      = Cbe::Request::Success::FALSE,
-				.block_number = offset / Cbe::BLOCK_SIZE,
-				.offset       = (uint64_t)data,
-				.count        = (uint32_t)(count / Cbe::BLOCK_SIZE),
-			};
-		}
+		Helper_request _helper_read_request  { };
+		Helper_request _helper_write_request { };
 
 		struct Frontend_request
 		{
@@ -470,14 +455,16 @@ class Vfs_cbe::Wrapper
 				PENDING, IN_PROGRESS, COMPLETE,
 				ERROR, ERROR_EOF
 			};
-			State           state      { NONE };
-
-			file_size count { 0 };
-
+			State        state       { NONE };
+			file_size    count       { 0 };
 			Cbe::Request cbe_request { };
 			uint32_t     snap_id     { 0 };
 
-			bool pending() const { return state == PENDING; }
+			uint64_t helper_offset { 0 };
+
+			bool pending()     const { return state == PENDING; }
+			bool in_progress() const { return state == IN_PROGRESS; }
+			bool complete()    const { return state == COMPLETE; }
 		};
 
 		Frontend_request _frontend_request { };
@@ -537,8 +524,28 @@ class Vfs_cbe::Wrapper
 			}
 
 			if (invalid_request /*&& !handle_invalid_request*/) {
-				Genode::error("May not handle invalid request");
-				return false;
+				Genode::log("Try to setup helper request");
+				if ((count % Helper_request::BLOCK_SIZE) == 0) {
+					return false;
+				}
+
+				_helper_read_request.cbe_request = Cbe::Request {
+					.operation    = op,
+					.success      = Cbe::Request::Success::FALSE,
+					.block_number = offset / Cbe::BLOCK_SIZE,
+					.offset       = (uint64_t)&_helper_read_request.block_data,
+					.count        = 1,
+				};
+				_helper_read_request.state = Helper_request::State::PENDING;
+
+				_frontend_request.helper_offset = (offset % Cbe::BLOCK_SIZE);
+				_frontend_request.count = Helper_request::BLOCK_SIZE;
+
+				/* skip handling by the CBE, helper requests will do that for us */
+				_frontend_request.state = Frontend_request::State::IN_PROGRESS;
+			} else {
+				_frontend_request.count = count;
+				_frontend_request.state = Frontend_request::State::PENDING;
 			}
 
 			_frontend_request.cbe_request = Cbe::Request {
@@ -548,9 +555,8 @@ class Vfs_cbe::Wrapper
 				.offset       = (uint64_t)data,
 				.count        = (uint32_t)(count / Cbe::BLOCK_SIZE),
 			};
-			_frontend_request.count = count;
+
 			_frontend_request.snap_id = snap_id;
-			_frontend_request.state = Frontend_request::State::PENDING;
 			return true;
 		}
 
@@ -598,6 +604,54 @@ class Vfs_cbe::Wrapper
 
 		bool _handle_cbe_frontend(Cbe::Library &cbe, Frontend_request &frontend_request)
 		{
+			if (_helper_read_request.pending()) {
+				if (_cbe->client_request_acceptable()) {
+					_cbe->submit_client_request(_helper_read_request.cbe_request,
+					                            frontend_request.snap_id);
+					_helper_read_request.state = Helper_request::State::IN_PROGRESS;
+				}
+			}
+
+			if (_helper_write_request.pending()) {
+				if (_cbe->client_request_acceptable()) {
+					_cbe->submit_client_request(_helper_write_request.cbe_request,
+					                            frontend_request.snap_id);
+					_helper_write_request.state = Helper_request::State::IN_PROGRESS;
+				}
+			}
+
+			if (frontend_request.pending()) {
+
+				using ST = Frontend_request::State;
+
+				Cbe::Request const &request = frontend_request.cbe_request;
+				Cbe::Virtual_block_address const vba = request.block_number;
+				uint32_t const snap_id = frontend_request.snap_id;
+
+				if (vba > cbe.max_vba()) {
+					warning("reject request with out-of-range virtual block start address ", vba);
+					_frontend_request.state = ST::ERROR_EOF;
+					return false;
+				}
+
+				if (vba + request.count < vba) {
+					warning("reject wraping request", vba);
+					_frontend_request.state = ST::ERROR_EOF;
+					return false;
+				}
+
+				if (vba + request.count > (cbe.max_vba() + 1)) {
+					warning("reject invalid request ", vba, " ", request.count);
+					_frontend_request.state = ST::ERROR_EOF;
+					return false;
+				}
+
+				if (cbe.client_request_acceptable()) {
+					cbe.submit_client_request(request, snap_id);
+					frontend_request.state = ST::IN_PROGRESS;
+				}
+			}
+
 			cbe.execute(_io_data, _plain_data, _cipher_data, _time.timestamp());
 			bool progress = cbe.execute_progress();
 
@@ -608,7 +662,64 @@ class Vfs_cbe::Wrapper
 				if (!cbe_request.valid()) { break; }
 
 				cbe.drop_completed_client_request(cbe_request);
-				_frontend_request.state = ST::COMPLETE;
+
+				if (_helper_read_request.in_progress()) {
+					_helper_read_request.state = Helper_request::State::COMPLETE;
+				} else if (_helper_write_request.in_progress()) {
+					_helper_write_request.state = Helper_request::State::COMPLETE;
+				} else {
+					frontend_request.state = ST::COMPLETE;
+				}
+				progress = true;
+			}
+
+			if (_helper_read_request.complete()) {
+
+				if (frontend_request.cbe_request.read()) {
+					char       * dst = reinterpret_cast<char*>
+						(frontend_request.cbe_request.offset);
+					char const * src = reinterpret_cast<char const*>
+						(&_helper_read_request.block_data) + frontend_request.helper_offset;
+
+					Genode::memcpy(dst, src, Helper_request::BLOCK_SIZE);
+
+					_helper_read_request.state = Helper_request::State::NONE;
+					frontend_request.state = ST::COMPLETE;
+				}
+
+				if (frontend_request.cbe_request.write()) {
+					/* copy whole block first */
+					{
+						char       * dst = reinterpret_cast<char*>
+							(&_helper_write_request.block_data);
+						char const * src = reinterpret_cast<char const*>
+							(&_helper_read_request.block_data) + frontend_request.helper_offset;
+						Genode::memcpy(dst, src, sizeof (Cbe::Block_data));
+					}
+
+					/* and than actual request data */
+					{
+						char       * dst = reinterpret_cast<char*>
+							(&_helper_write_request.block_data) + frontend_request.helper_offset;
+						char const * src = reinterpret_cast<char const*>
+							(frontend_request.cbe_request.offset) + frontend_request.helper_offset;
+						Genode::memcpy(dst, src, Helper_request::BLOCK_SIZE);
+					}
+
+					/* re-use request */
+					_helper_write_request.cbe_request = _helper_read_request.cbe_request;
+					_helper_write_request.cbe_request.operation = Cbe::Request::Operation::WRITE;
+					_helper_write_request.cbe_request.success   = Cbe::Request::Success::FALSE;
+
+					_helper_write_request.state = Helper_request::State::PENDING;
+					_helper_read_request.state  = Helper_request::State::NONE;
+				}
+				progress = true;
+			}
+
+			if (_helper_write_request.complete()) {
+				_helper_write_request.state = Helper_request::State::NONE;
+				frontend_request.state = ST::COMPLETE;
 				progress = true;
 			}
 
@@ -620,7 +731,7 @@ class Vfs_cbe::Wrapper
 				if (prim_index == ~0ull) {
 					Genode::error("prim_index invalid: ", cbe_request);
 
-					_frontend_request.state = ST::ERROR;
+					frontend_request.state = ST::ERROR;
 					return progress;
 				}
 
@@ -644,7 +755,7 @@ class Vfs_cbe::Wrapper
 				uint64_t const prim_index = cbe.client_data_index(cbe_request);
 				if (prim_index == ~0ull) {
 					Genode::error("prim_index invalid: ", cbe_request);
-					_frontend_request.state = ST::ERROR;
+					frontend_request.state = ST::ERROR;
 					return progress;
 				}
 
@@ -721,37 +832,6 @@ class Vfs_cbe::Wrapper
 
 		void handle_frontend_request()
 		{
-			if (_frontend_request.pending()) {
-
-				using ST = Frontend_request::State;
-
-				Cbe::Request const &request = _frontend_request.cbe_request;
-				Cbe::Virtual_block_address const vba = request.block_number;
-				uint32_t const snap_id = _frontend_request.snap_id;
-
-				if (vba > _cbe->max_vba()) {
-					warning("reject request with out-of-range virtual block start address ", vba);
-					_frontend_request.state = ST::ERROR_EOF;
-					return;
-				}
-
-				if (vba + request.count < vba) {
-					warning("reject wraping request", vba);
-					_frontend_request.state = ST::ERROR_EOF;
-					return;
-				}
-
-				if (vba + request.count > (_cbe->max_vba() + 1)) {
-					warning("reject invalid request ", vba, " ", request.count);
-					_frontend_request.state = ST::ERROR_EOF;
-					return;
-				}
-
-				if (_cbe->client_request_acceptable()) {
-					_cbe->submit_client_request(request, snap_id);
-					_frontend_request.state = ST::IN_PROGRESS;
-				}
-			}
 
 			while (true) {
 
