@@ -440,12 +440,17 @@ class Vfs_cbe::Wrapper
 			file_size const offset = handle.seek();
 
 			if ((offset % Cbe::BLOCK_SIZE) != 0) {
-				Genode::error("offset (", offset, ") not multiple of block size");
+				Genode::warning("offset (", offset, ") not multiple of block size");
 				throw Invalid_Request();
 			}
 
 			if (count < Cbe::BLOCK_SIZE) {
-				Genode::error("count less than block size");
+				Genode::warning("count less than block size");
+				throw Invalid_Request();
+			}
+
+			if ((count % Cbe::BLOCK_SIZE) != 0) {
+				Genode::warning("count (", count, ") not multiple of block siz");
 				throw Invalid_Request();
 			}
 
@@ -458,194 +463,310 @@ class Vfs_cbe::Wrapper
 			};
 		}
 
-		void handle_request(Cbe::Request *vfs_request, uint32_t snap_id)
+		struct Frontend_request
 		{
+			enum State {
+				NONE,
+				PENDING, IN_PROGRESS, COMPLETE,
+				ERROR, ERROR_EOF
+			};
+			State           state      { NONE };
+
+			file_size count { 0 };
+
+			Cbe::Request cbe_request { };
+			uint32_t     snap_id     { 0 };
+
+			bool pending() const { return state == PENDING; }
+		};
+
+		Frontend_request _frontend_request { };
+
+		Frontend_request const & frontend_request() const
+		{
+			return _frontend_request;
+		}
+
+		void ack_frontend_request(Vfs_handle &handle)
+		{
+			// assert current state was *_COMPLETE
+			_frontend_request.state = Frontend_request::State::NONE;
+		}
+
+		bool submit_frontend_request(Vfs_handle              &handle,
+		                             char                    *data,
+		                             file_size                count,
+		                             Cbe::Request::Operation  op,
+		                             uint32_t                 snap_id)
+		{
+			if (_frontend_request.state != Frontend_request::State::NONE) {
+				return false;
+			}
+
+			/* short-cut for SYNC requests */
+			if (op == Cbe::Request::Operation::SYNC) {
+				_frontend_request.cbe_request = Cbe::Request {
+					.operation    = op,
+					.success      = Cbe::Request::Success::FALSE,
+					.block_number = 0,
+					.offset       = 0,
+					.count        = 1,
+				};
+				_frontend_request.count   = 0;
+				_frontend_request.snap_id = 0;
+				_frontend_request.state   = Frontend_request::State::PENDING;
+				return true;
+			}
+
+			file_size const offset = handle.seek();
+			bool invalid_request = false;
+
+			if ((offset % Cbe::BLOCK_SIZE) != 0) {
+				Genode::warning("offset (", offset, ") not multiple of block size");
+				invalid_request |= true;
+			}
+
+			if (count < Cbe::BLOCK_SIZE) {
+				Genode::warning("count less than block size");
+				invalid_request |= true;
+			}
+
+			if ((count % Cbe::BLOCK_SIZE) != 0) {
+				Genode::warning("count (", count, ") not multiple of block siz");
+				invalid_request |= true;
+			}
+
+			if (invalid_request /*&& !handle_invalid_request*/) {
+				Genode::error("May not handle invalid request");
+				return false;
+			}
+
+			_frontend_request.cbe_request = Cbe::Request {
+				.operation    = op,
+				.success      = Cbe::Request::Success::FALSE,
+				.block_number = offset / Cbe::BLOCK_SIZE,
+				.offset       = (uint64_t)data,
+				.count        = (uint32_t)(count / Cbe::BLOCK_SIZE),
+			};
+			_frontend_request.count = count;
+			_frontend_request.snap_id = snap_id;
+			_frontend_request.state = Frontend_request::State::PENDING;
+			return true;
+		}
+
+		bool _handle_cbe_backend(Cbe::Library &cbe, Backend_request &req)
+		{
+			using ST = Backend_request::State;
+
 			bool progress = false;
 
-			if (vfs_request) {
-				Cbe::Request const &request = *vfs_request;
+			Cbe::Io_buffer::Index data_index { 0 };
+			Cbe::Request cbe_request = _cbe->has_io_request(data_index);
+			if (cbe_request.valid() &&
+				req.state == ST::NONE) {
+
+				if (cbe_request.read()) {
+					progress |= _backend_read(cbe_request, data_index);
+				} else if (cbe_request.write()) {
+					progress |= _backend_write(cbe_request, data_index);
+				} else if (cbe_request.sync()) {
+					progress |= _backend_sync(cbe_request, data_index);
+				} else {
+					Genode::error("invalid cbe_request");
+					throw -1;
+				}
+			}
+
+			if (req.state != ST::NONE) {
+				Cbe::Io_buffer::Index const data_index {
+					req.cbe_request.tag };
+
+				if (req.cbe_request.read()) {
+					progress |= _backend_read(req.cbe_request, data_index);
+				} else if (req.cbe_request.write()) {
+					progress |= _backend_write(req.cbe_request, data_index);
+				} else if (req.cbe_request.sync()) {
+					progress |= _backend_sync(req.cbe_request, data_index);
+				} else {
+					Genode::error("invalid req.cbe_request");
+					throw -1;
+				}
+			}
+
+			return progress;
+		}
+
+		bool _handle_cbe_frontend(Cbe::Library &cbe, Frontend_request &frontend_request)
+		{
+			cbe.execute(_io_data, _plain_data, _cipher_data, _time.timestamp());
+			bool progress = cbe.execute_progress();
+
+			using ST = Frontend_request::State;
+
+			while (true) {
+				Cbe::Request const cbe_request = cbe.peek_completed_client_request();
+				if (!cbe_request.valid()) { break; }
+
+				cbe.drop_completed_client_request(cbe_request);
+				_frontend_request.state = ST::COMPLETE;
+				progress = true;
+			}
+
+			/* read */
+			Cbe::Request cbe_request = cbe.client_data_ready();
+			if (cbe_request.valid() && cbe_request.read()) {
+
+				uint64_t const prim_index = cbe.client_data_index(cbe_request);
+				if (prim_index == ~0ull) {
+					Genode::error("prim_index invalid: ", cbe_request);
+
+					_frontend_request.state = ST::ERROR;
+					return progress;
+				}
+
+				Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
+					cbe_request.offset + (prim_index * Cbe::BLOCK_SIZE));
+
+				Cbe::Crypto_plain_buffer::Index data_index(~0);
+				bool const data_index_valid =
+					cbe.obtain_client_data(cbe_request, data_index);
+
+				if (data_index_valid) {
+					Genode::memcpy(&data, &_plain_data.item(data_index), sizeof (Cbe::Block_data));
+
+					progress = true;
+				}
+			}
+
+			/* write */
+			cbe_request = cbe.client_data_required();
+			if (cbe_request.valid() && cbe_request.write()) {
+				uint64_t const prim_index = cbe.client_data_index(cbe_request);
+				if (prim_index == ~0ull) {
+					Genode::error("prim_index invalid: ", cbe_request);
+					_frontend_request.state = ST::ERROR;
+					return progress;
+				}
+
+				Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
+					cbe_request.offset + (prim_index * Cbe::BLOCK_SIZE));
+
+				progress = cbe.supply_client_data(_time.timestamp(), cbe_request, data);
+				progress |= true; /// XXX why?
+			}
+
+			return progress;
+		}
+
+		bool _handle_crypto(Cbe::Library              &cbe,
+		                    External::Crypto          &cry,
+		                    Cbe::Crypto_cipher_buffer &cipher,
+		                    Cbe::Crypto_plain_buffer  &plain)
+		{
+			bool progress = cry.execute();
+
+			/* encrypt */
+			while (true) {
+				Cbe::Crypto_plain_buffer::Index data_index { 0 };
+				Cbe::Request request = cbe.crypto_cipher_data_required(data_index);
+				if (!request.valid() || !cry.encryption_request_acceptable()) { break; }
+
+				request.tag = data_index.value;
+				cry.submit_encryption_request(request, plain.item(data_index), 0);
+				cbe.crypto_cipher_data_requested(data_index);
+				progress |= true;
+			}
+
+			while (true) {
+				Cbe::Request const request = cry.peek_completed_encryption_request();
+				if (!request.valid()) {
+					break;
+				}
+				Cbe::Crypto_cipher_buffer::Index const data_index(request.tag);
+				if (!cry.supply_cipher_data(request, cipher.item(data_index))) {
+					break;
+				}
+				bool const success = request.success == Cbe::Request::Success::TRUE;
+				cbe.supply_crypto_cipher_data(data_index, success);
+				progress |= true;
+			}
+
+			/* decrypt */
+			while (true) {
+				Cbe::Crypto_cipher_buffer::Index data_index { 0 };
+				Cbe::Request request = cbe.crypto_plain_data_required(data_index);
+				if (!request.valid() || !cry.decryption_request_acceptable()) { break; }
+
+				request.tag = data_index.value;
+				cry.submit_decryption_request(request, cipher.item(data_index), 0);
+				cbe.crypto_plain_data_requested(data_index);
+				progress |= true;
+			}
+
+			while (true) {
+				Cbe::Request const request = cry.peek_completed_decryption_request();
+				if (!request.valid()) { break; }
+
+				Cbe::Crypto_plain_buffer::Index const data_index(request.tag);
+				if (!cry.supply_plain_data(request, plain.item(data_index))) {
+					break;
+				}
+				bool const success = request.success == Cbe::Request::Success::TRUE;
+				cbe.supply_crypto_plain_data(data_index, success);
+				progress |= true;
+			}
+
+			return progress;
+		}
+
+		void handle_frontend_request()
+		{
+			if (_frontend_request.pending()) {
+
+				using ST = Frontend_request::State;
+
+				Cbe::Request const &request = _frontend_request.cbe_request;
 				Cbe::Virtual_block_address const vba = request.block_number;
+				uint32_t const snap_id = _frontend_request.snap_id;
 
 				if (vba > _cbe->max_vba()) {
 					warning("reject request with out-of-range virtual block start address ", vba);
-					_state = ERROR_EOF;
+					_frontend_request.state = ST::ERROR_EOF;
 					return;
 				}
 
 				if (vba + request.count < vba) {
 					warning("reject wraping request", vba);
-					_state = ERROR_EOF;
+					_frontend_request.state = ST::ERROR_EOF;
 					return;
 				}
 
 				if (vba + request.count > (_cbe->max_vba() + 1)) {
 					warning("reject invalid request ", vba, " ", request.count);
-					_state = ERROR_EOF;
+					_frontend_request.state = ST::ERROR_EOF;
 					return;
 				}
 
-				if (_cbe->client_request_acceptable() && _state == NONE) {
+				if (_cbe->client_request_acceptable()) {
 					_cbe->submit_client_request(request, snap_id);
-					_state = PENDING;
-					progress = true;
+					_frontend_request.state = ST::IN_PROGRESS;
 				}
 			}
 
 			while (true) {
 
-				while (true) {
-					Cbe::Request const cbe_request = _cbe->peek_completed_client_request();
-					if (!cbe_request.valid()) { break; }
+				bool progress = false;
 
-					_cbe->drop_completed_client_request(cbe_request);
-					_state = NONE;
-					progress = true;
-				}
-
-				_cbe->execute(_io_data, _plain_data, _cipher_data, _time.timestamp());
-				progress |= _cbe->execute_progress();
-
-				/* read */
-				Cbe::Request cbe_request = _cbe->client_data_ready();
-				if (cbe_request.valid() && cbe_request.read()) {
-
-					uint64_t const prim_index = _cbe->client_data_index(cbe_request);
-					if (prim_index == ~0ull) {
-						Genode::error("prim_index invalid: ", cbe_request);
-						_state = ERROR;
-						return;
-					}
-
-					Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
-						cbe_request.offset + (prim_index * Cbe::BLOCK_SIZE));
-
-					Cbe::Crypto_plain_buffer::Index data_index(~0);
-					bool const data_index_valid =
-						_cbe->obtain_client_data(cbe_request, data_index);
-
-					if (data_index_valid) {
-						Genode::memcpy(&data, &_plain_data.item(data_index), sizeof (Cbe::Block_data));
-
-						progress |= true;
-					}
-				}
-
-				/* write */
-				cbe_request = _cbe->client_data_required();
-				if (cbe_request.valid() && cbe_request.write()) {
-					uint64_t const prim_index = _cbe->client_data_index(cbe_request);
-					if (prim_index == ~0ull) {
-						Genode::error("prim_index invalid: ", cbe_request);
-						_state = ERROR;
-						return;
-					}
-
-					Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
-						cbe_request.offset + (prim_index * Cbe::BLOCK_SIZE));
-
-					progress = _cbe->supply_client_data(_time.timestamp(), cbe_request, data);
-
-					progress = true;
-				}
-
-				Cbe::Io_buffer::Index data_index { 0 };
-				cbe_request = _cbe->has_io_request(data_index);
-				if (cbe_request.valid() &&
-					_backend_request.state == Backend_request::State::NONE) {
-
-					if (cbe_request.read()) {
-						progress |= _backend_read(cbe_request, data_index);
-					} else if (cbe_request.write()) {
-						progress |= _backend_write(cbe_request, data_index);
-					} else if (cbe_request.sync()) {
-						progress |= _backend_sync(cbe_request, data_index);
-					} else {
-						Genode::error("invalid cbe_request");
-						throw -1;
-					}
-				}
-
-				if (_backend_request.state != Backend_request::State::NONE) {
-					Cbe::Io_buffer::Index const data_index {
-						_backend_request.cbe_request.tag };
-
-					if (_backend_request.cbe_request.read()) {
-						progress |= _backend_read(_backend_request.cbe_request, data_index);
-					} else if (_backend_request.cbe_request.write()) {
-						progress |= _backend_write(_backend_request.cbe_request, data_index);
-					} else if (_backend_request.cbe_request.sync()) {
-						progress |= _backend_sync(_backend_request.cbe_request, data_index);
-					} else {
-						Genode::error("invalid _backend_request.cbe_request");
-						throw -1;
-					}
-				}
-
-				progress |= _crypto.execute();
-
-				/* encrypt */
-				while (true) {
-					Cbe::Crypto_plain_buffer::Index data_index(0);
-					Cbe::Request request = _cbe->crypto_cipher_data_required(data_index);
-					if (!request.valid()) {
-						break;
-					}
-					if (!_crypto.encryption_request_acceptable()) {
-						break;
-					}
-					request.tag = data_index.value;
-					_crypto.submit_encryption_request(request, _plain_data.item(data_index), 0);
-					_cbe->crypto_cipher_data_requested(data_index);
-					progress |= true;
-				}
-				while (true) {
-					Cbe::Request const request = _crypto.peek_completed_encryption_request();
-					if (!request.valid()) {
-						break;
-					}
-					Cbe::Crypto_cipher_buffer::Index const data_index(request.tag);
-					if (!_crypto.supply_cipher_data(request, _cipher_data.item(data_index))) {
-						break;
-					}
-					_cbe->supply_crypto_cipher_data(data_index, request.success == Cbe::Request::Success::TRUE);
-					progress |= true;
-				}
-
-				/* decrypt */
-				while (true) {
-					Cbe::Crypto_cipher_buffer::Index data_index(0);
-					Cbe::Request request = _cbe->crypto_plain_data_required(data_index);
-					if (!request.valid()) {
-						break;
-					}
-					if (!_crypto.decryption_request_acceptable()) {
-						break;
-					}
-					request.tag = data_index.value;
-					_crypto.submit_decryption_request(request, _cipher_data.item(data_index), 0);
-					_cbe->crypto_plain_data_requested(data_index);
-					progress |= true;
-				}
-				while (true) {
-					Cbe::Request const request = _crypto.peek_completed_decryption_request();
-					if (!request.valid()) {
-						break;
-					}
-					Cbe::Crypto_plain_buffer::Index const data_index(request.tag);
-					if (!_crypto.supply_plain_data(request, _plain_data.item(data_index))) {
-						break;
-					}
-					_cbe->supply_crypto_plain_data(data_index, request.success == Cbe::Request::Success::TRUE);
-					progress |= true;
-				}
+				progress |= _handle_cbe_frontend(*_cbe, _frontend_request);
+				progress |= _handle_cbe_backend(*_cbe, _backend_request);
+				progress |= _handle_crypto(*_cbe, _crypto, _cipher_data, _plain_data);
 
 				if (_creating_snapshot &&
 				    _cbe->snapshot_creation_complete(_snapshot_token, _snapshot_id)) {
 					_creating_snapshot = false;
 				}
 
-				if (!progress) break;
-				progress = false;
+				if (!progress) { break; }
 			}
 		}
 
@@ -668,7 +789,7 @@ class Vfs_cbe::Wrapper
 				_initialize_cbe();
 			}
 			_cbe->active_snapshot_ids(ids);
-			handle_request(nullptr, 0);
+			handle_frontend_request();
 		}
 
 		void create_snapshot(bool quaratine)
@@ -681,7 +802,7 @@ class Vfs_cbe::Wrapper
 			++_snapshot_token.value;
 			_creating_snapshot = _cbe->create_snapshot(_snapshot_token, quaratine);
 			if (_creating_snapshot) {
-				handle_request(nullptr, 0);
+				handle_frontend_request();
 			}
 		}
 
@@ -693,7 +814,7 @@ class Vfs_cbe::Wrapper
 
 			bool const res = _cbe->discard_snapshot(id);
 			if (res) {
-				handle_request(nullptr, 0);
+				handle_frontend_request();
 			}
 			return res;
 		}
@@ -724,115 +845,135 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 				_w(w), _snap_id(snap_id)
 			{ }
 
-
 			Read_result read(char *dst, file_size count,
 			                 file_size &out_count) override
 			{
-				out_count = 0;
+				using State = Wrapper::Frontend_request::State;
 
-				/* request already pending, try again later */
-				if (!_w.client_request_acceptable() || _w._state != Wrapper::Request_state::NONE) {
+				State state = _w.frontend_request().state;
+				if (state == State::NONE) {
+
+					if (!_w.client_request_acceptable()) {
+						return READ_QUEUED;
+					}
+					using Op = Cbe::Request::Operation;
+
+					bool const accepted =
+						_w.submit_frontend_request(*this, dst, count,
+						                           Op::READ, _snap_id);
+					if (!accepted) { return READ_ERR_IO; }
+				}
+
+				_w.handle_frontend_request();
+				state = _w.frontend_request().state;
+
+				if (   state == State::PENDING
+				    || state == State::IN_PROGRESS) {
 					return READ_QUEUED;
 				}
 
-				using Operation = Cbe::Request::Operation;
-				Cbe::Request request { };
-				try {
-					request = _w.cbe_request(*this, dst, count, Operation::READ);
-				} catch (Wrapper::Invalid_Request) {
-					_w._state = Wrapper::Request_state::NONE;
-					return READ_ERR_IO;
-				}
-
-				_w.handle_request(&request, _snap_id);
-
-				/* retry on next I/O signal */
-				if (_w._state == Wrapper::Request_state::PENDING) {
-					return READ_QUEUED;
-				}
-
-				if (_w._state == Wrapper::Request_state::ERROR) {
-					_w._state = Wrapper::Request_state::NONE;
-					return READ_ERR_IO;
-				}
-
-				if (_w._state == Wrapper::Request_state::ERROR_EOF) {
-					_w._state = Wrapper::Request_state::NONE;
+				if (state == State::COMPLETE) {
+					out_count = _w.frontend_request().count;
+					_w.ack_frontend_request(*this);
 					return READ_OK;
 				}
 
-				_w._state = Wrapper::Request_state::NONE;
-				out_count = count;
-				return READ_OK;
+				if (state == State::ERROR_EOF) {
+					out_count = 0;
+					_w.ack_frontend_request(*this);
+					return READ_OK;
+				}
+
+				if (state == State::ERROR) {
+					out_count = 0;
+					_w.ack_frontend_request(*this);
+					return READ_ERR_IO;
+				}
+
+				return READ_ERR_IO;
 			}
 
 			Write_result write(char const *src, file_size count,
 			                   file_size &out_count) override
 			{
-				out_count = 0;
+				using State = Wrapper::Frontend_request::State;
 
-				/* request already pending, try again later */
-				if (!_w.client_request_acceptable() || _w._state != Wrapper::Request_state::NONE) {
+				State state = _w.frontend_request().state;
+				if (state == State::NONE) {
+
+					if (!_w.client_request_acceptable()) {
+						throw Insufficient_buffer();
+					}
+					using Op = Cbe::Request::Operation;
+
+					bool const accepted =
+						_w.submit_frontend_request(*this, const_cast<char*>(src),
+						                           count, Op::WRITE, _snap_id);
+					if (!accepted) { return WRITE_ERR_IO; }
+				}
+
+				_w.handle_frontend_request();
+				state = _w.frontend_request().state;
+
+				if (   state == State::PENDING
+				    || state == State::IN_PROGRESS) {
 					throw Insufficient_buffer();
 				}
 
-				using Operation = Cbe::Request::Operation;
-				Cbe::Request request { };
-
-				try {
-					request = _w.cbe_request(*this, const_cast<char *>(src),
-					                         count, Operation::WRITE);
-				} catch (Wrapper::Invalid_Request) {
-					_w._state = Wrapper::Request_state::NONE;
-					return WRITE_ERR_IO;
-				}
-				_w.handle_request(&request, _snap_id);
-
-				/* retry on next I/O signal */
-				if (_w._state == Wrapper::Request_state::PENDING) {
-					throw Insufficient_buffer();
+				if (state == State::COMPLETE) {
+					out_count = _w.frontend_request().count;
+					_w.ack_frontend_request(*this);
+					return WRITE_OK;
 				}
 
-				if (_w._state == Wrapper::Request_state::ERROR) {
-					_w._state = Wrapper::Request_state::NONE;
+				if (state == State::ERROR_EOF) {
+					out_count = 0;
+					_w.ack_frontend_request(*this);
+					return WRITE_OK;
+				}
+
+				if (state == State::ERROR) {
+					out_count = 0;
+					_w.ack_frontend_request(*this);
 					return WRITE_ERR_IO;
 				}
 
-				if (_w._state == Wrapper::Request_state::ERROR_EOF) {
-					_w._state = Wrapper::Request_state::NONE;
-					return WRITE_ERR_IO;
-				}
-
-				_w._state = Wrapper::Request_state::NONE;
-				out_count = count;
-				return WRITE_OK;
+				return WRITE_ERR_IO;
 			}
 
 			Sync_result sync() override
 			{
-				/* request already pending, try again later */
-				if (!_w.client_request_acceptable() || _w._state != Wrapper::Request_state::NONE) {
+				using State = Wrapper::Frontend_request::State;
+
+				State state = _w.frontend_request().state;
+				if (state == State::NONE) {
+
+					if (!_w.client_request_acceptable()) {
+						return SYNC_QUEUED;
+					}
+					using Op = Cbe::Request::Operation;
+
+					bool const accepted =
+						_w.submit_frontend_request(*this, nullptr, 0, Op::SYNC, 0);
+					if (!accepted) { return SYNC_ERR_INVALID; }
+				}
+
+				_w.handle_frontend_request();
+				state = _w.frontend_request().state;
+
+				if (   state == State::PENDING
+				    || state == State::IN_PROGRESS) {
 					return SYNC_QUEUED;
 				}
 
-				using Operation = Cbe::Request::Operation;
-				Cbe::Request request {
-					.operation    = Operation::SYNC,
-					.success      = Cbe::Request::Success::FALSE,
-					.block_number = 0,
-					.offset       = 0,
-					.count        = 1,
-				};
-
-				_w.handle_request(&request, _snap_id);
-
-				/* retry on next I/O signal */
-				if (_w._state == Wrapper::Request_state::PENDING) {
-					return SYNC_QUEUED;
-				}
-
-				if (_w._state == Wrapper::Request_state::NONE) {
+				if (state == State::COMPLETE) {
+					_w.ack_frontend_request(*this);
 					return SYNC_OK;
+				}
+
+				if (state == State::ERROR) {
+					_w.ack_frontend_request(*this);
+					return SYNC_ERR_INVALID;
 				}
 
 				return SYNC_ERR_INVALID;
