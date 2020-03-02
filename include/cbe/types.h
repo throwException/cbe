@@ -622,7 +622,7 @@ namespace Cbe {
 			              "snapshot_id: ", snapshot_id, " "
 			              "dregree: ", degree, " "
 			              "free_gen: ", free_gen, " "
-			              "free_number: ", Genode::Hex(free_number), " "
+			              "free_number: ", free_number, " "
 			              "free_degree: ", free_degree, " "
 			              "free_leaves: ", free_leaves, " "
 			              "meta_height: ", meta_height, " "
