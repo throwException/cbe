@@ -75,7 +75,6 @@ is
       Obj.Secure_Superblock            := False;
       Obj.Wait_For_Front_End           := Wait_For_Event_Invalid;
       Obj.Creating_Quarantine_Snapshot := False;
-      Obj.Stall_Snapshot_Creation      := False;
 
       Obj.Superblock := SBs (Curr_SB);
       Obj.Superblock.Superblock_ID := Obj.Superblock.Superblock_ID + 1;
@@ -122,20 +121,7 @@ is
 
       Obj.WB_Prim := Primitive.Invalid_Object;
 
-      --  declare
-      --     Next_Snap : constant Snapshots_Index_Type :=
-      --        Next_Snap_Slot (Obj);
-      --  begin
-      --     Obj.Superblock.Snapshots (Next_Snap) :=
-      --        Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
-      --     --
-      --     --  Clear flags to prevent creating a quarantine snapshot
-      --     --  unintentionally.
-      --     --
-      --     Obj.Superblock.Snapshots (Next_Snap).Keep := False;
-      --     Obj.Superblock.Snapshots (Next_Snap).Gen := Obj.Cur_Gen;
-      --     Obj.Superblock.Curr_Snap := Next_Snap;
-      --  end;
+      Advance_Current_Snapshot_Slot (Obj.Superblock);
 
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
@@ -148,15 +134,35 @@ is
       Quara   :        Boolean;
       Result  :    out Boolean)
    is
-      pragma Unreferenced (Obj);
-      pragma Unreferenced (Token);
       pragma Unreferenced (Quara);
    begin
       --
-      --  Initially assume creation will be unsuccessfull and will
-      --  only be changed when a snapshot creation was started.
+      --  For now allow only one creation request to by pending.
+      --  That has to be changed later when the snapshot creation opertion
+      --  is managed by the Job_Pool.
       --
-      Result := False;
+      if Obj.Creating_Quarantine_Snapshot then
+         Result := False;
+         return;
+      end if;
+
+      Declare_Snapshot_Sync_Request :
+      declare
+         Req : constant Request.Object_Type :=
+            Request.Valid_Object (
+               Op     => Create_Snapshot,
+               Succ   => False,
+               Blk_Nr => Block_Number_Type (0),
+               Off    => 0,
+               Cnt    => 1,
+               Tg     => 0);
+      begin
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0, 1);
+      end Declare_Snapshot_Sync_Request;
+
+      Obj.Creating_Quarantine_Snapshot := True;
+      Obj.Snap_Token := Token;
+      Result := True;
    end Create_Snapshot;
 
    procedure Snapshot_Creation_Complete (
@@ -171,7 +177,7 @@ is
       pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: "
          & " result: " & Debug.To_String (R)));
 
-      if R then
+      if R and then Obj.Creating_Quarantine_Snapshot = False then
          Token   := Obj.Snap_Token;
          Snap_ID := Obj.Superblock.Last_Secured_Generation;
       else
@@ -256,13 +262,30 @@ is
 
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID, 1);
          Obj.Sync_Pending := True;
+
+      when Create_Snapshot | Discard_Snapshot =>
+         raise Program_Error;
+
       end case;
 
    end Submit_Client_Request;
 
    function Peek_Completed_Client_Request (Obj : Object_Type)
    return Request.Object_Type
-   is (Pool.Peek_Completed_Request (Obj.Request_Pool_Obj));
+   is
+      Req : constant Request.Object_Type :=
+         Pool.Peek_Completed_Request (Obj.Request_Pool_Obj);
+   begin
+
+      case Request.Operation (Req) is
+
+      when Read | Write | Sync =>
+         return Req;
+
+      when Create_Snapshot | Discard_Snapshot =>
+         return Request.Invalid_Object;
+      end case;
+   end Peek_Completed_Client_Request;
 
    procedure Drop_Completed_Client_Request (
       Obj : in out Object_Type;
@@ -591,6 +614,32 @@ is
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
 
+   procedure Advance_Current_Snapshot_Slot (SB : in out Superblock_Type)
+   is
+   begin
+      declare
+         Next_Snap : constant Snapshots_Index_Type := Next_Snap_Slot (SB);
+      begin
+         SB.Snapshots (Next_Snap) :=
+            SB.Snapshots (SB.Curr_Snap);
+         --
+         --  Clear flags to prevent creating a quarantine snapshot
+         --  unintentionally.
+         --
+         SB.Snapshots (Next_Snap).Keep  := False;
+         SB.Snapshots (Next_Snap).Valid := True;
+         --  SB.Snapshots (Next_Snap).Gen := Obj.Cur_Gen;
+         SB.Curr_Snap := Next_Snap;
+      end;
+   end Advance_Current_Snapshot_Slot;
+
+   procedure Write_Current_State_To_Snapshot_Slot (
+      SB : in out Superblock_Type)
+   is
+   begin
+      SB.Snapshots (SB.Curr_Snap).Keep := True;
+   end Write_Current_State_To_Snapshot_Slot;
+
    procedure Try_Discard_Snapshot (
       Snaps     : in out Snapshots_Type;
       Keep_Snap :        Snapshots_Index_Type;
@@ -618,73 +667,6 @@ is
       Success := Discard_Idx_Valid;
    end Try_Discard_Snapshot;
 
-   procedure Try_Flush_Cache_If_Dirty (
-      Obj   : in out Object_Type;
-      Dirty :    out Boolean)
-   is
-   begin
-      Dirty := Cache.Dirty (Obj.Cache_Obj);
-
-      if Dirty and then
-         Obj.Cache_Sync_State = Inactive
-      then
-
-         if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
-
-            Cache.Submit_Primitive_Without_Data (
-               Obj.Cache_Obj,
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Sync, False, Primitive.Tag_Lib_Cache_Sync, 0, 0));
-
-            Obj.Cache_Sync_State := Active;
-
-         end if;
-
-      end if;
-   end Try_Flush_Cache_If_Dirty;
-
-   procedure Create_Snapshot_Internal (
-      Obj      : in out Object_Type;
-      Progress :    out Boolean)
-   is
-   begin
-      if Obj.Cache_Sync_State = Active or else
-         Obj.Secure_Superblock
-      then
-         pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
-             & "flusher active: False "
-             & Debug.To_String (Obj.Cache_Sync_State = Active) & " "
-             & "Secure_Superblock: "
-             & Debug.To_String (Obj.Secure_Superblock)));
-         Progress := False;
-         return;
-      end if;
-
-      Declare_Cache_Dirty :
-      declare
-         Cache_Dirty : Boolean;
-      begin
-
-         Try_Flush_Cache_If_Dirty (Obj, Cache_Dirty);
-
-         --
-         --  In case we have to flush the Cache, wait until we have
-         --  finished doing that.
-         --
-         if not Cache_Dirty then
-            pragma Debug (Debug.Print_String ("Create_Snapshot_Internal: "
-               & "snapshot created: "
-               & "gen: " & Debug.To_String (Debug.Uint64_Type (Obj.Cur_Gen))));
-
-            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Keep :=
-               Obj.Creating_Quarantine_Snapshot;
-
-            Obj.Secure_Superblock := True;
-         end if;
-         Progress := True;
-      end Declare_Cache_Dirty;
-   end Create_Snapshot_Internal;
-
    function Curr_Snap (Obj : Object_Type)
    return Snapshots_Index_Type
    is (Obj.Superblock.Curr_Snap);
@@ -705,10 +687,10 @@ is
       raise Program_Error;
    end Snap_Slot_For_ID;
 
-   function Next_Snap_Slot (Obj : Object_Type)
+   function Next_Snap_Slot (SB : Superblock_Type)
    return Snapshots_Index_Type
    is
-         Next_Snap : Snapshots_Index_Type := Curr_Snap (Obj);
+         Next_Snap : Snapshots_Index_Type := SB.Curr_Snap;
    begin
       --  XXX make sure we end up at the same idx in case
       --  there is no free slot
@@ -721,8 +703,8 @@ is
                Snapshots_Index_Type'First);
 
          exit Loop_Snap_Slots when
-            not Obj.Superblock.Snapshots (Next_Snap).Valid or else
-            not Obj.Superblock.Snapshots (Next_Snap).Keep;
+            not SB.Snapshots (Next_Snap).Valid or else
+            not SB.Snapshots (Next_Snap).Keep;
       end loop Loop_Snap_Slots;
       return Next_Snap;
    end Next_Snap_Slot;
@@ -954,7 +936,6 @@ is
 
             --  FIXME
             Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-            Obj.Stall_Snapshot_Creation := False;
             New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj,
             Prim);
 
@@ -1366,7 +1347,6 @@ is
             --  the same branch are serialized.)
             --
             Virtual_Block_Device.Trans_Inhibit_Translation (Obj.VBD);
-            Obj.Stall_Snapshot_Creation := True;
             Progress := True;
             Obj.SCD_State := Inactive;
             return;
@@ -1615,6 +1595,7 @@ is
                   end case;
 
                when Sync =>
+
                   if not Sync_Superblock.Request_Acceptable (
                      Obj.Sync_SB_Obj)
                   then
@@ -1629,6 +1610,21 @@ is
                   pragma Debug (Debug.Print_String ("New Sync_Request: "
                      & Request.To_String (Req)));
                   Obj.State := Sync_Request;
+
+               when Create_Snapshot =>
+
+                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+
+                  Write_Current_State_To_Snapshot_Slot (Obj.Superblock);
+
+                  Sync_Superblock.Submit_Request (
+                     Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
+
+                  Obj.State := Sync_Request;
+
+               when Discard_Snapshot =>
+                  raise Program_Error;
+
                end case;
 
                Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
@@ -1770,7 +1766,6 @@ is
          --        is not a good idea
          --
          Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-         Obj.Stall_Snapshot_Creation := False;
 
       end loop Loop_WB_Completed_Prims;
 
@@ -2016,6 +2011,7 @@ is
 
             --  handle state
             Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
+
             --  Obj.Superblock.Last_Secured_Generation :=
             --     Sync_Superblock.Peek_Completed_Generation (
             --        Obj.Sync_SB_Obj, Prim);
@@ -2049,6 +2045,31 @@ is
                pragma Debug (Debug.Print_String (
                   "========> Pool.Mark_Completed_Primitive: "
                   & Primitive.To_String (Prim)));
+
+               Declare_Pool_Index :
+               declare
+                  Pool_Idx_Slot : constant Pool_Index_Slot_Type :=
+                     Primitive.Pool_Idx_Slot (Prim);
+                  Pool_Idx      : constant Pool_Index_Type :=
+                     Pool_Idx_Slot_Content (Pool_Idx_Slot);
+                  Req : constant Request.Object_Type :=
+                     Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
+               begin
+                  if Obj.Creating_Quarantine_Snapshot then
+                     if Request.Operation (Req) = Create_Snapshot then
+                        Obj.Snap_Gen :=
+                           Obj.Superblock.Last_Secured_Generation;
+
+                           Pool.Drop_Completed_Request (
+                              Obj.Request_Pool_Obj, Req);
+
+                           Advance_Current_Snapshot_Slot (Obj.Superblock);
+
+                           Obj.Creating_Quarantine_Snapshot := False;
+                     end if;
+                  end if;
+               end Declare_Pool_Index;
+
                Obj.State := Invalid;
             else
                Obj.State := Write_Request;

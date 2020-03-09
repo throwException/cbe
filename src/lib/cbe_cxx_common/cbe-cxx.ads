@@ -19,7 +19,7 @@ is
    type CXX_UInt32_Type          is range 0 .. 2**32 - 1 with Size => 4 * 8;
    type CXX_UInt64_Type          is mod        2**64     with Size => 8 * 8;
    type CXX_Bool_Type            is range 0 .. 1         with Size => 1 * 8;
-   type CXX_Operation_Type       is range 0 .. 3         with Size => 4 * 8;
+   type CXX_Operation_Type       is range 0 .. 5         with Size => 4 * 8;
    type CXX_Success_Type         is range 0 .. 1         with Size => 4 * 8;
    type CXX_Object_Size_Type     is new CXX_UInt32_Type;
    type CXX_Block_Number_Type    is new CXX_UInt64_Type;
@@ -114,9 +114,11 @@ is
    return CXX_Operation_Type
    is (
       case Input is
-      when Read  => 1,
-      when Write => 2,
-      when Sync  => 3);
+      when Read             => 1,
+      when Write            => 2,
+      when Sync             => 3,
+      when Create_Snapshot  => 4,
+      when Discard_Snapshot => 5);
 
    function CXX_Request_Valid_To_SPARK (
       Req : CXX_Request_Type;
@@ -138,7 +140,9 @@ is
       when 0 => Request.Invalid_Object,
       when 1 => CXX_Request_Valid_To_SPARK (Input, Read),
       when 2 => CXX_Request_Valid_To_SPARK (Input, Write),
-      when 3 => CXX_Request_Valid_To_SPARK (Input, Sync));
+      when 3 => CXX_Request_Valid_To_SPARK (Input, Sync),
+      when 4 => CXX_Request_Valid_To_SPARK (Input, Create_Snapshot),
+      when 5 => CXX_Request_Valid_To_SPARK (Input, Discard_Snapshot));
 
    function CXX_Request_From_SPARK (Obj : Request.Object_Type)
    return CXX_Request_Type

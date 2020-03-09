@@ -83,7 +83,9 @@ is
    type Number_Of_Blocks_Type is range 0 .. 2**32 - 1;
    type Snapshot_ID_Type is range 0 .. 2**32 - 1;
    type Key_ID_Type is range 0 .. 2**32 - 1;
-   type Operation_Type is (Read, Write, Sync);
+   type Operation_Type is
+      (Read, Write, Sync,
+       Create_Snapshot, Discard_Snapshot);
 
    type Hash_Index_Type is range 0 .. Hash_Size_Bytes - 1;
    type Hash_Type is array (Hash_Index_Type) of Byte_Type;

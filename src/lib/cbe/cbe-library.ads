@@ -423,7 +423,6 @@ private
       Secure_Superblock            : Boolean;
       Wait_For_Front_End           : Wait_For_Event_Type;
       Creating_Quarantine_Snapshot : Boolean;
-      Stall_Snapshot_Creation      : Boolean;
       Superblock                   : Superblock_Type;
 
       SCD_State    : SCD_State_Type;
@@ -469,14 +468,15 @@ private
 
    end record;
 
+   procedure Advance_Current_Snapshot_Slot (SB : in out Superblock_Type);
+
+   procedure Write_Current_State_To_Snapshot_Slot (
+      SB : in out Superblock_Type);
+
    procedure Try_Discard_Snapshot (
       Snaps     : in out Snapshots_Type;
       Keep_Snap :        Snapshots_Index_Type;
       Success   :    out Boolean);
-
-   procedure Try_Flush_Cache_If_Dirty (
-      Obj   : in out Object_Type;
-      Dirty :    out Boolean);
 
    function To_String (WFE : Wait_For_Event_Type) return String;
 
@@ -488,12 +488,8 @@ private
       ID  : Generation_Type)
    return Snapshots_Index_Type;
 
-   function Next_Snap_Slot (Obj : Object_Type)
+   function Next_Snap_Slot (SB : Superblock_Type)
    return Snapshots_Index_Type;
-
-   procedure Create_Snapshot_Internal (
-      Obj      : in out Object_Type;
-      Progress :    out Boolean);
 
    procedure Update_Snapshot_Hash (
       WB       :        Write_Back.Object_Type;

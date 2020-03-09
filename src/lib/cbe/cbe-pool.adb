@@ -357,6 +357,20 @@ is
       return Item.Req (Obj.Items (Idx));
    end Request_For_Index;
 
+   function Index_For_Request (
+      Obj : Object_Type;
+      Req : Request.Object_Type)
+   return Pool_Index_Type
+   is
+   begin
+      For_Each_Item : for Idx in Obj.Items'Range loop
+         if Request.Equal (Item.Req (Obj.Items (Idx)), Req) then
+            return Idx;
+         end if;
+      end loop For_Each_Item;
+      raise Program_Error;
+   end Index_For_Request;
+
    package body Index_Queue
    with SPARK_Mode
    is

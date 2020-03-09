@@ -86,6 +86,14 @@ is
    return Request.Object_Type;
 
    --
+   --  Index_For_Request
+   --
+   function Index_For_Request (
+      Obj : Object_Type;
+      Req : Request.Object_Type)
+   return Pool_Index_Type;
+
+   --
    --  Snap_ID_For_Request
    --
    function Snap_ID_For_Request (

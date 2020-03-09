@@ -90,7 +90,7 @@ is
                   raise Program_Error;
                end if;
 
-            when Sync =>
+            when Sync | Create_Snapshot | Discard_Snapshot =>
                raise Program_Error;
 
             end case;
@@ -123,7 +123,7 @@ is
                   raise Program_Error;
                end if;
 
-            when Sync | Read => null;
+            when Sync | Read | Create_Snapshot | Discard_Snapshot => null;
             end case;
 
          when Invalid => null;
@@ -152,6 +152,8 @@ is
       when Write => Assert_PBA_Not_Affected_By_Any_Job (Jobs, Prim_PBA);
       when Read  => Assert_PBA_Not_Written_By_Any_Job (Jobs, Prim_PBA);
       when Sync  => Assert_PBA_Not_Written_By_Any_Job (Jobs, Prim_PBA);
+      when others =>
+         raise Program_Error;
       end case;
    end Submit_Primitive_Assertions;
 
@@ -241,7 +243,7 @@ is
                return False;
             end if;
 
-         when Sync => null;
+         when Sync | Create_Snapshot | Discard_Snapshot => null;
          end case;
 
       end loop Find_Job_That_Accesses_Slot_Data;
@@ -492,6 +494,9 @@ is
          when Write =>
             Job_Execute_Write (
                Slots, Slots_Data, Jobs, Job_Idx, Job_Data, Progress);
+
+         when Create_Snapshot | Discard_Snapshot =>
+            raise Program_Error;
 
          end case;
 
