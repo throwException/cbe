@@ -15,7 +15,7 @@ exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
 
 proc cbe_image_file { } {
-	return "/home/lypo/genodelabs/genode/git/build/x86_64/bin/cbe_block.img"
+	return "cbe_block.img"
 }
 
 set image_size 512
@@ -143,14 +143,16 @@ append config {
 
 install_config $config
 
-exec rm -rf [cbe_image_file]
-exec truncate -s [cbe_image_size_mb]M [cbe_image_file]
+exec rm -rf bin/[cbe_image_file]
+exec truncate -s [cbe_image_size_mb]M bin/[cbe_image_file]
 
 append boot_modules {
 	core init timer cbe_tester
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
 	log_terminal report_rom lx_block
 }
+
+append boot_modules [cbe_image_file]
 
 build_boot_image $boot_modules
 
