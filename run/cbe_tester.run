@@ -111,6 +111,20 @@ append config {
 					<request type="sync"  lba="0"  count="3"/>
 					<request type="write" lba="2"  count="1"/>
 					<create-snapshot id="1" quarantine="yes"/>
+				</replay>
+				<dump unused_nodes="no"
+				      max_superblocks="1"
+				      max_snapshots="1"
+				      vbd="yes"
+				      vbd_pba_filter_enabled="no"
+				      vbd_pba_filter="38"
+				      vbd_vba_filter_enabled="no"
+				      vbd_vba_filter="0x13"
+				      free_tree="no"
+				      hashes="no"/>
+
+				<replay verbose="yes" bulk="no">
+					<discard-snapshot id="1"/>
 					<request type="write" lba="7"  count="1"/>
 					<request type="sync"  lba="7"  count="1"/>
 					<request type="write" lba="10" count="2"/>
@@ -118,10 +132,10 @@ append config {
 				</replay>
 
 				<dump unused_nodes="no"
-				      max_superblocks="2"
-				      max_snapshots="2"
+				      max_superblocks="1"
+				      max_snapshots="1"
 				      vbd="yes"
-				      vbd_pba_filter_enabled="yes"
+				      vbd_pba_filter_enabled="no"
 				      vbd_pba_filter="38"
 				      vbd_vba_filter_enabled="no"
 				      vbd_vba_filter="0x13"
