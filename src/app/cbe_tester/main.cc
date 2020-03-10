@@ -182,13 +182,16 @@ struct Create_snapshot
 	{ }
 };
 
+
 struct Discard_snapshot
 {
-	uint64_t id;
+	Cbe::Token token;
+	uint64_t   id;
 
-	Discard_snapshot(uint64_t id)
+	Discard_snapshot(Cbe::Token token, uint64_t id)
 	:
-		id { id }
+		token { token },
+		id    { id }
 	{ }
 };
 
@@ -362,7 +365,7 @@ struct Cbe::Block_session_component
 			}
 			Test &test = *new (_alloc) Test;
 			test.type = Test::DISCARD_SNAPSHOT;
-			test.discard_snapshot.construct(id);
+			test.discard_snapshot.construct(Token { id }, id);
 			_test_queue.enqueue(test);
 		} catch (Xml_node::Nonexistent_attribute) {
 			error("discard-snapshot node misses attribute");
@@ -862,7 +865,8 @@ class Cbe::Main
 		Signal_handler<Main>                    _request_handler         { _env.ep(), *this, &Main::_execute };
 		Cbe::Snapshot_ID                        _creating_snapshot_id    { 0, false };
 		bool                                    _creating_snapshot       { false };
-		Cbe::Snapshot_ID                        _discarding_snapshot_id  { 0, false };
+		bool                                    _discard_snapshot        { false };
+		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
 
 		void _execute_cbe_check (bool &progress)
 		{
@@ -1290,22 +1294,33 @@ class Cbe::Main
 				}
 			}
 
-			if (!_discarding_snapshot_id.valid) {
+			if (!_discard_snapshot) {
 				_block_session->with_discard_snapshot([&] (Discard_snapshot const ds) {
-					_discarding_snapshot_id = { ds.id, true };
-					if (_cbe->discard_snapshot(_discarding_snapshot_id)) {
-						_block_session->discard_snapshot_done(true);
+					if (_cbe->discard_snapshot(ds.token, Cbe::Snapshot_ID { ds.id, true })) {
+						_discard_snapshot_obj = { ds.token, ds.id };
+						_discard_snapshot = true;
 					} else {
 						_block_session->discard_snapshot_done(false);
 					}
+					progress |= true;
+				});
+			}
+
+			if (_discard_snapshot) {
+				Cbe::Token token { 0 };
+				if (_cbe->discard_snapshot_complete(token)
+				    && token.value == _discard_snapshot_obj.token.value) {
+					_block_session->discard_snapshot_done(true);
+					_discard_snapshot_obj = { 0, 0 };
+					_discard_snapshot = false;
+
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;
 					} else {
 						_state = INVALID;
 					}
-					_discarding_snapshot_id = { 0, false };
 					progress |= true;
-				});
+				}
 			}
 
 			_cbe->execute(_blk_buf, _crypto_plain_buf, _crypto_cipher_buf, _timer.curr_time().trunc_to_plain_ms().value);
