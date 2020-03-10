@@ -63,15 +63,29 @@ is
 
    procedure Discard_Snapshot (
       Obj     : in out Library.Object_Type;
+      Token   :        CXX_Token_Type;
       Snap_ID :        CXX_Snapshot_ID_Type;
       Result  :    out CXX_Bool_Type)
    is
       SPARK_Result : Boolean;
    begin
-      Library.Discard_Snapshot (Obj, Generation_Type (Snap_ID),
-         SPARK_Result);
+      Library.Discard_Snapshot (Obj, Token_Type (Token),
+         Generation_Type (Snap_ID), SPARK_Result);
       Result := CXX_Bool_From_SPARK (SPARK_Result);
    end Discard_Snapshot;
+
+   procedure Discard_Snapshot_Complete (
+      Obj     :     Library.Object_Type;
+      Token   : out CXX_Token_Type;
+      Result  : out CXX_Bool_Type)
+   is
+      SPARK_Token  : Token_Type;
+      SPARK_Result : Boolean;
+   begin
+      Library.Discard_Snapshot_Complete (Obj, SPARK_Token, SPARK_Result);
+      Token   := CXX_Token_Type (SPARK_Token);
+      Result  := CXX_Bool_From_SPARK (SPARK_Result);
+   end Discard_Snapshot_Complete;
 
    procedure Active_Snapshot_IDs (
       Obj :     Library.Object_Type;

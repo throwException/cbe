@@ -92,6 +92,12 @@ is
       Obj.Snap_Gen := 0;
       Obj.Snap_Token := 0;
 
+      Obj.Discarding_Snapshot  := False;
+      Obj.Discard_Snap_ID      := 0;
+      Obj.Discard_Snap_Slot    := Snapshots_Index_Type'First;
+      Obj.Discard_Snap_Token   := 0;
+      Obj.Last_Discard_Snap_ID := 0;
+
       Obj.SCD_State       := Inactive;
       Obj.SCD_Req         := Request.Invalid_Object;
       Obj.SCD_Data        := (others => 0);
@@ -190,11 +196,21 @@ is
 
    procedure Discard_Snapshot (
       Obj     : in out Object_Type;
+      Token   :        Token_Type;
       Snap_ID :        Generation_Type;
-      Success :    out Boolean)
+      Result  :    out Boolean)
    is
    begin
-      Success := False;
+      Result := False;
+
+      --
+      --  For now allow only one discard request to be pending.
+      --  That has to be changed later when the snapshot discard
+      --  operation is managed by the Job_Pool.
+      --
+      if Obj.Discarding_Snapshot then
+         return;
+      end if;
 
       Loop_Discard_Snapshot :
       for I in Snapshots_Index_Type loop
@@ -202,13 +218,51 @@ is
             Obj.Superblock.Snapshots (I).Keep and then
             Obj.Superblock.Snapshots (I).Gen = Snap_ID
          then
-            Obj.Superblock.Snapshots (I).Valid := False;
-            Success := True;
-            Obj.Secure_Superblock := True;
+            Obj.Discard_Snap_ID   := Snap_ID;
+            Obj.Discard_Snap_Slot := I;
+            Result := True;
             exit Loop_Discard_Snapshot;
          end if;
       end loop Loop_Discard_Snapshot;
+
+      if Result then
+         Declare_Discard_Sync_Request :
+         declare
+            Req : constant Request.Object_Type :=
+               Request.Valid_Object (
+                  Op     => Discard_Snapshot,
+                  Succ   => False,
+                  Blk_Nr => Block_Number_Type (0),
+                  Off    => 0,
+                  Cnt    => 1,
+                  Tg     => 0);
+         begin
+            --  XXX check request acceptable
+            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0, 1);
+         end Declare_Discard_Sync_Request;
+
+         Obj.Discarding_Snapshot := True;
+         Obj.Discard_Snap_Token  := Token;
+      end if;
    end Discard_Snapshot;
+
+   procedure Discard_Snapshot_Complete (
+      Obj     :     Object_Type;
+      Token   : out Token_Type;
+      Result  : out Boolean)
+   is
+      R : constant Boolean :=
+         Obj.Discard_Snap_ID = Obj.Last_Discard_Snap_ID;
+   begin
+      if R and then Obj.Discarding_Snapshot = False
+      then
+         Token  := Obj.Discard_Snap_Token;
+         Result := True;
+      else
+         Token  := 0;
+         Result := False;
+      end if;
+   end Discard_Snapshot_Complete;
 
    procedure Active_Snapshot_IDs (
       Obj  :     Object_Type;
@@ -1623,7 +1677,17 @@ is
                   Obj.State := Sync_Request;
 
                when Discard_Snapshot =>
-                  raise Program_Error;
+
+                  Obj.Superblock.Snapshots (
+                     Obj.Discard_Snap_Slot).Keep := False;
+
+                  Obj.Superblock.Snapshots (
+                     Obj.Discard_Snap_Slot).Valid := False;
+
+                  Sync_Superblock.Submit_Request (
+                     Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
+
+                  Obj.State := Sync_Request;
 
                end case;
 
@@ -2066,6 +2130,18 @@ is
                            Advance_Current_Snapshot_Slot (Obj.Superblock);
 
                            Obj.Creating_Quarantine_Snapshot := False;
+
+                     end if;
+
+                  elsif Obj.Discarding_Snapshot then
+                     if Request.Operation (Req) = Discard_Snapshot then
+
+                        Obj.Last_Discard_Snap_ID := Obj.Discard_Snap_ID;
+
+                        Pool.Drop_Completed_Request (
+                           Obj.Request_Pool_Obj, Req);
+
+                        Obj.Discarding_Snapshot := False;
                      end if;
                   end if;
                end Declare_Pool_Index;

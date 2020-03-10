@@ -74,8 +74,17 @@ is
    --
    procedure Discard_Snapshot (
       Obj     : in out Object_Type;
+      Token   :        Token_Type;
       Snap_ID :        Generation_Type;
-      Success :    out Boolean);
+      Result  :    out Boolean);
+
+   --
+   --  Check if discard given quaratine snapshot is complete
+   --
+   procedure Discard_Snapshot_Complete (
+      Obj     :     Object_Type;
+      Token   : out Token_Type;
+      Result  : out Boolean);
 
    --
    --  Return active snapshot ids
@@ -396,6 +405,12 @@ private
 
       Snap_Token : Token_Type;
       Snap_Gen   : Generation_Type;
+
+      Discarding_Snapshot  : Boolean;
+      Discard_Snap_ID      : Generation_Type;
+      Discard_Snap_Token   : Token_Type;
+      Last_Discard_Snap_ID : Generation_Type;
+      Discard_Snap_Slot    : Snapshots_Index_Type;
 
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;

@@ -53,7 +53,8 @@ class Cbe::Library : public Cbe::Spark_object<273400>
 
 		void _create_snapshot(uint64_t, bool, bool &);
 		void _snapshot_creation_complete(uint64_t &, uint64_t &, bool &);
-		void _discard_snapshot(uint64_t id, bool &);
+		void _discard_snapshot(uint64_t, uint64_t, bool &);
+		void _discard_snapshot_complete(uint64_t &, bool &);
 
 	public:
 
@@ -293,10 +294,26 @@ class Cbe::Library : public Cbe::Spark_object<273400>
 	 *
 	 * \return true if discard attempt was successful, false otherwise
 	 */
-	bool discard_snapshot(Snapshot_ID id)
+	bool discard_snapshot(Token token, Snapshot_ID id)
 	{
 		bool result = false;
-		_discard_snapshot(id.value, result);
+		_discard_snapshot(token.value, id.value, result);
+		return result;
+	}
+
+	/**
+	 * Check completion state of snapshot discard
+	 *
+	 * The parameter is only usable of the method returned true.
+	 *
+	 * \param token token of the completed snapshot request
+	 *
+	 * \return true if snapshot discard is complete, false otherwise
+	 */
+	bool discard_snapshot_complete(Token &token)
+	{
+		bool result = false;
+		_discard_snapshot_complete(token.value, result);
 		return result;
 	}
 
