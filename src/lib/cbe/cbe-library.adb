@@ -104,7 +104,6 @@ is
       Obj.SCD_Curr_Lvl    := 1;
       Obj.SCD_New_PBAs    := (others => 0);
       Obj.SCD_New_Blocks  := 0;
-      Obj.SCD_Free_PBAs   := (others => 0);
       Obj.SCD_Free_Blocks := 0;
 
       Obj.SCD_Cache_Prim := Primitive.Invalid_Object;
@@ -532,7 +531,6 @@ is
          Obj.SCD_Curr_Lvl := 1;
          Obj.SCD_New_PBAs := (others => 0);
          Obj.SCD_New_Blocks := 0;
-         Obj.SCD_Free_PBAs := (others => 0);
          Obj.SCD_Free_Blocks := 0;
          Progress := True;
       when others =>
@@ -1294,19 +1292,13 @@ is
                      --  new block.
                      --
                      else
-                        Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks) :=
-                           Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
-
                         Obj.SCD_Free_Blocks := Obj.SCD_Free_Blocks + 1;
                         Obj.SCD_New_Blocks  := Obj.SCD_New_Blocks  + 1;
 
                         pragma Debug (Debug.Print_String ("New_Blocks: "
                            & Debug.To_String (Debug.Uint64_Type (
                                 Obj.SCD_New_Blocks))
-                           & " Free_PBA: "
-                           & Debug.To_String (Debug.Uint64_Type (
-                              Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks))) & " "
-                           & Debug.To_String (Debug.Uint64_Type (
+                           & " " & Debug.To_String (Debug.Uint64_Type (
                               Old_PBAs (
                                  Tree_Level_Index_Type (Level - 1)).PBA))));
                      end if;
@@ -1337,8 +1329,6 @@ is
                   Old_PBAs (Trans_Max_Level).PBA;
             else
                pragma Debug (Debug.Print_String ("New root PBA"));
-               Obj.SCD_Free_PBAs (Obj.SCD_Free_Blocks) :=
-                  Old_PBAs (Trans_Max_Level).PBA;
                Obj.SCD_New_Blocks := Obj.SCD_New_Blocks  + 1;
             end if;
 

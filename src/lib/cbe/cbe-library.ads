@@ -14,7 +14,6 @@ with CBE.Crypto;
 with CBE.Virtual_Block_Device;
 with CBE.Write_Back;
 with CBE.Sync_Superblock;
-with CBE.Free_Tree;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Primitive;
@@ -463,7 +462,6 @@ private
       --  marked as reserved in the FT as they are still referenced by
       --  an snapshot.
       --
-      SCD_Free_PBAs   : Free_Tree.Free_PBAs_Type := (others => 0);
       SCD_Free_Blocks : Tree_Level_Index_Type := 0;
 
       WB_Update_PBA : Physical_Block_Address_Type;
