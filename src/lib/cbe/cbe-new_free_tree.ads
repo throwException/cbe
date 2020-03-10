@@ -32,7 +32,7 @@ is
       Old_PBAs       : Type_1_Node_Walk_Type;
    end record;
 
-   procedure Initialized_Object (Obj : in out Object_Type);
+   procedure Initialized_Object (Obj : out Object_Type);
 
    ------------------------
    --  Module interface  --
@@ -314,14 +314,14 @@ private
          Type_1_Info_Stack.Object_Type;
 
    procedure Initialize_Type_1_Info_Stack_Array (
-      A : in out Type_1_Info_Stack_Array_Type);
+      A : out Type_1_Info_Stack_Array_Type);
 
    type Type_1_Node_Block_Array_Type is array
       (Type_1_Info_Stack_Array_Index_Type) of
          Type_1_Node_Block_Type;
 
    procedure Initialize_Type_1_Node_Block_Array (
-      A : in out Type_1_Node_Block_Array_Type);
+      A : out Type_1_Node_Block_Array_Type);
 
    type Meta_Tree_Request_State_Type is (
       Invalid, Pending, In_Progress, Complete);
@@ -442,11 +442,9 @@ private
    function Block_From_Level_0_Node (Entries : Type_2_Node_Block_Type)
    return Block_Data_Type;
 
-   procedure Dump_Level_0_Block_Data (Block_Data : Block_Data_Type);
-
    procedure Populate_Level_0_Stack (
       Stack        : in out Type_2_Info_Stack.Object_Type;
-      Entries      : in out Type_2_Node_Block_Type;
+      Entries      :    out Type_2_Node_Block_Type;
       Block_Data   :        Block_Data_Type;
       Active_Snaps :        Snapshots_Type;
       Secured_Gen  :        Generation_Type);
@@ -454,13 +452,9 @@ private
    function Block_From_Level_N_Node (Entries : Type_1_Node_Block_Type)
    return Block_Data_Type;
 
-   procedure Dump_Level_N_Node_Data (Entries : Type_1_Node_Block_Type);
-
-   procedure Dump_Level_N_Block_Data (Block_Data : Block_Data_Type);
-
    procedure Populate_Lower_N_Stack (
       Stack       : in out Type_1_Info_Stack.Object_Type;
-      Entries     : in out Type_1_Node_Block_Type;
+      Entries     :    out Type_1_Node_Block_Type;
       Block_Data  :        Block_Data_Type;
       Current_Gen :        Generation_Type);
 

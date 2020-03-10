@@ -56,10 +56,9 @@ is
 
    procedure Compute_Node_Hash (
       Block_Data    : in     Block_Data_Type;
-      SHA_Hash_Data : in out SHA256_4K.Data_Type;
       CBE_Hash      :    out Hash_Type);
 
-   procedure Initialized_Object (Obj : in out Object_Type)
+   procedure Initialized_Object (Obj : out Object_Type)
    is
    begin
       Obj.State         := Invalid;
@@ -118,10 +117,6 @@ is
       Obj.Level_N_Nodes (Obj.Tree_Geom.Max_Level).Volatile :=
          Node_Volatile (Obj.Root_Node, Obj.Current_Gen);
 
-      Debug.Print_String ("MT: " & "Submit_Request: "
-         & "root PBA: " & Debug.To_String (Obj.Root_Node.PBA)
-         & "PBA: " & Debug.To_String (Obj.Old_PBA));
-
       Obj.State := Update;
    end Submit_Request;
 
@@ -135,10 +130,6 @@ is
    begin
       if Obj.Cache_Request.State /= Invalid then
          return;
-      end if;
-
-      if Obj.State /= Invalid then
-         Debug.Print_String ("MT: " & "Execute: " & "state: " & To_String (Obj.State));
       end if;
 
       case Obj.State is
@@ -163,8 +154,6 @@ is
       if Obj.State /= Complete then
          return Primitive.Invalid_Object;
       end if;
-      Debug.Print_String ("MT: Peek_Completed_Primitive: "
-         & Primitive.To_String (Obj.Complete_Prim));
       return Obj.Complete_Prim;
    end Peek_Completed_Primitive;
 
@@ -264,7 +253,6 @@ is
 
       if not Primitive.Success (Prim) then
 
-         Debug.Print_String ("Mark_Generated_Cache_Primitive_Complete: FAILED");
          Obj.Complete_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Read,
             Succ   => Request.Success_Type (False),
@@ -275,27 +263,18 @@ is
          return;
       end if;
 
-      Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: "
-         & "Level : " & Debug.To_String (Debug.Uint64_Type (Obj.Cache_Request.Level)));
-
       case Primitive.Operation (Obj.Cache_Request.Prim) is
          when Sync =>
-
-            Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: " & "SYNC");
             null;
 
          when Read =>
-
-            Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: " & "READ");
 
             if Obj.Cache_Request.Level > Type_2_Level then
                if not Check_Node_Hash (Block_Data,
                   Obj.Level_N_Nodes (Obj.Cache_Request.Level).Node.Hash)
                then
-                  Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: T1 " & "Tree_Hash_Mismatch " & To_String (Obj.Level_N_Nodes (Obj.Cache_Request.Level)));
                   Obj.State := Tree_Hash_Mismatch;
                else
-                  Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: T1");
                   Type_1_Node_Block_From_Block_Data (
                      Obj.Level_N_Nodes (Obj.Cache_Request.Level).Entries,
                      Block_Data);
@@ -306,10 +285,8 @@ is
             elsif Obj.Cache_Request.Level = Type_2_Level then
                if not Check_Node_Hash (Block_Data, Obj.Level_1_Node.Node.Hash)
                then
-                  Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: T2 " & "Tree_Hash_Mismatch " & To_String (Obj.Level_1_Node));
                   Obj.State := Tree_Hash_Mismatch;
                else
-                  Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: T2");
                   Type_2_Node_Block_From_Block_Data (
                      Obj.Level_1_Node.Entries,
                      Block_Data);
@@ -324,7 +301,8 @@ is
 
             if Obj.Cache_Request.Level > Type_2_Level then
 
-               Obj.Level_N_Nodes (Obj.Cache_Request.Level).State := Write_Complete;
+               Obj.Level_N_Nodes (Obj.Cache_Request.Level).State :=
+                  Write_Complete;
 
             elsif Obj.Cache_Request.Level = Type_2_Level then
 
@@ -377,7 +355,7 @@ is
       when Tree_Hash_Mismatch => "Tree_Hash_Mismatch");
 
    procedure Initialize_Type_1_Info_Array (
-      A : in out Type_1_Info_Array_Type)
+      A : out Type_1_Info_Array_Type)
    is
    begin
       for I in A'Range loop
@@ -394,7 +372,6 @@ is
    begin
       Exchanged := False;
 
-      Debug.Print_String ("MT: " & "Exchange_NV_Level_1_Node: " & To_String (Obj.Level_1_Node));
       if not Obj.Level_1_Node.Volatile then
 
          Obj.Level_1_Node.Node.PBA := T2_Entry.PBA;
@@ -414,15 +391,13 @@ is
       T2_Entry  : in out Type_2_Node_Type;
       Exchanged :    out Boolean)
    is
-      T1_Entry : Type_1_Node_Type := Type_1_Node_Invalid;
+      T1_Entry : Type_1_Node_Type;
    begin
       Exchanged := False;
 
       Loop_Non_Volatile_Inner_Nodes :
       --  for L in Obj.Level_N_Nodes'Range loop
       for L in Obj.Level_N_Nodes'Range loop
-
-         Debug.Print_String ("MT: " & "Exchange_NV_Inner_Nodes: " & To_String (Obj.Level_N_Nodes (L)));
 
          if Obj.Level_N_Nodes (L).Node /= Type_1_Node_Invalid
             and then not Obj.Level_N_Nodes (L).Volatile
@@ -449,8 +424,6 @@ is
       T2_Entry : in out Type_2_Node_Type)
    is
    begin
-      Debug.Print_String ("MT: " & "Exchange_Request_PBA: " & Debug.To_String (Obj.Old_PBA) & " -> " & Debug.To_String (T2_Entry.PBA));
-
       Obj.Complete_Prim := Primitive.Valid_Object_No_Pool_Idx (
          Op     => Read,
          Succ   => Request.Success_Type (True),
@@ -470,31 +443,31 @@ is
       Obj     : in out Object_Type;
       Handled :    out Boolean)
    is
-      TMP_T2_Entry : Type_2_Node_Type := Type_2_Node_Invalid;
+      TMP_T2_Entry : Type_2_Node_Type;
    begin
       Handled := False;
-      Debug.Print_String ("MT: " & "Handle_Level_0_Nodes: Parent_Node: " & To_String (Obj.Level_1_Node.Node));
 
       Loop_Level_0_Nodes :
       for I in 0 .. Obj.Tree_Geom.Edges loop
          TMP_T2_Entry := Obj.Level_1_Node.Entries (Natural (I));
-         Debug.Print_String ("MT: " & "Handle_Level_0_Nodes: " & Debug.To_String (Debug.Uint64_Type (I)) & ": " & Debug.To_String (TMP_T2_Entry.PBA));
 
          if TMP_T2_Entry /= Type_2_Node_Invalid
             and then Check_Level_0_Usable (Obj.Current_Gen, TMP_T2_Entry)
          then
             declare
-               Exchanged_Level_1 : Boolean := False;
+               Exchanged_Level_1 : Boolean;
                Exchanged_Level_N : Boolean := False;
                Exchanged_Request_PBA : Boolean := False;
             begin
 
                --  first try to exchange the level 1 node ...
-               Exchange_NV_Level_1_Node (Obj, TMP_T2_Entry, Exchanged_Level_1);
+               Exchange_NV_Level_1_Node (Obj, TMP_T2_Entry,
+                  Exchanged_Level_1);
 
                --  ... next the inner level N nodes ...
                if not Exchanged_Level_1 then
-                  Exchange_NV_Inner_Nodes (Obj, TMP_T2_Entry, Exchanged_Level_N);
+                  Exchange_NV_Inner_Nodes (Obj, TMP_T2_Entry,
+                     Exchanged_Level_N);
                end if;
 
                --  ... and than satisfy the original MT request
@@ -502,12 +475,6 @@ is
                   Exchange_Request_PBA (Obj, TMP_T2_Entry);
                   Exchanged_Request_PBA := True;
                end if;
-
-               Debug.Print_String ("MT: " & "Handle_Level_0_Nodes: " & Debug.To_String (Debug.Uint64_Type (I))
-                  & " Exchanged_Level_1: " & Debug.To_String (Exchanged_Level_1)
-                  & " Exchanged_Level_N: " & Debug.To_String (Exchanged_Level_N)
-                  & " Exchanged_Request_PBA: " & Debug.To_String (Exchanged_Request_PBA)
-                  & " => " & Debug.To_String (TMP_T2_Entry.PBA));
 
                Obj.Level_1_Node.Entries (Natural (I)) := TMP_T2_Entry;
                Handled := True;
@@ -523,7 +490,6 @@ is
       Handled :    out Boolean)
    is
    begin
-      Debug.Print_String ("MT: Handle_Level_1_Node: " & To_String (Obj.Level_1_Node));
       case Obj.Level_1_Node.State is
          when Invalid =>
 
@@ -539,28 +505,27 @@ is
 
             Handle_Level_0_Nodes (Obj, Handled);
             if Handled then
-               Debug.Print_String ("MT: Handle_Level_1_Node: 0 WRITE");
                Obj.Level_1_Node.State := Write;
             else
-               Debug.Print_String ("MT: Handle_Level_1_Node: 0 COMPLETE");
                Obj.Level_1_Node.State := Complete;
                Handled := True;
             end if;
 
          when Write =>
-            Debug.Print_String ("MT: Handle_Level_1_Node: " & To_String (Obj.Level_1_Node));
-
-            Debug.Print_String ("MT: " & "Mark_Generated_Cache_Primitive_Complete: WRITE T2: " & To_String (Obj.Level_1_Node)
-            & " UPDATE: " & To_String (Obj.Level_N_Nodes (Obj.Level_N_Nodes'First)));
 
             declare
-               Block_Data : Block_Data_Type := (others => 0);
+               Block_Data : Block_Data_Type;
             begin
                Block_Data_From_Type_2_Node_Block (Block_Data,
                   Obj.Level_1_Node.Entries);
 
-               Update_Parent (Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Entries (Natural (Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Index)),
-                  Block_Data, Obj.Current_Gen, Obj.Level_1_Node.Node.PBA);
+               Update_Parent (
+                  Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Entries (
+                     Natural (Obj.Level_N_Nodes (
+                        Obj.Level_N_Nodes'First).Index)),
+                           Block_Data, Obj.Current_Gen,
+                           Obj.Level_1_Node.Node.PBA
+               );
 
                Obj.Cache_Request := New_Cache_Request (
                   Obj.Level_1_Node.Node.PBA, Write, 1, Block_Data);
@@ -572,8 +537,6 @@ is
 
          when Write_Complete =>
 
-            Debug.Print_String ("MT: Handle_Level_1_Node: " & To_String (Obj.Level_1_Node));
-
             Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Index :=
                Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Index + 1;
 
@@ -581,8 +544,6 @@ is
             Handled := True;
 
          when Complete =>
-
-            Debug.Print_String ("MT: Handle_Level_1_Node: " & To_String (Obj.Level_1_Node));
 
             Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Index :=
                Obj.Level_N_Nodes (Obj.Level_N_Nodes'First).Index + 1;
@@ -598,9 +559,10 @@ is
       Handled :    out Boolean)
    is
    begin
+      Handled := False;
+
       Loop_Level_N_Nodes :
       for L in Obj.Level_N_Nodes'Range loop
-         Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L)) & " state: " & To_String (Obj.Level_N_Nodes (L).State));
          case Obj.Level_N_Nodes (L).State is
             when Invalid =>
                null;
@@ -614,18 +576,13 @@ is
 
             when Read_Complete =>
 
-               Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L))
-                  & " state: " & To_String (Obj.Level_N_Nodes (L).State)
-                  & " current index: " & Debug.To_String (Debug.Uint64_Type (Obj.Level_N_Nodes (L).Index)));
-
-               if Obj.Level_N_Nodes (L).Index < Node_Index_Type (Obj.Tree_Geom.Edges)
+               if Obj.Level_N_Nodes (L).Index < Node_Index_Type (
+                     Obj.Tree_Geom.Edges)
                   and then Obj.Level_N_Nodes (L).Entries (Natural (
                      Obj.Level_N_Nodes (L).Index)) /= Type_1_Node_Invalid
                   and then not Obj.Finished
                then
                   if L /= Obj.Level_N_Nodes'First then
-                     Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L))
-                        & " state: " & To_String (Obj.Level_N_Nodes (L).State) & " READ NEXT Level: " & Debug.To_String (Debug.Uint64_Type (L - 1)));
                      Obj.Level_N_Nodes (L - 1) := (
                         State    => Read,
                         Node     => Obj.Level_N_Nodes (L).Entries (Natural (
@@ -636,9 +593,6 @@ is
                         Volatile => Node_Volatile (
                            Obj.Level_N_Nodes (L).Node, Obj.Current_Gen));
                   else
-                     Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L))
-                        & " state: " & To_String (Obj.Level_N_Nodes (L)) & " READ NEXT LEAF");
-
                      Obj.Level_1_Node := (
                         State    => Read,
                         Node      => Obj.Level_N_Nodes (L).Entries (Natural (
@@ -647,11 +601,8 @@ is
                         Index    => 0,
                         Volatile => Node_Volatile (
                            Obj.Level_N_Nodes (L).Node, Obj.Current_Gen));
-                     Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L))
-                        & " state: " & To_String (Obj.Level_N_Nodes (L)) & " READ NEXT LEAF: " & To_String (Obj.Level_1_Node));
                   end if;
                else
-                  Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L)) & " state: " & To_String (Obj.Level_N_Nodes (L).State) & " FINISHED");
                   if Obj.Level_N_Nodes (L).Dirty then
                      Obj.Level_N_Nodes (L).State := Write;
                   else
@@ -663,18 +614,13 @@ is
 
             when Write =>
 
-               Debug.Print_String ("MT: Handle_Level_N_Nodes: Level: " & Debug.To_String (Debug.Uint64_Type (L)) & " state: " & To_String (Obj.Level_N_Nodes (L).State) & " FINISHED");
-
                declare
-                  Block_Data : Block_Data_Type := (others => 0);
+                  Block_Data : Block_Data_Type;
                begin
                   Block_Data_From_Type_1_Node_Block (Block_Data,
                      Obj.Level_N_Nodes (L).Entries);
 
                   if L = Obj.Tree_Geom.Max_Level then
-
-                     Debug.Print_String ("MT: " & "Handle_Level_N_Nodes: WRITE T1: " & To_String (Obj.Level_N_Nodes (L))
-                        & " UPDATE: " & To_String (Obj.Root_Node));
 
                      Update_Parent (
                         Obj.Root_Node,
@@ -685,13 +631,12 @@ is
 
                   else
 
-                     Debug.Print_String ("MT: " & "Handle_Level_N_Nodes: WRITE T1: " & To_String (Obj.Level_N_Nodes (L))
-                        & " UPDATE: " & To_String (Obj.Level_N_Nodes (L + 1)));
-
                      Update_Parent (
-                        Obj.Level_N_Nodes (L + 1).Entries (Natural (Obj.Level_N_Nodes (L + 1).Index)),
+                        Obj.Level_N_Nodes (L + 1).Entries (
+                           Natural (Obj.Level_N_Nodes (L + 1).Index)),
                         Block_Data, Obj.Current_Gen,
                         Obj.Level_N_Nodes (L).Node.PBA);
+
                      Obj.Level_N_Nodes (L + 1).Dirty := True;
                   end if;
 
@@ -704,7 +649,6 @@ is
 
             when Write_Complete =>
 
-               Debug.Print_String ("MT: Handle_Level_N_Nodes: Write_Complete: Level: " & Debug.To_String (Debug.Uint64_Type (L)));
                if Tree_Level_Index_Type (L) = Obj.Tree_Geom.Max_Level then
                   Obj.State := Complete;
                else
@@ -720,7 +664,6 @@ is
 
             when Complete =>
 
-               Debug.Print_String ("MT: Handle_Level_N_Nodes: Complete: Level: " & Debug.To_String (Debug.Uint64_Type (L)));
                if Tree_Level_Index_Type (L) = Obj.Tree_Geom.Max_Level then
                   Obj.State := Complete;
                else
@@ -740,15 +683,9 @@ is
       Obj      : in out Object_Type;
       Progress : in out Boolean)
    is
-      Handled_Level_1_Node  : Boolean := False;
-      Handled_Level_N_Nodes : Boolean := False;
+      Handled_Level_1_Node  : Boolean;
+      Handled_Level_N_Nodes : Boolean;
    begin
-      Debug.Print_String ("MT: Execute_Update: Leve1: 1 " & To_String (Obj.Level_1_Node));
-      Dump_Level_N_Nodes :
-      for L in Obj.Level_N_Nodes'Range loop
-         Debug.Print_String ("MT: Execute_Update: Level: " & Debug.To_String (Debug.Uint64_Type (L)) & " " & To_String (Obj.Level_N_Nodes (L)));
-      end loop Dump_Level_N_Nodes;
-
       Handle_Level_1_Node (Obj, Handled_Level_1_Node);
       if Handled_Level_1_Node then
          Progress := True;
@@ -760,17 +697,13 @@ is
    end Execute_Update;
 
    procedure Update_Parent (
-      Node       : in out Type_1_Node_Type;
+      Node       :    out Type_1_Node_Type;
       Block_Data : in     Block_Data_Type;
       Gen        :        Generation_Type;
       PBA  :              Physical_Block_Address_Type)
    is
-      SHA_Hash_Data : SHA256_4K.Data_Type;
    begin
-      Compute_Node_Hash (Block_Data, SHA_Hash_Data, Node.Hash);
-      Debug.Print_String ("MT: Update_Parent:"
-         & " Node.Gen: " & Debug.To_String (Node.Gen) & " -> " & Debug.To_String (Gen)
-         & " Node.PBA: " & Debug.To_String (Node.PBA) & " -> " & Debug.To_String (PBA));
+      Compute_Node_Hash (Block_Data, Node.Hash);
       Node.Gen := Gen;
       Node.PBA := PBA;
    end Update_Parent;
@@ -783,10 +716,10 @@ is
 
    procedure Compute_Node_Hash (
       Block_Data    : in     Block_Data_Type;
-      SHA_Hash_Data : in out SHA256_4K.Data_Type;
       CBE_Hash      :    out Hash_Type)
    is
-      SHA_Hash : SHA256_4K.Hash_Type;
+      SHA_Hash_Data : SHA256_4K.Data_Type;
+      SHA_Hash      : SHA256_4K.Hash_Type;
    begin
       SHA256_4K_Data_From_CBE_Data (SHA_Hash_Data, Block_Data);
       SHA256_4K.Hash (SHA_Hash_Data, SHA_Hash);
@@ -798,17 +731,13 @@ is
       Node_Hash  : Hash_Type)
    return Boolean
    is
-      SHA_Hash_Data : SHA256_4K.Data_Type;
       Computed_Hash : Hash_Type;
    begin
-      Compute_Node_Hash (Block_Data, SHA_Hash_Data, Computed_Hash);
+      Compute_Node_Hash (Block_Data, Computed_Hash);
 
       if Computed_Hash = Node_Hash then
          return True;
       else
-         Debug.Print_String ("Check_Node_Hash: "
-            & " exp: " & Debug.To_String (Node_Hash)
-            & " got: " & Debug.To_String (Computed_Hash));
          return False;
       end if;
    end Check_Node_Hash;

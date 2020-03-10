@@ -22,7 +22,7 @@ is
 
    type Object_Type is private;
 
-   procedure Initialized_Object (Obj : in out Object_Type);
+   procedure Initialized_Object (Obj : out Object_Type);
 
    ------------------------
    --  Module interface  --
@@ -187,7 +187,7 @@ private
          Type_1_Info_Type;
 
    procedure Initialize_Type_1_Info_Array (
-      A : in out Type_1_Info_Array_Type);
+      A : out Type_1_Info_Array_Type);
 
    type Cache_Primitive_State_Type is (
       Invalid, Pending, In_Progress);
@@ -266,7 +266,7 @@ private
       Handled :    out Boolean);
 
    procedure Update_Parent (
-      Node       : in out Type_1_Node_Type;
+      Node       :    out Type_1_Node_Type;
       Block_Data : in     Block_Data_Type;
       Gen        :        Generation_Type;
       PBA        :        Physical_Block_Address_Type);

@@ -54,7 +54,7 @@ is
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
 
-   procedure Initialized_Object (Obj : in out Object_Type)
+   procedure Initialized_Object (Obj : out Object_Type)
    is
    begin
       Obj.State       := Invalid;
@@ -154,15 +154,11 @@ is
          Tree_Max_Level => Max_Level,
          New_PBAs       => New_Blocks,
          Old_PBAs       => Old_Blocks);
-
-      Debug.Print_String ("FT: " & "Submit_Request: " & To_String (Obj));
    end Submit_Request;
 
    procedure Retry_Allocation (Obj : in out Object_Type)
    is
    begin
-      Debug.Print_String ("FT: " & "Retry_Allocation");
-
       Reset_Block_State (Obj);
 
       Type_1_Info_Stack.Push (Obj.Level_N_Stacks (
@@ -199,25 +195,17 @@ is
          return;
       end if;
 
-      if Obj.State /= Invalid then
-         Debug.Print_String ("FT: " & "Execute: " & To_String (Obj));
-      end if;
-
       case Obj.State is
          when Invalid =>
-            --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: False");
             null;
          when Scan =>
             Execute_Scan (Obj, Active_Snaps, Last_Secured_Gen, Progress);
-            --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
          when Scan_Complete =>
             Obj.State := Update;
             Progress := True;
          when Update =>
-            Debug.Print_String ("FT: " & "Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
             Execute_Update (Obj, Active_Snaps, Last_Secured_Gen, Progress);
          when Update_Complete =>
-            Debug.Print_String ("FT: " & "Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
             Primitive.Success (Obj.WB_Data.Prim, True);
             Obj.State := Complete;
          when Complete =>
@@ -226,7 +214,6 @@ is
             Primitive.Success (Obj.WB_Data.Prim, False);
             Obj.State := Complete;
             Progress := True;
-            --  Debug.Print_String ("FT: " & "2 Execute: " & To_String (Obj) & " Progress: " & Debug.To_String (Progress));
          when Tree_Hash_Mismatch =>
             raise Program_Error;
       end case;
@@ -297,7 +284,6 @@ is
    is
    begin
 
-      Debug.Print_String ("FT: " & "Drop_Generated_Meta_Tree_Primitive:");
       if Obj.Meta_Tree_Request.State /= Pending then
          raise Program_Error;
       end if;
@@ -487,20 +473,20 @@ is
       & " " & To_String (T.State)
       & " " & Debug.To_String (Debug.Uint64_Type (T.Index)));
 
-   function To_String (T : Type_1_Node_Type) return String
-   is ("Type_1_Node: " & Debug.To_String (T.PBA)
-      & " " & Debug.To_String (T.Gen)
-      & " " & Debug.To_String (T.Hash));
+   --  function To_String (T : Type_1_Node_Type) return String
+   --  is ("Type_1_Node: " & Debug.To_String (T.PBA)
+   --     & " " & Debug.To_String (T.Gen)
+   --     & " " & Debug.To_String (T.Hash));
 
-   function To_String (T : Type_2_Node_Type) return String
-   is ("Type_2_Node: " & Debug.To_String (T.PBA)
-      & " " & Debug.To_String (T.Last_VBA)
-      & " " & Debug.To_String (T.Alloc_Gen)
-      & " " & Debug.To_String (T.Free_Gen)
-      & " " & Debug.To_String (T.Reserved));
+   --  function To_String (T : Type_2_Node_Type) return String
+   --  is ("Type_2_Node: " & Debug.To_String (T.PBA)
+   --     & " " & Debug.To_String (T.Last_VBA)
+   --     & " " & Debug.To_String (T.Alloc_Gen)
+   --     & " " & Debug.To_String (T.Free_Gen)
+   --     & " " & Debug.To_String (T.Reserved));
 
    procedure Initialize_Type_1_Info_Stack_Array (
-      A : in out Type_1_Info_Stack_Array_Type)
+      A : out Type_1_Info_Stack_Array_Type)
    is
    begin
       for I in Type_1_Info_Stack_Array_Type'Range loop
@@ -509,7 +495,7 @@ is
    end Initialize_Type_1_Info_Stack_Array;
 
    procedure Initialize_Type_1_Node_Block_Array (
-      A : in out Type_1_Node_Block_Array_Type)
+      A : out Type_1_Node_Block_Array_Type)
    is
    begin
       for I in A'Range loop
@@ -571,15 +557,14 @@ is
 
    procedure Compute_Node_Hash (
       Block_Data    : in     Block_Data_Type;
-      SHA_Hash_Data : in out SHA256_4K.Data_Type;
       CBE_Hash      :    out Hash_Type);
 
    procedure Compute_Node_Hash (
       Block_Data    : in     Block_Data_Type;
-      SHA_Hash_Data : in out SHA256_4K.Data_Type;
       CBE_Hash      :    out Hash_Type)
    is
-      SHA_Hash : SHA256_4K.Hash_Type;
+      SHA_Hash_Data : SHA256_4K.Data_Type;
+      SHA_Hash      : SHA256_4K.Hash_Type;
    begin
       SHA256_4K_Data_From_CBE_Data (SHA_Hash_Data, Block_Data);
       SHA256_4K.Hash (SHA_Hash_Data, SHA_Hash);
@@ -591,10 +576,9 @@ is
       Node_Hash  : Hash_Type)
    return Boolean
    is
-      SHA_Hash_Data : SHA256_4K.Data_Type;
       Computed_Hash : Hash_Type;
    begin
-      Compute_Node_Hash (Block_Data, SHA_Hash_Data, Computed_Hash);
+      Compute_Node_Hash (Block_Data, Computed_Hash);
       return (Computed_Hash = Node_Hash);
    end Check_Node_Hash;
 
@@ -614,26 +598,9 @@ is
       return Block_Data;
    end Block_From_Level_0_Node;
 
-   procedure Dump_Level_0_Block_Data (Block_Data : Block_Data_Type)
-   is
-      Entries : Type_2_Node_Block_Type;
-   begin
-      Type_2_Node_Block_From_Block_Data (Entries, Block_Data);
-      for I in Entries'Range loop
-         declare
-            Node : constant Type_2_Node_Type := Entries (I);
-         begin
-            if Node /= Type_2_Node_Invalid then
-               Debug.Print_String ("FT: " & "I: " & Debug.To_String (Debug.Uint64_Type (I))
-                  & " " & To_String (Node));
-            end if;
-         end;
-      end loop;
-   end Dump_Level_0_Block_Data;
-
    procedure Populate_Level_0_Stack (
       Stack        : in out Type_2_Info_Stack.Object_Type;
-      Entries      : in out Type_2_Node_Block_Type;
+      Entries      :    out Type_2_Node_Block_Type;
       Block_Data   :        Block_Data_Type;
       Active_Snaps :        Snapshots_Type;
       Secured_Gen  :        Generation_Type)
@@ -653,13 +620,8 @@ is
                      Node     => Node,
                      Index    => Node_Index_Type (I));
                begin
-                  Debug.Print_String ("FT: " & "Push: ----------------------------------------> " & To_String (Info));
                   Type_2_Info_Stack.Push (Stack, Info);
                end;
-            else
-               if Node /= Type_2_Node_Invalid then
-                  Debug.Print_String ("FT: " & "Check_Type_2_Leaf_Usable:  " & To_String (Node) & " not useable");
-               end if;
             end if;
          end;
       end loop;
@@ -674,39 +636,9 @@ is
       return Block_Data;
    end Block_From_Level_N_Node;
 
-   procedure Dump_Level_N_Block_Data (Block_Data : Block_Data_Type)
-   is
-      Entries : Type_1_Node_Block_Type;
-   begin
-      Type_1_Node_Block_From_Block_Data (Entries, Block_Data);
-      for I in Entries'Range loop
-         declare
-            Node : constant Type_1_Node_Type := Entries (I);
-         begin
-            if Node /= Type_1_Node_Invalid then
-               Debug.Print_String ("FT: " & "I: " & Debug.To_String (Debug.Uint64_Type (I)) & " " & To_String (Node));
-            end if;
-         end;
-      end loop;
-   end Dump_Level_N_Block_Data;
-
-   procedure Dump_Level_N_Node_Data (Entries : Type_1_Node_Block_Type)
-   is
-   begin
-      for I in Entries'Range loop
-         declare
-            Node : constant Type_1_Node_Type := Entries (I);
-         begin
-            if Node /= Type_1_Node_Invalid then
-               Debug.Print_String ("FT: " & "I: " & Debug.To_String (Debug.Uint64_Type (I)) & " " & To_String (Node));
-            end if;
-         end;
-      end loop;
-   end Dump_Level_N_Node_Data;
-
    procedure Populate_Lower_N_Stack (
       Stack       : in out Type_1_Info_Stack.Object_Type;
-      Entries     : in out Type_1_Node_Block_Type;
+      Entries     :    out Type_1_Node_Block_Type;
       Block_Data  :        Block_Data_Type;
       Current_Gen :        Generation_Type)
    is
@@ -724,7 +656,6 @@ is
                   Index    => Node_Index_Type (I),
                   Volatile => Node_Volatile (Node, Current_Gen));
             begin
-               Debug.Print_String ("FT: " & "Push: " & To_String (Info));
                Type_1_Info_Stack.Push (Stack, Info);
             end;
          end if;
@@ -737,10 +668,9 @@ is
       Block_Data : in     Block_Data_Type;
       Entries    : in out Type_1_Node_Block_Type)
    is
-      SHA_Hash_Data : SHA256_4K.Data_Type;
       Computed_Hash : Hash_Type;
    begin
-      Compute_Node_Hash (Block_Data, SHA_Hash_Data, Computed_Hash);
+      Compute_Node_Hash (Block_Data, Computed_Hash);
 
       Entries (Natural (T.Index)) := (
          PBA  => T.Node.PBA,
@@ -761,11 +691,8 @@ is
                Info : constant Type_2_Info_Type :=
                   Type_2_Info_Stack.Peek_Top (Stack);
             begin
-               Debug.Print_String ("FT: " & "Pop:  ++++++++++++++++++++++++++++++++++++++++> " & To_String (Info));
                if not Node_Queue.Full (Leafs) then
                   Node_Queue.Enqueue (Leafs, Info);
-               else
-                  Debug.Print_String ("FT: " & "queue full, ignore " & To_String (Info));
                end if;
             end;
 
@@ -805,7 +732,6 @@ is
       begin
          Check_Type_2_Stack (Obj.Level_0_Stack, Obj.Level_N_Stacks (1),
             Obj.Type_2_Leafs, Found_Blocks);
-         Debug.Print_String ("FT: Execute_Scan: " & "handle level 0: Found_Blocks: " & Debug.To_String (Debug.Uint64_Type (Found_Blocks)));
          Obj.Found_Blocks := Obj.Found_Blocks + Found_Blocks;
       end;
 
@@ -817,8 +743,6 @@ is
                N : Type_1_Info_Type :=
                   Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L));
             begin
-               Debug.Print_String ("FT: Execute_Scan: " & "handle level "
-                  & Debug.To_String (Debug.Uint64_Type (L)) & ": " & To_String (N));
                case N.State is
                when Invalid =>
 
@@ -835,12 +759,10 @@ is
                   Obj.Cache_Request.State := Invalid;
 
                   if L >= 2 then
-                     Debug.Print_String ("FT: Execute_Scan: " & "populate inner nodes level: " & Debug.To_String (Debug.Uint64_Type (L - 1)));
                      Populate_Lower_N_Stack (Obj.Level_N_Stacks (L - 1),
                         Obj.Level_N_Node, Obj.Cache_Block_Data,
                         Obj.Current_Gen);
                   else
-                     Debug.Print_String ("FT: Execute_Scan: " & "populate leaf nodes");
                      Populate_Level_0_Stack (Obj.Level_0_Stack,
                         Obj.Level_0_Node, Obj.Cache_Block_Data,
                         Active_Snaps, Last_Secured_Gen);
@@ -887,8 +809,6 @@ is
       if Enough_Found then
          Obj.State := Scan_Complete;
 
-         Debug.Print_String ("FT: " & "SCAN FINISHED");
-
          Initialize_Type_1_Info_Stack_Array (Obj.Level_N_Stacks);
          Initialize_Type_1_Node_Block_Array (Obj.Level_N_Nodes);
 
@@ -930,21 +850,18 @@ is
                   Info : constant Type_2_Info_Type :=
                      Type_2_Info_Stack.Peek_Top (Stack);
                begin
-                  Debug.Print_String ("FT: " & "Pop:  ========> " & To_String (Info));
-
                   if Entries (Natural (Info.Index)).PBA /= Info.Node.PBA then
                      raise Program_Error;
                   end if;
 
-                  Debug.Print_String ("FT: " & "Exchange_Type_2_Leafs:"
-                     & " NEW: " & Debug.To_String (Entries (Natural (Info.Index)).PBA)
-                     & " OLD: " & Debug.To_String (Old_Blocks (I).PBA));
-
                   New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
 
-                  Entries (Natural (Info.Index)).PBA       := Old_Blocks (I).PBA;
-                  Entries (Natural (Info.Index)).Alloc_Gen := Old_Blocks (I).Gen;
-                  Entries (Natural (Info.Index)).Free_Gen  := Current_Gen;
+                  Entries (Natural (Info.Index)).PBA :=
+                     Old_Blocks (I).PBA;
+                  Entries (Natural (Info.Index)).Alloc_Gen :=
+                     Old_Blocks (I).Gen;
+                  Entries (Natural (Info.Index)).Free_Gen :=
+                     Current_Gen;
 
                   Entries (Natural (Info.Index)).Last_VBA    := 0;
                   Entries (Natural (Info.Index)).Last_Key_ID := 0;
@@ -969,32 +886,28 @@ is
    is
       Exchange_Finished : Boolean := False;
       Update_Finished   : Boolean := False;
-      Exchanged         : Number_Of_Blocks_Type := 0;
+      Exchanged         : Number_Of_Blocks_Type;
    begin
       --  Node_Queue.Dump (Obj.Type_2_Leafs);
 
       --  handle level 0
       declare
-         Handled : Boolean := False;
+         Handled : Boolean;
       begin
          Exchange_Type_2_Leafs (Obj.Current_Gen, Obj.WB_Data.Tree_Max_Level,
          Obj.WB_Data.Old_PBAs, Obj.WB_Data.New_PBAs,
          Obj.Level_0_Stack, Obj.Level_0_Node,
          Exchanged, Handled);
-         Debug.Print_String ("FT: " & "Type2 handled: " & Debug.To_String (Handled));
          if Handled then
             if Exchanged > 0 then
-               Debug.Print_String ("FT: " & "Exchanged blocks: " & Debug.To_String (Debug.Uint64_Type (Exchanged)));
                Obj.Exchanged_Blocks := Obj.Exchanged_Blocks + Exchanged;
             else
-               Debug.Print_String ("FT: " & "no Exchanged blocks, mark complete");
                declare
                   L : constant Type_1_Info_Stack_Array_Index_Type :=
                      Obj.Level_N_Stacks'First;
                      N : Type_1_Info_Type :=
                         Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L));
                begin
-                  Debug.Print_String ("FT: " & "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Execute_Update: " & " N: " & To_String (N));
                   N.State := Complete;
                   Type_1_Info_Stack.Update_Top (Obj.Level_N_Stacks (L), N);
                end;
@@ -1003,26 +916,8 @@ is
       end;
 
       if Obj.Exchanged_Blocks = Obj.Needed_Blocks then
-         Debug.Print_String ("FT: " & "Execute_Update: ################################# Exchange_Finished");
          Exchange_Finished := True;
       end if;
-
-      --  dump stacks
-      Debug.Print_String ("-- start dump");
-      for L in Obj.Level_N_Stacks'Range loop
-         if not Type_1_Info_Stack.Empty (Obj.Level_N_Stacks (L)) then
-            declare
-               N : constant Type_1_Info_Type :=
-                  Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L));
-            begin
-               Debug.Print_String ("FT: Dump: L: " & Debug.To_String (Debug.Uint64_Type (L)) & " N: " & To_String (N));
-               Dump_Level_N_Node_Data (Obj.Level_N_Nodes (L));
-            end;
-         else
-            Debug.Print_String ("FT: Dump: L: " & Debug.To_String (Debug.Uint64_Type (L)) & " empty");
-         end if;
-      end loop;
-      Debug.Print_String ("-- end dump");
 
       --  handle level 1 - N
       Loop_Level_N_Stacks :
@@ -1032,8 +927,6 @@ is
                N : Type_1_Info_Type :=
                   Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L));
             begin
-               Debug.Print_String ("FT: " & "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- Execute_Update: " & " N: " & To_String (N));
-
                case N.State is
                when Invalid =>
 
@@ -1044,26 +937,23 @@ is
                   Obj.Cache_Request := New_Cache_Request (
                      N.Node.PBA, Read, L);
                   Progress := True;
-                  Debug.Print_String ("FT: " & "Execute_Update: " & To_String (Obj) & " N: " & To_String (N) & " request cache data");
 
                when Available =>
 
                   Obj.Cache_Request.State := Invalid;
 
-                  Debug.Print_String ("FT: " & "Execute_Update: N: " & To_String (N) & " available");
-
                   if L >= 2 then
-                     Debug.Print_String ("FT: " & "Execute_Update: " & To_String (Obj) & " populate: " & Debug.To_String (Debug.Uint64_Type (L)));
                      Populate_Lower_N_Stack (Obj.Level_N_Stacks (L - 1),
                         Obj.Level_N_Nodes (L - 1), Obj.Cache_Block_Data,
                         Obj.Current_Gen);
-                     if not Type_1_Info_Stack.Empty (Obj.Level_N_Stacks (L - 1)) then
+                     if not Type_1_Info_Stack.Empty (
+                        Obj.Level_N_Stacks (L - 1))
+                     then
                         N.State := Write;
                      else
                         N.State := Complete;
                      end if;
                   else
-                     Debug.Print_String ("FT: " & "Execute_Update: " & To_String (Obj) & " populate: 0");
                      Populate_Level_0_Stack (Obj.Level_0_Stack,
                         Obj.Level_0_Node, Obj.Cache_Block_Data,
                         Active_Snaps, Last_Secured_Gen);
@@ -1087,7 +977,6 @@ is
 
                      if Obj.Meta_Tree_Request.State = Invalid then
 
-                        Debug.Print_String ("FT: " & "REPLACE: " & To_String (N) & " MT INVALID");
                         Obj.Meta_Tree_Request := New_Meta_Tree_Request (
                            N.Node.PBA);
                         Progress := True;
@@ -1095,79 +984,39 @@ is
 
                      elsif Obj.Meta_Tree_Request.State = Complete then
 
-                        Debug.Print_String ("FT: " & "REPLACE COMPLETE: PBA: " & Debug.To_String (N.Node.PBA) & " -> " & Debug.To_String (Obj.Meta_Tree_Request.PBA));
                         Obj.Meta_Tree_Request.State := Invalid;
 
                         N.Volatile := True;
                         N.Node.PBA := Obj.Meta_Tree_Request.PBA;
-                        Type_1_Info_Stack.Update_Top (Obj.Level_N_Stacks (L), N);
+                        Type_1_Info_Stack.Update_Top (
+                           Obj.Level_N_Stacks (L), N);
                      else
                         raise Program_Error;
                      end if;
                   end if;
 
-                  Debug.Print_String ("FT: " & "Execute_Update: " & To_String (Obj) & " N: " & To_String (N) & " write " & Debug.To_String (Debug.Uint64_Type (L)));
                   if L >= 2 then
-                     Debug.Print_String ("FT: " & "WRITE TYPE1 BLOCK L: " & Debug.To_String (Debug.Uint64_Type (L)));
-
                      Obj.Cache_Block_Data :=
                         Block_From_Level_N_Node (Obj.Level_N_Nodes (L - 1));
-
-                     Debug.Print_String ("FT: " & "After: L: " & Debug.To_String (Debug.Uint64_Type (L - 1)));
-                        --  & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L - 1))));
-                     Dump_Level_N_Block_Data (Obj.Cache_Block_Data);
-
-                     Debug.Print_String ("FT: " & "Upper node: L: " & Debug.To_String (Debug.Uint64_Type (L)) & " " & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L))));
-                     Dump_Level_N_Node_Data (Obj.Level_N_Nodes (L));
 
                      if L < Type_1_Info_Stack_Array_Index_Type (
                         Obj.Tree_Geom.Max_Level)
                      then
-                        Debug.Print_String ("FT: " & "L:" & Debug.To_String (Debug.Uint64_Type (L)) & " " & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L)))
-                           & " L+1: " & Debug.To_String (Debug.Uint64_Type (L + 1)) & " " & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L + 1))));
-
                         Update_Upper_N_Stack (N, Obj.Current_Gen,
                            Obj.Cache_Block_Data, Obj.Level_N_Nodes (L));
                      else
-                        Debug.Print_String ("FT: " & "UPDATE ROOT HASH: old: " & Debug.To_String (Obj.Root_Node.PBA) & " new: " & To_String (N));
-                        declare
-                           SHA_Hash_Data : SHA256_4K.Data_Type;
-                        begin
-                           Compute_Node_Hash (Obj.Cache_Block_Data,
-                              SHA_Hash_Data, Obj.Root_Node.Hash);
-                           Obj.Root_Node.Gen := Obj.Current_Gen;
-                           Obj.Root_Node.PBA := N.Node.PBA;
-                        end;
+                        Compute_Node_Hash (Obj.Cache_Block_Data,
+                           Obj.Root_Node.Hash);
+                        Obj.Root_Node.Gen := Obj.Current_Gen;
+                        Obj.Root_Node.PBA := N.Node.PBA;
                      end if;
                   else
-                     Debug.Print_String ("FT: " & "WRITE TYPE2 BLOCK L:" & Debug.To_String (Debug.Uint64_Type (L)) & " " & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L)))
-                        & " L+1: " & Debug.To_String (Debug.Uint64_Type (L + 1)) & " " & To_String (Type_1_Info_Stack.Peek_Top (Obj.Level_N_Stacks (L + 1))));
-
-                     Debug.Print_String ("FT: " & "Before");
-                     Dump_Level_0_Block_Data (Obj.Cache_Block_Data);
-
                      Obj.Cache_Block_Data :=
                         Block_From_Level_0_Node (Obj.Level_0_Node);
-
-                     Debug.Print_String ("FT: " & "After");
-                     Dump_Level_0_Block_Data (Obj.Cache_Block_Data);
-
-                     Debug.Print_String ("FT: " & "Upper node");
-                     Dump_Level_N_Node_Data (Obj.Level_N_Nodes (L));
 
                      Update_Upper_N_Stack (N, Obj.Current_Gen,
                         Obj.Cache_Block_Data, Obj.Level_N_Nodes (L));
                   end if;
-
-                  Debug.Print_String ("FT: " & "New hash");
-                  declare
-                     SHA_Hash_Data : SHA256_4K.Data_Type;
-                     Computed_Hash : Hash_Type;
-                  begin
-                     Compute_Node_Hash (Obj.Cache_Block_Data,
-                        SHA_Hash_Data, Computed_Hash);
-                     Debug.Print_String ("FT: " & Debug.To_String (Computed_Hash));
-                  end;
 
                   Obj.Cache_Request := New_Cache_Request (
                      N.Node.PBA, Write, L);
@@ -1178,23 +1027,19 @@ is
 
                   Obj.Cache_Request.State := Invalid;
 
-                  Debug.Print_String ("FT: " & "Execute_Update: Exchanged_Blocks: " & Debug.To_String (Debug.Uint64_Type (Obj.Exchanged_Blocks)));
-
-                  Debug.Print_String ("FT: " & "Pop: " & To_String (N));
                   Type_1_Info_Stack.Pop (Obj.Level_N_Stacks (L));
 
                   if Exchange_Finished then
-                     while not Type_1_Info_Stack.Empty (Obj.Level_N_Stacks (L)) loop
-                        Debug.Print_String ("FT: " & "Pop remaining");
+                     while not Type_1_Info_Stack.Empty (
+                        Obj.Level_N_Stacks (L))
+                     loop
                         Type_1_Info_Stack.Pop (Obj.Level_N_Stacks (L));
                      end loop;
-                     Debug.Print_String ("FT: " & "Pop remaining done");
                   end if;
 
                   if L = Type_1_Info_Stack_Array_Index_Type (
                      Obj.Tree_Geom.Max_Level)
                   then
-                     Debug.Print_String ("FT: " & "UPDATE FINISHED");
                      Update_Finished := True;
                   end if;
                   Progress := True;
@@ -1210,7 +1055,6 @@ is
       end if;
 
       if Exchange_Finished and then Update_Finished then
-         Debug.Print_String ("FT: " & "STATE COMPLETE");
          Obj.State := Update_Complete;
       end if;
    end Execute_Update;
@@ -1336,7 +1180,6 @@ is
          else
             Obj.Tail := Node_Queue_Index_Type'First;
          end if;
-         Debug.Print_String ("Enqueue: Used: " & Debug.To_String (Debug.Uint64_Type (Obj.Used)));
          Obj.Used := Used_Type'Succ (Obj.Used);
       end Enqueue;
 
@@ -1368,8 +1211,6 @@ is
             Used : Used_Type := Obj.Used;
          begin
             while Used > Used_Type'First loop
-
-               Debug.Print_String (To_String (Obj.Container (Next)));
 
                if Next < Node_Queue_Index_Type'Last then
                   Next := Node_Queue_Index_Type'Succ (Next);
