@@ -27,6 +27,7 @@ class Cbe_dump::Configuration
 		bool             _vbd_vba_filter_enabled;
 		Genode::uint64_t _vbd_vba_filter;
 		bool             _free_tree;
+		bool             _meta_tree;
 		bool             _hashes;
 
 	public:
@@ -42,6 +43,7 @@ class Cbe_dump::Configuration
 			_vbd_vba_filter_enabled { node.attribute_value("vbd_vba_filter_enabled", false) },
 			_vbd_vba_filter         { node.attribute_value("vbd_vba_filter", (Genode::uint64_t)0) },
 			_free_tree              { node.attribute_value("free_tree", true) },
+			_meta_tree              { node.attribute_value("meta_tree", true) },
 			_hashes                 { node.attribute_value("hashes", true) }
 		{ }
 
@@ -56,6 +58,7 @@ class Cbe_dump::Configuration
 			_vbd_vba_filter_enabled { other._vbd_vba_filter_enabled },
 			_vbd_vba_filter         { other._vbd_vba_filter },
 			_free_tree              { other._free_tree },
+			_meta_tree              { other._meta_tree },
 			_hashes                 { other._hashes }
 		{ }
 
@@ -68,6 +71,7 @@ class Cbe_dump::Configuration
 		bool             vbd_vba_filter_enabled() const { return _vbd_vba_filter_enabled; }
 		Genode::uint64_t vbd_vba_filter()         const { return _vbd_vba_filter; }
 		bool             free_tree()              const { return _free_tree; }
+		bool             meta_tree()              const { return _meta_tree; }
 		bool             hashes()                 const { return _hashes; }
 
 } __attribute__((packed));
