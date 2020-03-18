@@ -129,7 +129,14 @@ is
    return Object_Type
    is (
       Items => (others => Item.Invalid_Object),
-      Indices => Index_Queue.Empty_Index_Queue);
+      Indices => Index_Queue.Empty_Index_Queue,
+      Splitter => (
+         Pool_Idx_Slot => Pool_Idx_Slot_Invalid,
+         Curr_Req      => Request.Invalid_Object,
+         Curr_Blk_Nr   => 0,
+         Curr_Idx      => 0,
+         Nr_Of_Prims   => 0,
+         Snap_ID       => 0));
 
    --
    --  Request_Acceptable
@@ -145,9 +152,6 @@ is
          return False;
       end if;
    end Request_Acceptable;
-
-   --  (not Index_Queue.Full (Obj.Indices) and then (
-   --     for some I of Obj.Items => Item.Invalid (I)));
 
    --
    --  Submit_Request
@@ -194,8 +198,194 @@ is
       if Index_Queue.Empty (Obj.Indices) then
          return Pool_Idx_Slot_Invalid;
       end if;
-      return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
+
+      if not Request.Valid (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      then
+         raise Program_Error;
+      end if;
+
+      case
+         Request.Operation (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      is
+      when Read | Write =>
+         return Pool_Idx_Slot_Invalid;
+
+      when Sync =>
+         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
+
+      when Create_Snapshot =>
+         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
+
+      when Discard_Snapshot =>
+         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
+
+      end case;
+
    end Peek_Pending_Request;
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) then
+         return;
+      end if;
+
+      if not Request.Valid (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      then
+         raise Program_Error;
+      end if;
+
+      case
+         Request.Operation (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      is
+      when Read | Write =>
+
+         if not Request.Valid (Obj.Splitter.Curr_Req) then
+
+            Obj.Splitter := (
+               Pool_Idx_Slot =>
+                  Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices)),
+               Curr_Req      =>
+                  Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))),
+               Curr_Blk_Nr   =>
+                  Request.Block_Number (
+                     Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices)))),
+               Curr_Idx      => 0,
+               Nr_Of_Prims   =>
+                  Number_Of_Primitives_Type (
+                     Request.Count (
+                        Item.Req (
+                           Obj.Items (Index_Queue.Head (Obj.Indices))))),
+               Snap_ID       =>
+                  Snap_ID_For_Request (
+                     Obj, Item.Req (
+                        Obj.Items (Index_Queue.Head (Obj.Indices)))));
+
+               Item.State (
+                  Obj.Items (
+                     Index_Queue.Head (Obj.Indices)), Item.In_Progress);
+
+            if not Request.Valid (Obj.Splitter.Curr_Req) then
+               raise Program_Error;
+            end if;
+
+            Progress := True;
+
+         end if;
+
+      when Sync => return;
+      when Create_Snapshot => return;
+      when Discard_Snapshot => return;
+      end case;
+
+   end Execute;
+
+   --
+   --  Peek_Generated_VBD_Primitive
+   --
+   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) then
+         return Primitive.Invalid_Object;
+      end if;
+
+      if not Request.Valid (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      then
+         raise Program_Error;
+      end if;
+
+      case
+         Request.Operation (
+            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      is
+      when Read | Write =>
+
+         if not Request.Valid (Obj.Splitter.Curr_Req) then
+            return Primitive.Invalid_Object;
+         end if;
+
+         return
+            Primitive.Valid_Object (
+               Request.Operation (Obj.Splitter.Curr_Req),
+               Request.Success (Obj.Splitter.Curr_Req),
+               Primitive.Tag_Splitter,
+               Pool_Idx_Slot_Content (Obj.Splitter.Pool_Idx_Slot),
+               Obj.Splitter.Curr_Blk_Nr,
+               Obj.Splitter.Curr_Idx);
+
+      when Sync =>
+         return Primitive.Invalid_Object;
+
+      when Create_Snapshot =>
+         return Primitive.Invalid_Object;
+
+      when Discard_Snapshot =>
+         return Primitive.Invalid_Object;
+
+      end case;
+
+   end Peek_Generated_VBD_Primitive;
+
+   --
+   --  Number_Of_Primitives
+   --
+   function Number_Of_Primitives (Req : Request.Object_Type)
+   return Number_Of_Primitives_Type
+   is
+   begin
+
+      return Number_Of_Primitives_Type (Request.Count (Req));
+   end Number_Of_Primitives;
+
+   --
+   --  Peek_Generated_Primitive_ID
+   --
+   function Peek_Generated_VBD_Primitive_ID (Obj : Object_Type)
+   return Snapshot_ID_Type
+   is
+   begin
+
+      return Obj.Splitter.Snap_ID;
+   end Peek_Generated_VBD_Primitive_ID;
+
+   --
+   --  Drop_Generated_VBD_Primitive
+   --
+   procedure Drop_Generated_VBD_Primitive (Obj : in out Object_Type)
+   is
+      use type Primitive.Index_Type;
+   begin
+      Obj.Splitter.Curr_Blk_Nr := Obj.Splitter.Curr_Blk_Nr + 1;
+      Obj.Splitter.Curr_Idx    := Obj.Splitter.Curr_Idx    + 1;
+
+      if Number_Of_Primitives_Type (Obj.Splitter.Curr_Idx) =
+            Obj.Splitter.Nr_Of_Prims
+      then
+         Obj.Splitter.Pool_Idx_Slot := Pool_Idx_Slot_Invalid;
+         Obj.Splitter.Curr_Req      := Request.Invalid_Object;
+         Obj.Splitter.Curr_Blk_Nr   := 0;
+         Obj.Splitter.Curr_Idx      := 0;
+         Obj.Splitter.Nr_Of_Prims   := 0;
+         Obj.Splitter.Snap_ID       := 0;
+
+         Drop_Pending_Request (Obj);
+      end if;
+
+   end Drop_Generated_VBD_Primitive;
 
    --
    --  Drop_Pending_Request
@@ -253,6 +443,7 @@ is
       Req :        Request.Object_Type)
    is
    begin
+
       For_Each_Item : for Idx in Obj.Items'Range loop
          if Request.Equal (Item.Req (Obj.Items (Idx)), Req) then
             if not Item.Complete (Obj.Items (Idx)) then

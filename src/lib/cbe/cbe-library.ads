@@ -9,7 +9,6 @@
 pragma Ada_2012;
 
 with CBE.Pool;
-with CBE.Splitter;
 with CBE.Crypto;
 with CBE.Virtual_Block_Device;
 with CBE.Write_Back;
@@ -417,7 +416,6 @@ private
       Cache_Slots_Data             : Cache.Slots_Data_Type;
       Cache_Sync_State             : Cache_Sync_State_Type;
       Request_Pool_Obj             : Pool.Object_Type;
-      Splitter_Obj                 : Splitter.Object_Type;
       Crypto_Obj                   : Crypto.Object_Type;
       IO_Obj                       : Block_IO.Object_Type;
       Trans_Data                   : Translation_Data_Type;
@@ -550,10 +548,6 @@ private
       Progress : in out Boolean);
 
    procedure Execute_Request_Pool (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean);
-
-   procedure Execute_Splitter (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 

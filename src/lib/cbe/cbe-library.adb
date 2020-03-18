@@ -42,10 +42,9 @@ is
 
       Obj.Sync_Pending := False;
 
-      Obj.Execute_Progress        := False;
-      Obj.Request_Pool_Obj        := Pool.Initialized_Object;
-      Obj.Splitter_Obj            := Splitter.Initialized_Object;
-      Obj.Crypto_Obj              := Crypto.Initialized_Object;
+      Obj.Execute_Progress := False;
+      Obj.Request_Pool_Obj := Pool.Initialized_Object;
+      Obj.Crypto_Obj       := Crypto.Initialized_Object;
 
       Obj.IO_Obj                  := Block_IO.Initialized_Object;
 
@@ -298,7 +297,7 @@ is
          Declare_Request_Number_Primitives :
          declare
             Number_Of_Primitives : constant Number_Of_Primitives_Type :=
-               Splitter.Number_Of_Primitives (Req);
+               Pool.Number_Of_Primitives (Req);
          begin
             if Number_Of_Primitives = 0 then
                raise Program_Error;
@@ -1583,6 +1582,8 @@ is
       Progress : in out Boolean)
    is
    begin
+      Pool.Execute (Obj.Request_Pool_Obj, Progress);
+
       Loop_Pool_Pending_Requests :
       loop
          Declare_Pool_Idx_Slot :
@@ -1600,43 +1601,10 @@ is
 
                Req : constant Request.Object_Type :=
                   Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
-
-               Snap_ID : constant Snapshot_ID_Type :=
-                  Pool.Snap_ID_For_Request (Obj.Request_Pool_Obj, Req);
             begin
                case Request.Operation (Req) is
                when Read | Write =>
-                  if not Splitter.Request_Acceptable (Obj.Splitter_Obj) then
-                     exit Loop_Pool_Pending_Requests;
-                  end if;
-
-                  --  XXX move check into pool
-                  if Pool.Overlapping_Request_In_Progress (
-                     Obj.Request_Pool_Obj,
-                     Request.Block_Number (Req))
-                  then
-                     pragma Debug (Pool.Dump_Pool_State (
-                        Obj.Request_Pool_Obj));
-                     pragma Debug (Debug.Print_String ("Execute: "
-                     & "overlapping request in progress"));
-                     exit Loop_Pool_Pending_Requests;
-                  end if;
-
-                  Splitter.Submit_Request (
-                     Obj.Splitter_Obj, Pool_Idx, Req, Snap_ID);
-
-                  case Request.Operation (Req) is
-                     when Read =>
-                        pragma Debug (Debug.Print_String ("New Read_Request: "
-                           & Request.To_String (Req)));
-                        Obj.State := Read_Request;
-                     when Write =>
-                        pragma Debug (Debug.Print_String ("New Write_Request: "
-                           & Request.To_String (Req)));
-                        Obj.State := Write_Request;
-                     when others =>
-                        raise Program_Error;
-                  end case;
+                  exit Loop_Pool_Pending_Requests;
 
                when Sync =>
 
@@ -1687,32 +1655,23 @@ is
          end Declare_Pool_Idx_Slot;
          Progress := True;
       end loop Loop_Pool_Pending_Requests;
-   end Execute_Request_Pool;
 
-   procedure Execute_Splitter (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean)
-   is
-   begin
-      if Obj.State = Sync_Request then
-         return;
-      end if;
-
-      Loop_Splitter_Generated_Prims :
+      Loop_Pool_Generated_VBD_Prims :
       loop
-         Declare_Prim_3 :
+         Declare_Prim :
          declare
             Snap_Slot_Index : Snapshots_Index_Type;
             Prim : constant Primitive.Object_Type :=
-               Splitter.Peek_Generated_Primitive (Obj.Splitter_Obj);
+               Pool.Peek_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
             Snap_ID : constant Snapshot_ID_Type :=
-               Splitter.Peek_Generated_Primitive_ID (Obj.Splitter_Obj);
+               Pool.Peek_Generated_VBD_Primitive_ID (Obj.Request_Pool_Obj);
          begin
-            exit Loop_Splitter_Generated_Prims when
-               not Primitive.Valid (Prim) or else
-               not Virtual_Block_Device.Primitive_Acceptable (Obj.VBD);
 
-            Splitter.Drop_Generated_Primitive (Obj.Splitter_Obj);
+            exit Loop_Pool_Generated_VBD_Prims when
+               not Primitive.Valid (Prim);
+
+            exit Loop_Pool_Generated_VBD_Prims when
+               not Virtual_Block_Device.Primitive_Acceptable (Obj.VBD);
 
             if Snap_ID /= 0 then
                Snap_Slot_Index := Snap_Slot_For_ID (Obj,
@@ -1737,6 +1696,15 @@ is
                & Debug.To_String (Obj.Superblock.Snapshots (
                   Snap_Slot_Index).Hash)));
 
+            case Primitive.Operation (Prim) is
+            when Read =>
+               Obj.State := Read_Request;
+            when Write =>
+               Obj.State := Write_Request;
+            when others =>
+               raise Program_Error;
+            end case;
+
             --
             --  For every new Request, we have to use the currlently active
             --  snapshot as a previous Request may have changed the tree.
@@ -1748,10 +1716,15 @@ is
                Obj.Superblock.Snapshots (Snap_Slot_Index).Hash,
                Prim);
 
-         end Declare_Prim_3;
+            Pool.Drop_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
+            Debug.Print_String ("Pool -> VBD " & Primitive.To_String (Prim));
+
+         end Declare_Prim;
          Progress := True;
-      end loop Loop_Splitter_Generated_Prims;
-   end Execute_Splitter;
+
+      end loop Loop_Pool_Generated_VBD_Prims;
+
+   end Execute_Request_Pool;
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;
@@ -2390,15 +2363,17 @@ is
 
       Execute_SCD (Obj, Progress);
 
-      if Obj.State = Invalid then
+      if Obj.State = Invalid or else
+         Obj.State = Read_Request or else
+         Obj.State = Write_Request
+      then
          Execute_Request_Pool (Obj, Progress);
       end if;
 
       if Obj.State = Read_Request
          or else Obj.State = Write_Request
       then
-         Execute_Splitter     (Obj, Progress);
-         Execute_VBD          (Obj, Crypto_Plain_Buf, Progress);
+         Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       end if;
 
       Execute_Cache  (Obj, IO_Buf, Progress);

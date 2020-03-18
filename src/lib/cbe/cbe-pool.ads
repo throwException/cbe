@@ -38,6 +38,13 @@ is
    return Boolean;
 
    --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
    --  Submit_Request
    --
    procedure Submit_Request (
@@ -113,6 +120,29 @@ is
       Obj : Object_Type;
       BN  : Block_Number_Type)
    return Boolean;
+
+   --
+   --  Number_Of_Primitives
+   --
+   function Number_Of_Primitives (Req : Request.Object_Type)
+   return Number_Of_Primitives_Type;
+
+   --
+   --  Peek_Generated_VBD_Primitive
+   --
+   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Primitive_ID
+   --
+   function Peek_Generated_VBD_Primitive_ID (Obj : Object_Type)
+   return Snapshot_ID_Type;
+
+   --
+   --  Drop_Generated_VBD_Primitive
+   --
+   procedure Drop_Generated_VBD_Primitive (Obj : in out Object_Type);
 
 private
 
@@ -230,11 +260,24 @@ private
    type Items_Type is array (Pool_Index_Type) of Item.Item_Type;
 
    --
+   --  Splitter_Type
+   --
+   type Splitter_Type is record
+      Pool_Idx_Slot : Pool_Index_Slot_Type;
+      Curr_Req      : Request.Object_Type;
+      Curr_Blk_Nr   : Block_Number_Type;
+      Curr_Idx      : Primitive.Index_Type;
+      Nr_Of_Prims   : Number_Of_Primitives_Type;
+      Snap_ID       : Snapshot_ID_Type;
+   end record;
+
+   --
    --  Object_Type
    --
    type Object_Type is record
-      Items   : Items_Type;
-      Indices : Index_Queue.Index_Queue_Type;
+      Items    : Items_Type;
+      Indices  : Index_Queue.Index_Queue_Type;
+      Splitter : Splitter_Type;
    end record;
 
 end CBE.Pool;
