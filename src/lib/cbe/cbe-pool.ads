@@ -117,8 +117,8 @@ is
    --  Check if a overlapping request is already in progress
    --
    function Overlapping_Request_In_Progress (
-      Obj : Object_Type;
-      BN  : Block_Number_Type)
+      Obj    : Object_Type;
+      Blk_Nr : Block_Number_Type)
    return Boolean;
 
    --
@@ -145,74 +145,6 @@ is
    procedure Drop_Generated_VBD_Primitive (Obj : in out Object_Type);
 
 private
-
-   --
-   --  Item
-   --
-   package Item
-   with SPARK_Mode
-   is
-      type State_Type is (Invalid, Pending, In_Progress, Complete);
-      type Item_Type  is private;
-
-      --
-      --  Primitive_Completed
-      --
-      procedure Primitive_Completed (
-         Obj  : in out Item_Type;
-         Prim :        Primitive.Object_Type);
-
-      --
-      --  Invalid_Object
-      --
-      function Invalid_Object
-      return Item_Type;
-
-      --
-      --  Valid_Object
-      --
-      function Pending_Object (
-         Rq               : Request.Object_Type;
-         ID               : Snapshot_ID_Type;
-         Nr_Of_Prims      : Number_Of_Primitives_Type;
-         Nr_Of_Done_Prims : Number_Of_Primitives_Type)
-      return Item_Type;
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Invalid    (Obj : Item_Type) return Boolean;
-      function Pending    (Obj : Item_Type) return Boolean;
-      function In_Progress (Obj : Item_Type) return Boolean;
-      function Complete   (Obj : Item_Type) return Boolean;
-      function Req        (Obj : Item_Type) return Request.Object_Type;
-      function Snap_ID    (Obj : Item_Type) return Snapshot_ID_Type;
-
-      procedure State (
-         Obj : in out Item_Type;
-         Sta :        State_Type);
-
-      procedure Req (
-         Obj : in out Item_Type;
-         Rq  :        Request.Object_Type);
-
-      function To_String (Obj : Item_Type) return String;
-
-   private
-
-      --
-      --  Item_Type
-      --
-      type Item_Type is record
-         State            : State_Type;
-         Req              : Request.Object_Type;
-         Snap_ID          : Snapshot_ID_Type;
-         Nr_Of_Prims      : Number_Of_Primitives_Type;
-         Nr_Of_Done_Prims : Number_Of_Primitives_Type;
-      end record;
-
-   end Item;
 
    package Index_Queue
    with SPARK_Mode
@@ -257,8 +189,6 @@ private
          end record;
    end Index_Queue;
 
-   type Items_Type is array (Pool_Index_Type) of Item.Item_Type;
-
    --
    --  Splitter_Type
    --
@@ -271,6 +201,21 @@ private
       Snap_ID       : Snapshot_ID_Type;
    end record;
 
+   type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
+
+   --
+   --  Item_Type
+   --
+   type Item_Type is record
+      State            : Item_State_Type;
+      Req              : Request.Object_Type;
+      Snap_ID          : Snapshot_ID_Type;
+      Nr_Of_Prims      : Number_Of_Primitives_Type;
+      Nr_Of_Done_Prims : Number_Of_Primitives_Type;
+   end record;
+
+   type Items_Type is array (Pool_Index_Type) of Item_Type;
+
    --
    --  Object_Type
    --
@@ -279,5 +224,24 @@ private
       Indices  : Index_Queue.Index_Queue_Type;
       Splitter : Splitter_Type;
    end record;
+
+   --
+   --  Item_Invalid
+   --
+   function Item_Invalid
+   return Item_Type;
+
+   --
+   --  Item_To_String
+   --
+   function Item_To_String (Itm : Item_Type)
+   return String;
+
+   --
+   --  Item_Mark_Completed_Primitive
+   --
+   procedure Item_Mark_Completed_Primitive (
+      Itm  : in out Item_Type;
+      Prim :        Primitive.Object_Type);
 
 end CBE.Pool;

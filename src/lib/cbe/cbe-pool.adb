@@ -14,104 +14,29 @@ pragma Unreferenced (CBE.Debug);
 package body CBE.Pool
 with SPARK_Mode
 is
+   --
+   --  Item_Invalid
+   --
+   function Item_Invalid
+   return Item_Type
+   is (
+      State            => Invalid,
+      Req              => Request.Invalid_Object,
+      Snap_ID          => 0,
+      Nr_Of_Prims      => 0,
+      Nr_Of_Done_Prims => 0);
 
-   package body Item
-   with SPARK_Mode
-   is
-      --
-      --  Primitive_Completed
-      --
-      procedure Primitive_Completed (
-         Obj  : in out Item_Type;
-         Prim :        Primitive.Object_Type)
-      is
-         Rq : Request.Object_Type;
-      begin
-         if not Primitive.Success (Prim) then
-            Rq := Item.Req (Obj);
-            Request.Success (Rq, False);
-            Item.Req (Obj, Rq);
-         end if;
-         Obj.Nr_Of_Done_Prims := Obj.Nr_Of_Done_Prims + 1;
-         if Obj.Nr_Of_Done_Prims = Obj.Nr_Of_Prims then
-            Obj.State := Complete;
-         end if;
-      end Primitive_Completed;
-
-      --
-      --  Invalid_Object
-      --
-      function Invalid_Object
-      return Item_Type
-      is (
-         State            => Invalid,
-         Req              => Request.Invalid_Object,
-         Snap_ID          => 0,
-         Nr_Of_Prims      => 0,
-         Nr_Of_Done_Prims => 0);
-
-      --
-      --  Pending_Object
-      --
-      function Pending_Object (
-         Rq               : Request.Object_Type;
-         ID               : Snapshot_ID_Type;
-         Nr_Of_Prims      : Number_Of_Primitives_Type;
-         Nr_Of_Done_Prims : Number_Of_Primitives_Type)
-      return Item_Type
-      is (
-         State            => Pending,
-         Req              => Rq,
-         Snap_ID          => ID,
-         Nr_Of_Prims      => Nr_Of_Prims,
-         Nr_Of_Done_Prims => Nr_Of_Done_Prims);
-
-      -----------------
-      --  Accessors  --
-      -----------------
-
-      function Invalid (Obj : Item_Type) return Boolean
-      is (Obj.State = Invalid);
-
-      function Pending (Obj : Item_Type) return Boolean
-      is (Obj.State = Pending);
-
-      function In_Progress (Obj : Item_Type) return Boolean
-      is (Obj.State = In_Progress);
-
-      function Complete   (Obj : Item_Type) return Boolean
-      is (Obj.State = Complete);
-
-      function Req (Obj : Item_Type) return Request.Object_Type
-      is (Obj.Req);
-
-      function Snap_ID (Obj : Item_Type) return Snapshot_ID_Type
-      is (Obj.Snap_ID);
-
-      procedure Req (
-         Obj : in out Item_Type;
-         Rq  :        Request.Object_Type)
-      is
-         Rq1 : constant Request.Object_Type := Rq;
-      begin
-         Obj.Req := Rq1;
-      end Req;
-
-      procedure State (
-         Obj : in out Item_Type;
-         Sta :        State_Type)
-      is
-      begin
-         Obj.State := Sta;
-      end State;
-
-      function To_String (Obj : Item_Type) return String
-      is (case Obj.State is
-         when Item.Invalid     => "invalid",
-         when Item.Pending     => "pending",
-         when Item.In_Progress => "in_progress",
-         when Item.Complete    => "complete");
-   end Item;
+   --
+   --  Item_To_String
+   --
+   function Item_To_String (Itm : Item_Type)
+   return String
+   is (
+      case Itm.State is
+      when Invalid     => "invalid",
+      when Pending     => "pending",
+      when In_Progress => "in_progress",
+      when Complete    => "complete");
 
    --
    --  Initialize_Object
@@ -128,7 +53,7 @@ is
    function Initialized_Object
    return Object_Type
    is (
-      Items => (others => Item.Invalid_Object),
+      Items => (others => Item_Invalid),
       Indices => Index_Queue.Empty_Index_Queue,
       Splitter => (
          Pool_Idx_Slot => Pool_Idx_Slot_Invalid,
@@ -168,15 +93,15 @@ is
       Items_Loop :
       for Item_Id in Obj.Items'Range loop
 
-         if Item.Invalid (Obj.Items (Item_Id)) then
+         if Obj.Items (Item_Id).State = Invalid then
 
             Request.Success (Req_Buf, True);
-            Obj.Items (Item_Id) :=
-               Item.Pending_Object (
-                  Rq               => Req_Buf,
-                  ID               => ID,
-                  Nr_Of_Prims      => Nr_Of_Prims,
-                  Nr_Of_Done_Prims => 0);
+            Obj.Items (Item_Id) := (
+               State            => Pending,
+               Req              => Req_Buf,
+               Snap_ID          => ID,
+               Nr_Of_Prims      => Nr_Of_Prims,
+               Nr_Of_Done_Prims => 0);
 
             Index_Queue.Enqueue (Obj.Indices, Item_Id);
 
@@ -199,15 +124,12 @@ is
          return Pool_Idx_Slot_Invalid;
       end if;
 
-      if not Request.Valid (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      if not Request.Valid (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       then
          raise Program_Error;
       end if;
 
-      case
-         Request.Operation (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      case Request.Operation (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       is
       when Read | Write =>
          return Pool_Idx_Slot_Invalid;
@@ -238,15 +160,12 @@ is
          return;
       end if;
 
-      if not Request.Valid (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      if not Request.Valid (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       then
          raise Program_Error;
       end if;
 
-      case
-         Request.Operation (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      case Request.Operation (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       is
       when Read | Write =>
 
@@ -255,25 +174,21 @@ is
             Obj.Splitter := (
                Pool_Idx_Slot =>
                   Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices)),
-               Curr_Req      =>
-                  Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))),
+               Curr_Req      => Obj.Items (Index_Queue.Head (Obj.Indices)).Req,
                Curr_Blk_Nr   =>
                   Request.Block_Number (
-                     Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices)))),
+                     Obj.Items (Index_Queue.Head (Obj.Indices)).Req),
                Curr_Idx      => 0,
                Nr_Of_Prims   =>
                   Number_Of_Primitives_Type (
                      Request.Count (
-                        Item.Req (
-                           Obj.Items (Index_Queue.Head (Obj.Indices))))),
+                        Obj.Items (Index_Queue.Head (Obj.Indices)).Req)),
                Snap_ID       =>
                   Snap_ID_For_Request (
-                     Obj, Item.Req (
-                        Obj.Items (Index_Queue.Head (Obj.Indices)))));
+                     Obj,
+                     Obj.Items (Index_Queue.Head (Obj.Indices)).Req));
 
-               Item.State (
-                  Obj.Items (
-                     Index_Queue.Head (Obj.Indices)), Item.In_Progress);
+               Obj.Items (Index_Queue.Head (Obj.Indices)).State := In_Progress;
 
             if not Request.Valid (Obj.Splitter.Curr_Req) then
                raise Program_Error;
@@ -302,15 +217,12 @@ is
          return Primitive.Invalid_Object;
       end if;
 
-      if not Request.Valid (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      if not Request.Valid (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       then
          raise Program_Error;
       end if;
 
-      case
-         Request.Operation (
-            Item.Req (Obj.Items (Index_Queue.Head (Obj.Indices))))
+      case Request.Operation (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
       is
       when Read | Write =>
 
@@ -398,14 +310,34 @@ is
       end if;
 
       declare
-         Index : constant Pool_Index_Type :=
-            Index_Queue.Head (Obj.Indices);
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
       begin
-         Item.State (Obj.Items (Index), Item.In_Progress);
+         Obj.Items (Idx).State := In_Progress;
       end;
 
       Index_Queue.Dequeue_Head (Obj.Indices);
    end Drop_Pending_Request;
+
+   --
+   --  Item_Mark_Completed_Primitive
+   --
+   procedure Item_Mark_Completed_Primitive (
+      Itm  : in out Item_Type;
+      Prim :        Primitive.Object_Type)
+   is
+   begin
+
+      if not Primitive.Success (Prim) then
+         Request.Success (Itm.Req, False);
+      end if;
+
+      Itm.Nr_Of_Done_Prims := Itm.Nr_Of_Done_Prims + 1;
+
+      if Itm.Nr_Of_Done_Prims = Itm.Nr_Of_Prims then
+         Itm.State := Complete;
+      end if;
+
+   end Item_Mark_Completed_Primitive;
 
    --
    --  Mark_Completed_Primitive
@@ -415,9 +347,10 @@ is
       Prim :        Primitive.Object_Type)
    is
    begin
-      Item.Primitive_Completed (
+      Item_Mark_Completed_Primitive (
          Obj.Items (Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim))),
          Prim);
+
    end Mark_Completed_Primitive;
 
    --
@@ -427,9 +360,9 @@ is
    return Request.Object_Type
    is
    begin
-      for Item_Id in Obj.Items'Range loop
-         if Item.Complete (Obj.Items (Item_Id)) then
-            return Item.Req (Obj.Items (Item_Id));
+      for Idx in Obj.Items'Range loop
+         if Obj.Items (Idx).State = Complete then
+            return Obj.Items (Idx).Req;
          end if;
       end loop;
       return Request.Invalid_Object;
@@ -444,12 +377,13 @@ is
    is
    begin
 
-      For_Each_Item : for Idx in Obj.Items'Range loop
-         if Request.Equal (Item.Req (Obj.Items (Idx)), Req) then
-            if not Item.Complete (Obj.Items (Idx)) then
+      For_Each_Item :
+      for Idx in Obj.Items'Range loop
+         if Request.Equal (Obj.Items (Idx).Req, Req) then
+            if Obj.Items (Idx).State /= Complete then
                raise Program_Error;
             end if;
-            Obj.Items (Idx) := Item.Invalid_Object;
+            Obj.Items (Idx) := Item_Invalid;
             return;
          end if;
       end loop For_Each_Item;
@@ -466,9 +400,9 @@ is
    is
    begin
       for Itm of Obj.Items loop
-         if not Item.Invalid (Itm) then
-            if Request.Equal (Item.Req (Itm), (Req)) then
-               return Item.Snap_ID (Itm);
+         if Itm.State /= Invalid then
+            if Request.Equal (Itm.Req, Req) then
+               return Itm.Snap_ID;
             end if;
          end if;
       end loop;
@@ -482,13 +416,13 @@ is
    is
    begin
       for I in Obj.Items'Range loop
-         if not Item.Invalid (Obj.Items (I)) then
+         if Obj.Items (I).State /= Invalid then
             pragma Debug (Debug.Print_String ("Request_Pool: "
                & Debug.To_String (Debug.Uint64_Type (I))
                & ": "
-               & "Req: " & Request.To_String (Item.Req (Obj.Items (I)))
+               & "Req: " & Request.To_String (Obj.Items (I).Req)
                & " State: "
-               & Item.To_String (Obj.Items (I))));
+               & Item_To_String (Obj.Items (I))));
             null;
          end if;
       end loop;
@@ -498,27 +432,26 @@ is
    --  Check if a overlapping request is already in progress
    --
    function Overlapping_Request_In_Progress (
-      Obj : Object_Type;
-      BN  : Block_Number_Type)
+      Obj    : Object_Type;
+      Blk_Nr : Block_Number_Type)
    return Boolean
    is
       Result : Boolean := False;
    begin
       Loop_In_Progress_Items :
-      for O of Obj.Items loop
-         if Item.In_Progress (O) then
+      for Itm of Obj.Items loop
+         if Itm.State = In_Progress then
 
             --  The overlap range is [lower, upper).
             declare
                Lower : constant Block_Number_Type :=
-                  Request.Block_Number (Item.Req (O));
+                  Request.Block_Number (Itm.Req);
                Upper : constant Block_Number_Type :=
-                  Lower + Block_Number_Type (
-                     Request.Count (Item.Req (O)));
+                  Lower + Block_Number_Type (Request.Count (Itm.Req));
             begin
-               if BN >= Lower and then BN < Upper then
-                  pragma Debug (Debug.Print_String ("Overlap: BN: "
-                     & Debug.To_String (Debug.Uint64_Type (BN))
+               if Blk_Nr >= Lower and then Blk_Nr < Upper then
+                  pragma Debug (Debug.Print_String ("Overlap: Blk_Nr: "
+                     & Debug.To_String (Debug.Uint64_Type (Blk_Nr))
                      & " Lower: "
                      & Debug.To_String (Debug.Uint64_Type (Lower))
                      & " Upper: "
@@ -542,10 +475,10 @@ is
    return Request.Object_Type
    is
    begin
-      if not Request.Valid (Item.Req (Obj.Items (Idx))) then
+      if not Request.Valid (Obj.Items (Idx).Req) then
          raise Program_Error;
       end if;
-      return Item.Req (Obj.Items (Idx));
+      return Obj.Items (Idx).Req;
    end Request_For_Index;
 
    function Index_For_Request (
@@ -555,7 +488,7 @@ is
    is
    begin
       For_Each_Item : for Idx in Obj.Items'Range loop
-         if Request.Equal (Item.Req (Obj.Items (Idx)), Req) then
+         if Request.Equal (Obj.Items (Idx).Req, Req) then
             return Idx;
          end if;
       end loop For_Each_Item;
