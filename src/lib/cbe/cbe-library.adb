@@ -1646,46 +1646,23 @@ is
       loop
          Declare_Prim :
          declare
-            Snap_Slot_Index : Snapshots_Index_Type;
             Prim : constant Primitive.Object_Type :=
                Pool.Peek_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
          begin
 
             exit Loop_Pool_Generated_VBD_Prims when
-               not Primitive.Valid (Prim);
-
-            exit Loop_Pool_Generated_VBD_Prims when
+               not Primitive.Valid (Prim) or else
                not Virtual_Block_Device.Primitive_Acceptable (Obj.VBD);
 
-            Declare_Snap_ID :
+            Declare_Snap_Slot_Idx :
             declare
                Snap_ID : constant Snapshot_ID_Type :=
                   Pool.Peek_Generated_VBD_Primitive_ID (Obj.Request_Pool_Obj);
+
+               Snap_Slot_Idx : constant Snapshots_Index_Type := (
+                  if Snap_ID = 0 then Curr_Snap (Obj)
+                  else Snap_Slot_For_ID (Obj, Generation_Type (Snap_ID)));
             begin
-
-               if Snap_ID /= 0 then
-                  Snap_Slot_Index := Snap_Slot_For_ID (Obj,
-                     Generation_Type (Snap_ID));
-               else
-                  Snap_Slot_Index := Curr_Snap (Obj);
-               end if;
-
-               pragma Debug (Debug.Print_String ("Execute: "
-                  & "submit VBD: "
-                  & "Snap_ID: " & Debug.To_String (Debug.Uint64_Type (Snap_ID))
-                  & " Prim: " & Primitive.To_String (Prim)
-                  & " Cur_SB: "
-                  & Debug.To_String (Debug.Uint64_Type (Obj.Cur_SB))
-                  & " Curr_Snap: " & Debug.To_String (Debug.Uint64_Type (
-                     Obj.Superblock.Curr_Snap))
-                  & " PBA: " & Debug.To_String (Debug.Uint64_Type (
-                     Obj.Superblock.Snapshots (Snap_Slot_Index).PBA))
-                  & " Gen: "
-                  & Debug.To_String (Debug.Uint64_Type (
-                     Obj.Superblock.Snapshots (Snap_Slot_Index).Gen))
-                  & " "
-                  & Debug.To_String (Obj.Superblock.Snapshots (
-                     Snap_Slot_Index).Hash)));
 
                case Primitive.Operation (Prim) is
                when Read =>
@@ -1696,26 +1673,19 @@ is
                   raise Program_Error;
                end case;
 
-               --
-               --  For every new Request, we have to use the currlently active
-               --  snapshot as a previous Request may have changed the tree.
-               --
                Virtual_Block_Device.Submit_Primitive (
                   Obj.VBD,
-                  Obj.Superblock.Snapshots (Snap_Slot_Index).PBA,
-                  Obj.Superblock.Snapshots (Snap_Slot_Index).Gen,
-                  Obj.Superblock.Snapshots (Snap_Slot_Index).Hash,
+                  Obj.Superblock.Snapshots (Snap_Slot_Idx).PBA,
+                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Gen,
+                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
                   Prim);
 
                Pool.Drop_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
-               Debug.Print_String (
-                  "Pool -> VBD " & Primitive.To_String (Prim));
+               Progress := True;
 
-            end Declare_Snap_ID;
+            end Declare_Snap_Slot_Idx;
 
          end Declare_Prim;
-
-         Progress := True;
 
       end loop Loop_Pool_Generated_VBD_Prims;
 
