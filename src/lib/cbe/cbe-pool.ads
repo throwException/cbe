@@ -41,9 +41,9 @@ is
    --  Submit_Request
    --
    procedure Submit_Request (
-      Obj : in out Object_Type;
-      Req :        Request.Object_Type;
-      ID  :        Snapshot_ID_Type);
+      Obj     : in out Object_Type;
+      Req     :        Request.Object_Type;
+      Snap_ID :        Snapshot_ID_Type);
 
    --
    --  Peek_Pending_Request
@@ -170,8 +170,6 @@ private
       Snap_ID          : Snapshot_ID_Type;
       Nr_Of_Prims      : Number_Of_Primitives_Type;
       Nr_Of_Done_Prims : Number_Of_Primitives_Type;
-      Curr_Blk_Nr      : Block_Number_Type;
-      Curr_Idx         : Primitive.Index_Type;
    end record;
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
