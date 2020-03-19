@@ -85,26 +85,13 @@ is
    return Request.Object_Type;
 
    --
-   --  Index_For_Request
-   --
-   function Index_For_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Pool_Index_Type;
-
-   --
-   --  Dump pool state
-   --
-   procedure Dump_Pool_State (Obj : Object_Type);
-
-   --
    --  Peek_Generated_VBD_Primitive
    --
    function Peek_Generated_VBD_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_Primitive_ID
+   --  Peek_Generated_VBD_Primitive_ID
    --
    function Peek_Generated_VBD_Primitive_ID (Obj : Object_Type)
    return Snapshot_ID_Type;
@@ -151,35 +138,29 @@ private
 
    private
 
-         type Index_Queue_Type is record
-            Head    : Queue_Index_Type;
-            Tail    : Queue_Index_Type;
-            Used    : Used_Type;
-            Indices : Item_Indices_Type;
-         end record;
+      type Index_Queue_Type is record
+         Head    : Queue_Index_Type;
+         Tail    : Queue_Index_Type;
+         Used    : Used_Type;
+         Indices : Item_Indices_Type;
+      end record;
+
    end Index_Queue;
 
    type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
 
-   --
-   --  Item_Type
-   --
    type Item_Type is record
-      State            : Item_State_Type;
-      Req              : Request.Object_Type;
-      Snap_ID          : Snapshot_ID_Type;
-      Nr_Of_Prims      : Number_Of_Primitives_Type;
-      Nr_Of_Done_Prims : Number_Of_Primitives_Type;
+      State                 : Item_State_Type;
+      Req                   : Request.Object_Type;
+      Snap_ID               : Snapshot_ID_Type;
+      Nr_Of_Prims_Completed : Number_Of_Primitives_Type;
    end record;
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
 
-   --
-   --  Object_Type
-   --
    type Object_Type is record
-      Items    : Items_Type;
-      Indices  : Index_Queue.Index_Queue_Type;
+      Items   : Items_Type;
+      Indices : Index_Queue.Index_Queue_Type;
    end record;
 
    --
@@ -189,16 +170,16 @@ private
    return Item_Type;
 
    --
-   --  Item_To_String
-   --
-   function Item_To_String (Itm : Item_Type)
-   return String;
-
-   --
    --  Item_Mark_Completed_Primitive
    --
    procedure Item_Mark_Completed_Primitive (
       Itm  : in out Item_Type;
       Prim :        Primitive.Object_Type);
+
+   --
+   --  Item_Nr_Of_Prims
+   --
+   function Item_Nr_Of_Prims (Itm : Item_Type)
+   return Number_Of_Primitives_Type;
 
 end CBE.Pool;

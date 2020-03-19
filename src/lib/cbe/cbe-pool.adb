@@ -15,39 +15,6 @@ package body CBE.Pool
 with SPARK_Mode
 is
    --
-   --  Item_Invalid
-   --
-   function Item_Invalid
-   return Item_Type
-   is (
-      State            => Invalid,
-      Req              => Request.Invalid_Object,
-      Snap_ID          => 0,
-      Nr_Of_Prims      => 0,
-      Nr_Of_Done_Prims => 0);
-
-   --
-   --  Item_To_String
-   --
-   function Item_To_String (Itm : Item_Type)
-   return String
-   is (
-      case Itm.State is
-      when Invalid     => "invalid",
-      when Pending     => "pending",
-      when In_Progress => "in_progress",
-      when Complete    => "complete");
-
-   --
-   --  Initialized_Object
-   --
-   function Initialized_Object
-   return Object_Type
-   is (
-      Items => (others => Item_Invalid),
-      Indices => Index_Queue.Empty_Index_Queue);
-
-   --
    --  Request_Acceptable
    --
    function Request_Acceptable (Obj : Object_Type)
@@ -69,16 +36,10 @@ is
 
          if Obj.Items (Item_Id).State = Invalid then
             Obj.Items (Item_Id) := (
-               State            => Pending,
-               Req              => Req,
-               Snap_ID          => Snap_ID,
-               Nr_Of_Done_Prims => 0,
-               Nr_Of_Prims      => (
-                 case Request.Operation (Req) is
-                 when Sync | Create_Snapshot | Discard_Snapshot =>
-                    1,
-                 when Read | Write =>
-                    Number_Of_Primitives_Type (Request.Count (Req))));
+               State                 => Pending,
+               Req                   => Req,
+               Snap_ID               => Snap_ID,
+               Nr_Of_Prims_Completed => 0);
 
             Request.Success (Obj.Items (Item_Id).Req, True);
             Index_Queue.Enqueue (Obj.Indices, Item_Id);
@@ -193,8 +154,8 @@ is
                   Primitive.Tag_Splitter,
                   Idx,
                   Request.Block_Number (Itm.Req) +
-                     Block_Number_Type (Itm.Nr_Of_Done_Prims),
-                  Primitive.Index_Type (Itm.Nr_Of_Done_Prims));
+                     Block_Number_Type (Itm.Nr_Of_Prims_Completed),
+                  Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
 
          when Sync =>
             return Primitive.Invalid_Object;
@@ -210,7 +171,7 @@ is
    end Peek_Generated_VBD_Primitive;
 
    --
-   --  Peek_Generated_Primitive_ID
+   --  Peek_Generated_VBD_Primitive_ID
    --
    function Peek_Generated_VBD_Primitive_ID (Obj : Object_Type)
    return Snapshot_ID_Type
@@ -263,7 +224,7 @@ is
          case Request.Operation (Itm.Req) is
          when Read | Write =>
 
-            if Obj.Items (Idx).Nr_Of_Done_Prims = Itm.Nr_Of_Prims - 1 then
+            if Itm.Nr_Of_Prims_Completed = Item_Nr_Of_Prims (Itm) - 1 then
                Drop_Pending_Request (Obj);
             end if;
 
@@ -305,9 +266,9 @@ is
          Request.Success (Itm.Req, False);
       end if;
 
-      Itm.Nr_Of_Done_Prims := Itm.Nr_Of_Done_Prims + 1;
+      Itm.Nr_Of_Prims_Completed := Itm.Nr_Of_Prims_Completed + 1;
 
-      if Itm.Nr_Of_Done_Prims = Itm.Nr_Of_Prims then
+      if Itm.Nr_Of_Prims_Completed = Item_Nr_Of_Prims (Itm) then
          Itm.State := Complete;
       end if;
 
@@ -364,25 +325,6 @@ is
    end Drop_Completed_Request;
 
    --
-   --  Dump pool state
-   --
-   procedure Dump_Pool_State (Obj : Object_Type)
-   is
-   begin
-      for I in Obj.Items'Range loop
-         if Obj.Items (I).State /= Invalid then
-            pragma Debug (Debug.Print_String ("Request_Pool: "
-               & Debug.To_String (Debug.Uint64_Type (I))
-               & ": "
-               & "Req: " & Request.To_String (Obj.Items (I).Req)
-               & " State: "
-               & Item_To_String (Obj.Items (I))));
-            null;
-         end if;
-      end loop;
-   end Dump_Pool_State;
-
-   --
    --  Request_For_Index
    --
    function Request_For_Index (
@@ -397,20 +339,41 @@ is
       return Obj.Items (Idx).Req;
    end Request_For_Index;
 
-   function Index_For_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Pool_Index_Type
-   is
-   begin
-      For_Each_Item : for Idx in Obj.Items'Range loop
-         if Request.Equal (Obj.Items (Idx).Req, Req) then
-            return Idx;
-         end if;
-      end loop For_Each_Item;
-      raise Program_Error;
-   end Index_For_Request;
+   --
+   --  Item_Nr_Of_Prims
+   --
+   function Item_Nr_Of_Prims (Itm : Item_Type)
+   return Number_Of_Primitives_Type
+   is (
+      case Request.Operation (Itm.Req) is
+      when Read | Write =>
+         Number_Of_Primitives_Type (Request.Count (Itm.Req)),
+      when Sync | Create_Snapshot | Discard_Snapshot =>
+         1);
 
+   --
+   --  Item_Invalid
+   --
+   function Item_Invalid
+   return Item_Type
+   is (
+      State                 => Invalid,
+      Req                   => Request.Invalid_Object,
+      Snap_ID               => 0,
+      Nr_Of_Prims_Completed => 0);
+
+   --
+   --  Initialized_Object
+   --
+   function Initialized_Object
+   return Object_Type
+   is (
+      Items => (others => Item_Invalid),
+      Indices => Index_Queue.Empty_Index_Queue);
+
+   --
+   --  Index_Queue
+   --
    package body Index_Queue
    with SPARK_Mode
    is
