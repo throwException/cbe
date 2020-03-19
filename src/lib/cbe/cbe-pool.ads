@@ -41,10 +41,9 @@ is
    --  Submit_Request
    --
    procedure Submit_Request (
-      Obj         : in out Object_Type;
-      Req         :        Request.Object_Type;
-      ID          :        Snapshot_ID_Type;
-      Nr_Of_Prims :        Number_Of_Primitives_Type);
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type;
+      ID  :        Snapshot_ID_Type);
 
    --
    --  Peek_Pending_Request
@@ -97,20 +96,6 @@ is
    --  Dump pool state
    --
    procedure Dump_Pool_State (Obj : Object_Type);
-
-   --
-   --  Check if a overlapping request is already in progress
-   --
-   function Overlapping_Request_In_Progress (
-      Obj    : Object_Type;
-      Blk_Nr : Block_Number_Type)
-   return Boolean;
-
-   --
-   --  Number_Of_Primitives
-   --
-   function Number_Of_Primitives (Req : Request.Object_Type)
-   return Number_Of_Primitives_Type;
 
    --
    --  Peek_Generated_VBD_Primitive

@@ -62,28 +62,32 @@ is
    --  Submit_Request
    --
    procedure Submit_Request (
-      Obj         : in out Object_Type;
-      Req         :        Request.Object_Type;
-      ID          :        Snapshot_ID_Type;
-      Nr_Of_Prims :        Number_Of_Primitives_Type)
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type;
+      ID  :        Snapshot_ID_Type)
    is
-      Req_Buf : Request.Object_Type := Req;
    begin
       Items_Loop :
       for Item_Id in Obj.Items'Range loop
 
          if Obj.Items (Item_Id).State = Invalid then
 
-            Request.Success (Req_Buf, True);
             Obj.Items (Item_Id) := (
                State            => Pending,
-               Req              => Req_Buf,
+               Req              => Req,
                Snap_ID          => ID,
-               Nr_Of_Prims      => Nr_Of_Prims,
+               Nr_Of_Prims      => (
+                 case Request.Operation (Req) is
+                 when Sync | Create_Snapshot | Discard_Snapshot =>
+                    1,
+                 when Read | Write =>
+                    Number_Of_Primitives_Type (Request.Count (Req))),
+
                Nr_Of_Done_Prims => 0,
                Curr_Blk_Nr      => 0,
                Curr_Idx         => 0);
 
+            Request.Success (Obj.Items (Item_Id).Req, True);
             Index_Queue.Enqueue (Obj.Indices, Item_Id);
 
             exit Items_Loop;
@@ -217,16 +221,6 @@ is
          end case;
       end Declare_Item;
    end Peek_Generated_VBD_Primitive;
-
-   --
-   --  Number_Of_Primitives
-   --
-   function Number_Of_Primitives (Req : Request.Object_Type)
-   return Number_Of_Primitives_Type
-   is
-   begin
-      return Number_Of_Primitives_Type (Request.Count (Req));
-   end Number_Of_Primitives;
 
    --
    --  Peek_Generated_Primitive_ID
@@ -409,44 +403,6 @@ is
          end if;
       end loop;
    end Dump_Pool_State;
-
-   --
-   --  Check if a overlapping request is already in progress
-   --
-   function Overlapping_Request_In_Progress (
-      Obj    : Object_Type;
-      Blk_Nr : Block_Number_Type)
-   return Boolean
-   is
-      Result : Boolean := False;
-   begin
-      Loop_In_Progress_Items :
-      for Itm of Obj.Items loop
-         if Itm.State = In_Progress then
-
-            --  The overlap range is [lower, upper).
-            declare
-               Lower : constant Block_Number_Type :=
-                  Request.Block_Number (Itm.Req);
-               Upper : constant Block_Number_Type :=
-                  Lower + Block_Number_Type (Request.Count (Itm.Req));
-            begin
-               if Blk_Nr >= Lower and then Blk_Nr < Upper then
-                  pragma Debug (Debug.Print_String ("Overlap: Blk_Nr: "
-                     & Debug.To_String (Debug.Uint64_Type (Blk_Nr))
-                     & " Lower: "
-                     & Debug.To_String (Debug.Uint64_Type (Lower))
-                     & " Upper: "
-                     & Debug.To_String (Debug.Uint64_Type (Upper))));
-                  Result := True;
-                  exit Loop_In_Progress_Items;
-               end if;
-            end;
-         end if;
-      end loop Loop_In_Progress_Items;
-
-      return Result;
-   end Overlapping_Request_In_Progress;
 
    --
    --  Request_For_Index

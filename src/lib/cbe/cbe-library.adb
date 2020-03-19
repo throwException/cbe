@@ -161,7 +161,7 @@ is
                Cnt    => 1,
                Tg     => 0);
       begin
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0, 1);
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
       end Declare_Snapshot_Sync_Request;
 
       Obj.Creating_Quarantine_Snapshot := True;
@@ -236,7 +236,7 @@ is
                   Tg     => 0);
          begin
             --  XXX check request acceptable
-            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0, 1);
+            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
          end Declare_Discard_Sync_Request;
 
          Obj.Discarding_Snapshot := True;
@@ -294,25 +294,11 @@ is
       case Request.Operation (Req) is
       when Read | Write =>
 
-         Declare_Request_Number_Primitives :
-         declare
-            Number_Of_Primitives : constant Number_Of_Primitives_Type :=
-               Pool.Number_Of_Primitives (Req);
-         begin
-            if Number_Of_Primitives = 0 then
-               raise Program_Error;
-            end if;
-
-            Pool.Submit_Request (
-               Obj.Request_Pool_Obj,
-               Req,
-               ID,
-               Number_Of_Primitives);
-         end Declare_Request_Number_Primitives;
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
       when Sync =>
 
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID, 1);
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
          Obj.Sync_Pending := True;
 
       when Create_Snapshot | Discard_Snapshot =>
