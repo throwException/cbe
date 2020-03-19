@@ -1570,81 +1570,96 @@ is
    begin
       Pool.Execute (Obj.Request_Pool_Obj, Progress);
 
-      Loop_Pool_Pending_Requests :
+      Loop_Pool_Generated_Sync_Prims :
       loop
-         Declare_Pool_Idx_Slot :
+         Declare_Sync_Prim :
          declare
-            Pool_Idx_Slot : constant Pool_Index_Slot_Type :=
-               Pool.Peek_Pending_Request (Obj.Request_Pool_Obj);
+            Prim : constant Primitive.Object_Type :=
+               Pool.Peek_Generated_Sync_Primitive (Obj.Request_Pool_Obj);
          begin
-            exit Loop_Pool_Pending_Requests when
-            not Pool_Idx_Slot_Valid (Pool_Idx_Slot);
 
-            Declare_Pool_Idx :
-            declare
-               Pool_Idx : constant Pool_Index_Type :=
-                  Pool_Idx_Slot_Content (Pool_Idx_Slot);
+            exit Loop_Pool_Generated_Sync_Prims when
+               not Primitive.Valid (Prim) or else
+               not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
 
-               Req : constant Request.Object_Type :=
-                  Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
-            begin
-               case Request.Operation (Req) is
-               when Read | Write =>
-                  exit Loop_Pool_Pending_Requests;
+            Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+            Sync_Superblock.Submit_Request (
+               Obj.Sync_SB_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Cur_SB,
+               Obj.Cur_Gen);
 
-               when Sync =>
+            Obj.State := Sync_Request;
+            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Progress := True;
 
-                  if not Sync_Superblock.Request_Acceptable (
-                     Obj.Sync_SB_Obj)
-                  then
-                     exit Loop_Pool_Pending_Requests;
-                  end if;
+         end Declare_Sync_Prim;
 
-                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+      end loop Loop_Pool_Generated_Sync_Prims;
 
-                  Sync_Superblock.Submit_Request (
-                     Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
+      Loop_Pool_Generated_Create_Snap_Prims :
+      loop
+         Declare_Create_Snap_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Pool.Peek_Generated_Create_Snap_Primitive (
+                  Obj.Request_Pool_Obj);
+         begin
 
-                  pragma Debug (Debug.Print_String ("New Sync_Request: "
-                     & Request.To_String (Req)));
-                  Obj.State := Sync_Request;
+            exit Loop_Pool_Generated_Create_Snap_Prims when
+               not Primitive.Valid (Prim) or else
+               not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
 
-               when Create_Snapshot =>
+            Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
 
-                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+            Write_Current_State_To_Snapshot_Slot (Obj.Superblock);
 
-                  Write_Current_State_To_Snapshot_Slot (Obj.Superblock);
+            Sync_Superblock.Submit_Request (
+               Obj.Sync_SB_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Cur_SB,
+               Obj.Cur_Gen);
 
-                  Sync_Superblock.Submit_Request (
-                     Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
+            Obj.State := Sync_Request;
+            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Progress := True;
 
-                  Obj.State := Sync_Request;
+         end Declare_Create_Snap_Prim;
 
-               when Discard_Snapshot =>
+      end loop Loop_Pool_Generated_Create_Snap_Prims;
 
-                  Obj.Superblock.Snapshots (
-                     Obj.Discard_Snap_Slot).Keep := False;
+      Loop_Pool_Generated_Discard_Snap_Prims :
+      loop
+         Declare_Discard_Snap_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Pool.Peek_Generated_Discard_Snap_Primitive (
+                  Obj.Request_Pool_Obj);
+         begin
 
-                  Obj.Superblock.Snapshots (
-                     Obj.Discard_Snap_Slot).Valid := False;
+            exit Loop_Pool_Generated_Discard_Snap_Prims when
+               not Primitive.Valid (Prim) or else
+               not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
 
-                  Sync_Superblock.Submit_Request (
-                     Obj.Sync_SB_Obj, Pool_Idx, Obj.Cur_SB, Obj.Cur_Gen);
+            Obj.Superblock.Snapshots (Obj.Discard_Snap_Slot).Keep := False;
+            Obj.Superblock.Snapshots (Obj.Discard_Snap_Slot).Valid := False;
+            Sync_Superblock.Submit_Request (
+               Obj.Sync_SB_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Cur_SB,
+               Obj.Cur_Gen);
 
-                  Obj.State := Sync_Request;
+            Obj.State := Sync_Request;
+            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Progress := True;
 
-               end case;
+         end Declare_Discard_Snap_Prim;
 
-               Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
-
-            end Declare_Pool_Idx;
-         end Declare_Pool_Idx_Slot;
-         Progress := True;
-      end loop Loop_Pool_Pending_Requests;
+      end loop Loop_Pool_Generated_Discard_Snap_Prims;
 
       Loop_Pool_Generated_VBD_Prims :
       loop
-         Declare_Prim :
+         Declare_VBD_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
                Pool.Peek_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
@@ -1685,7 +1700,7 @@ is
 
             end Declare_Snap_Slot_Idx;
 
-         end Declare_Prim;
+         end Declare_VBD_Prim;
 
       end loop Loop_Pool_Generated_VBD_Prims;
 

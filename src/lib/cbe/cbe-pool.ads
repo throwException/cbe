@@ -85,6 +85,24 @@ is
    return Request.Object_Type;
 
    --
+   --  Peek_Generated_Discard_Snap_Primitive
+   --
+   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Create_Snap_Primitive
+   --
+   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Sync_Primitive
+   --
+   function Peek_Generated_Sync_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Peek_Generated_VBD_Primitive
    --
    function Peek_Generated_VBD_Primitive (Obj : Object_Type)

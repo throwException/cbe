@@ -126,6 +126,141 @@ is
    end Execute;
 
    --
+   --  Peek_Generated_Discard_Snap_Primitive
+   --
+   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is
+   begin
+      if Index_Queue.Empty (Obj.Indices) then
+         return Primitive.Invalid_Object;
+      end if;
+
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
+         end if;
+
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+            return Primitive.Invalid_Object;
+
+         when Sync =>
+            return Primitive.Invalid_Object;
+
+         when Create_Snapshot =>
+            return Primitive.Invalid_Object;
+
+         when Discard_Snapshot =>
+            return
+               Primitive.Valid_Object (
+                  Request.Operation (Itm.Req),
+                  Request.Success (Itm.Req),
+                  Primitive.Tag_Splitter,
+                  Idx,
+                  Request.Block_Number (Itm.Req) +
+                     Block_Number_Type (Itm.Nr_Of_Prims_Completed),
+                  Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+
+         end case;
+      end Declare_Item;
+   end Peek_Generated_Discard_Snap_Primitive;
+
+   --
+   --  Peek_Generated_Create_Snap_Primitive
+   --
+   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is
+   begin
+      if Index_Queue.Empty (Obj.Indices) then
+         return Primitive.Invalid_Object;
+      end if;
+
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
+         end if;
+
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+            return Primitive.Invalid_Object;
+
+         when Sync =>
+            return Primitive.Invalid_Object;
+
+         when Create_Snapshot =>
+            return
+               Primitive.Valid_Object (
+                  Request.Operation (Itm.Req),
+                  Request.Success (Itm.Req),
+                  Primitive.Tag_Splitter,
+                  Idx,
+                  Request.Block_Number (Itm.Req) +
+                     Block_Number_Type (Itm.Nr_Of_Prims_Completed),
+                  Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+
+         when Discard_Snapshot =>
+            return Primitive.Invalid_Object;
+
+         end case;
+      end Declare_Item;
+   end Peek_Generated_Create_Snap_Primitive;
+
+   --
+   --  Peek_Generated_Sync_Primitive
+   --
+   function Peek_Generated_Sync_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is
+   begin
+      if Index_Queue.Empty (Obj.Indices) then
+         return Primitive.Invalid_Object;
+      end if;
+
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
+         end if;
+
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+            return Primitive.Invalid_Object;
+
+         when Sync =>
+            return
+               Primitive.Valid_Object (
+                  Request.Operation (Itm.Req),
+                  Request.Success (Itm.Req),
+                  Primitive.Tag_Splitter,
+                  Idx,
+                  Request.Block_Number (Itm.Req) +
+                     Block_Number_Type (Itm.Nr_Of_Prims_Completed),
+                  Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+
+         when Create_Snapshot =>
+            return Primitive.Invalid_Object;
+
+         when Discard_Snapshot =>
+            return Primitive.Invalid_Object;
+
+         end case;
+      end Declare_Item;
+   end Peek_Generated_Sync_Primitive;
+
+   --
    --  Peek_Generated_VBD_Primitive
    --
    function Peek_Generated_VBD_Primitive (Obj : Object_Type)
