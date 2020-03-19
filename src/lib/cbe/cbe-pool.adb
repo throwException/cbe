@@ -24,7 +24,9 @@ is
       Req              => Request.Invalid_Object,
       Snap_ID          => 0,
       Nr_Of_Prims      => 0,
-      Nr_Of_Done_Prims => 0);
+      Nr_Of_Done_Prims => 0,
+      Curr_Blk_Nr      => 0,
+      Curr_Idx         => 0);
 
    --
    --  Item_To_String
@@ -39,29 +41,13 @@ is
       when Complete    => "complete");
 
    --
-   --  Initialize_Object
-   --
-   procedure Initialize_Object (Obj : out Object_Type)
-   is
-   begin
-      Obj := Initialized_Object;
-   end Initialize_Object;
-
-   --
    --  Initialized_Object
    --
    function Initialized_Object
    return Object_Type
    is (
       Items => (others => Item_Invalid),
-      Indices => Index_Queue.Empty_Index_Queue,
-      Splitter => (
-         Pool_Idx_Slot => Pool_Idx_Slot_Invalid,
-         Curr_Req      => Request.Invalid_Object,
-         Curr_Blk_Nr   => 0,
-         Curr_Idx      => 0,
-         Nr_Of_Prims   => 0,
-         Snap_ID       => 0));
+      Indices => Index_Queue.Empty_Index_Queue);
 
    --
    --  Request_Acceptable
@@ -69,13 +55,7 @@ is
    function Request_Acceptable (Obj : Object_Type) return Boolean
    is
    begin
-      if not Index_Queue.Full (Obj.Indices)
-         and then Index_Queue.Avail (Obj.Indices, 2)
-      then
-         return True;
-      else
-         return False;
-      end if;
+      return not Index_Queue.Full (Obj.Indices);
    end Request_Acceptable;
 
    --
@@ -89,7 +69,6 @@ is
    is
       Req_Buf : Request.Object_Type := Req;
    begin
-
       Items_Loop :
       for Item_Id in Obj.Items'Range loop
 
@@ -101,7 +80,9 @@ is
                Req              => Req_Buf,
                Snap_ID          => ID,
                Nr_Of_Prims      => Nr_Of_Prims,
-               Nr_Of_Done_Prims => 0);
+               Nr_Of_Done_Prims => 0,
+               Curr_Blk_Nr      => 0,
+               Curr_Idx         => 0);
 
             Index_Queue.Enqueue (Obj.Indices, Item_Id);
 
@@ -155,7 +136,6 @@ is
       Progress : in out Boolean)
    is
    begin
-
       if Index_Queue.Empty (Obj.Indices) then
          return;
       end if;
@@ -169,34 +149,23 @@ is
       is
       when Read | Write =>
 
-         if not Request.Valid (Obj.Splitter.Curr_Req) then
+         case Obj.Items (Index_Queue.Head (Obj.Indices)).State is
+         when Pending =>
 
-            Obj.Splitter := (
-               Pool_Idx_Slot =>
-                  Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices)),
-               Curr_Req      => Obj.Items (Index_Queue.Head (Obj.Indices)).Req,
-               Curr_Blk_Nr   =>
-                  Request.Block_Number (
-                     Obj.Items (Index_Queue.Head (Obj.Indices)).Req),
-               Curr_Idx      => 0,
-               Nr_Of_Prims   =>
-                  Number_Of_Primitives_Type (
-                     Request.Count (
-                        Obj.Items (Index_Queue.Head (Obj.Indices)).Req)),
-               Snap_ID       =>
-                  Snap_ID_For_Request (
-                     Obj,
-                     Obj.Items (Index_Queue.Head (Obj.Indices)).Req));
+            Obj.Items (Index_Queue.Head (Obj.Indices)).Curr_Blk_Nr :=
+               Request.Block_Number (
+                  Obj.Items (Index_Queue.Head (Obj.Indices)).Req);
 
-               Obj.Items (Index_Queue.Head (Obj.Indices)).State := In_Progress;
-
-            if not Request.Valid (Obj.Splitter.Curr_Req) then
-               raise Program_Error;
-            end if;
+            Obj.Items (Index_Queue.Head (Obj.Indices)).Curr_Idx := 0;
+            Obj.Items (Index_Queue.Head (Obj.Indices)).State := In_Progress;
 
             Progress := True;
 
-         end if;
+         when others =>
+
+            null;
+
+         end case;
 
       when Sync => return;
       when Create_Snapshot => return;
@@ -212,44 +181,41 @@ is
    return Primitive.Object_Type
    is
    begin
-
       if Index_Queue.Empty (Obj.Indices) then
          return Primitive.Invalid_Object;
       end if;
 
-      if not Request.Valid (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
-      then
-         raise Program_Error;
-      end if;
-
-      case Request.Operation (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
-      is
-      when Read | Write =>
-
-         if not Request.Valid (Obj.Splitter.Curr_Req) then
-            return Primitive.Invalid_Object;
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
          end if;
 
-         return
-            Primitive.Valid_Object (
-               Request.Operation (Obj.Splitter.Curr_Req),
-               Request.Success (Obj.Splitter.Curr_Req),
-               Primitive.Tag_Splitter,
-               Pool_Idx_Slot_Content (Obj.Splitter.Pool_Idx_Slot),
-               Obj.Splitter.Curr_Blk_Nr,
-               Obj.Splitter.Curr_Idx);
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+            return
+               Primitive.Valid_Object (
+                  Request.Operation (Itm.Req),
+                  Request.Success (Itm.Req),
+                  Primitive.Tag_Splitter,
+                  Idx,
+                  Itm.Curr_Blk_Nr,
+                  Itm.Curr_Idx);
 
-      when Sync =>
-         return Primitive.Invalid_Object;
+         when Sync =>
+            return Primitive.Invalid_Object;
 
-      when Create_Snapshot =>
-         return Primitive.Invalid_Object;
+         when Create_Snapshot =>
+            return Primitive.Invalid_Object;
 
-      when Discard_Snapshot =>
-         return Primitive.Invalid_Object;
+         when Discard_Snapshot =>
+            return Primitive.Invalid_Object;
 
-      end case;
-
+         end case;
+      end Declare_Item;
    end Peek_Generated_VBD_Primitive;
 
    --
@@ -259,7 +225,6 @@ is
    return Number_Of_Primitives_Type
    is
    begin
-
       return Number_Of_Primitives_Type (Request.Count (Req));
    end Number_Of_Primitives;
 
@@ -270,8 +235,29 @@ is
    return Snapshot_ID_Type
    is
    begin
+      if Index_Queue.Empty (Obj.Indices) then
+         raise Program_Error;
+      end if;
 
-      return Obj.Splitter.Snap_ID;
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
+         end if;
+
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+            return Itm.Snap_ID;
+
+         when others =>
+            raise Program_Error;
+
+         end case;
+      end Declare_Item;
+
    end Peek_Generated_VBD_Primitive_ID;
 
    --
@@ -281,21 +267,37 @@ is
    is
       use type Primitive.Index_Type;
    begin
-      Obj.Splitter.Curr_Blk_Nr := Obj.Splitter.Curr_Blk_Nr + 1;
-      Obj.Splitter.Curr_Idx    := Obj.Splitter.Curr_Idx    + 1;
-
-      if Number_Of_Primitives_Type (Obj.Splitter.Curr_Idx) =
-            Obj.Splitter.Nr_Of_Prims
-      then
-         Obj.Splitter.Pool_Idx_Slot := Pool_Idx_Slot_Invalid;
-         Obj.Splitter.Curr_Req      := Request.Invalid_Object;
-         Obj.Splitter.Curr_Blk_Nr   := 0;
-         Obj.Splitter.Curr_Idx      := 0;
-         Obj.Splitter.Nr_Of_Prims   := 0;
-         Obj.Splitter.Snap_ID       := 0;
-
-         Drop_Pending_Request (Obj);
+      if Index_Queue.Empty (Obj.Indices) then
+         raise Program_Error;
       end if;
+
+      Declare_Item :
+      declare
+         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         Itm : constant Item_Type := Obj.Items (Idx);
+      begin
+         if not Request.Valid (Itm.Req) then
+            raise Program_Error;
+         end if;
+
+         case Request.Operation (Itm.Req) is
+         when Read | Write =>
+
+            Obj.Items (Idx).Curr_Blk_Nr := Itm.Curr_Blk_Nr + 1;
+            Obj.Items (Idx).Curr_Idx    := Itm.Curr_Idx    + 1;
+
+            if Number_Of_Primitives_Type (Obj.Items (Idx).Curr_Idx) =
+                  Itm.Nr_Of_Prims
+            then
+               Obj.Items (Idx).Curr_Blk_Nr := 0;
+               Obj.Items (Idx).Curr_Idx    := 0;
+
+               Drop_Pending_Request (Obj);
+            end if;
+
+         when others => null;
+         end case;
+      end Declare_Item;
 
    end Drop_Generated_VBD_Primitive;
 
@@ -376,7 +378,6 @@ is
       Req :        Request.Object_Type)
    is
    begin
-
       For_Each_Item :
       for Idx in Obj.Items'Range loop
          if Request.Equal (Obj.Items (Idx).Req, Req) then
@@ -389,25 +390,6 @@ is
       end loop For_Each_Item;
       raise Program_Error;
    end Drop_Completed_Request;
-
-   --
-   --  Snap_ID_For_Request
-   --
-   function Snap_ID_For_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Snapshot_ID_Type
-   is
-   begin
-      for Itm of Obj.Items loop
-         if Itm.State /= Invalid then
-            if Request.Equal (Itm.Req, Req) then
-               return Itm.Snap_ID;
-            end if;
-         end if;
-      end loop;
-      raise Program_Error;
-   end Snap_ID_For_Request;
 
    --
    --  Dump pool state

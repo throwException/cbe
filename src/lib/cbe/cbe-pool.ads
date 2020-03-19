@@ -19,13 +19,6 @@ is
    type Object_Type is private;
 
    --
-   --  Initialize_Object
-   --
-   --  FIXME will not be used anymore when library module is in spark
-   --
-   procedure Initialize_Object (Obj : out Object_Type);
-
-   --
    --  Initialized_Object
    --
    function Initialized_Object
@@ -99,14 +92,6 @@ is
       Obj : Object_Type;
       Req : Request.Object_Type)
    return Pool_Index_Type;
-
-   --
-   --  Snap_ID_For_Request
-   --
-   function Snap_ID_For_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Snapshot_ID_Type;
 
    --
    --  Dump pool state
@@ -189,18 +174,6 @@ private
          end record;
    end Index_Queue;
 
-   --
-   --  Splitter_Type
-   --
-   type Splitter_Type is record
-      Pool_Idx_Slot : Pool_Index_Slot_Type;
-      Curr_Req      : Request.Object_Type;
-      Curr_Blk_Nr   : Block_Number_Type;
-      Curr_Idx      : Primitive.Index_Type;
-      Nr_Of_Prims   : Number_Of_Primitives_Type;
-      Snap_ID       : Snapshot_ID_Type;
-   end record;
-
    type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
 
    --
@@ -212,6 +185,8 @@ private
       Snap_ID          : Snapshot_ID_Type;
       Nr_Of_Prims      : Number_Of_Primitives_Type;
       Nr_Of_Done_Prims : Number_Of_Primitives_Type;
+      Curr_Blk_Nr      : Block_Number_Type;
+      Curr_Idx         : Primitive.Index_Type;
    end record;
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
@@ -222,7 +197,6 @@ private
    type Object_Type is record
       Items    : Items_Type;
       Indices  : Index_Queue.Index_Queue_Type;
-      Splitter : Splitter_Type;
    end record;
 
    --
