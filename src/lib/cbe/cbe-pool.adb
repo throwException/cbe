@@ -52,40 +52,6 @@ is
    end Submit_Request;
 
    --
-   --  Peek_Pending_Request
-   --
-   function Peek_Pending_Request (Obj : Object_Type)
-   return Pool_Index_Slot_Type
-   is
-   begin
-      if Index_Queue.Empty (Obj.Indices) then
-         return Pool_Idx_Slot_Invalid;
-      end if;
-
-      if not Request.Valid (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
-      then
-         raise Program_Error;
-      end if;
-
-      case Request.Operation (Obj.Items (Index_Queue.Head (Obj.Indices)).Req)
-      is
-      when Read | Write =>
-         return Pool_Idx_Slot_Invalid;
-
-      when Sync =>
-         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
-
-      when Create_Snapshot =>
-         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
-
-      when Discard_Snapshot =>
-         return Pool_Idx_Slot_Valid (Index_Queue.Head (Obj.Indices));
-
-      end case;
-
-   end Peek_Pending_Request;
-
-   --
    --  Execute
    --
    procedure Execute (
@@ -186,34 +152,66 @@ is
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
          Itm : constant Item_Type := Obj.Items (Idx);
       begin
-         if not Request.Valid (Itm.Req) then
-            raise Program_Error;
-         end if;
+         case Itm.State is
+         when Pending =>
 
-         case Request.Operation (Itm.Req) is
-         when Read | Write =>
-            return Primitive.Invalid_Object;
+            case Request.Operation (Itm.Req) is
+            when Create_Snapshot =>
+               return
+                  Primitive.Valid_Object (
+                     Request.Operation (Itm.Req),
+                     Request.Success (Itm.Req),
+                     Primitive.Tag_Splitter,
+                     Idx,
+                     Request.Block_Number (Itm.Req) +
+                        Block_Number_Type (Itm.Nr_Of_Prims_Completed),
+                     Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
 
-         when Sync =>
-            return Primitive.Invalid_Object;
+            when others =>
+               return Primitive.Invalid_Object;
 
-         when Create_Snapshot =>
-            return
-               Primitive.Valid_Object (
-                  Request.Operation (Itm.Req),
-                  Request.Success (Itm.Req),
-                  Primitive.Tag_Splitter,
-                  Idx,
-                  Request.Block_Number (Itm.Req) +
-                     Block_Number_Type (Itm.Nr_Of_Prims_Completed),
-                  Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+            end case;
 
-         when Discard_Snapshot =>
+         when others =>
             return Primitive.Invalid_Object;
 
          end case;
       end Declare_Item;
    end Peek_Generated_Create_Snap_Primitive;
+
+   --
+   --  Drop_Generated_Create_Snap_Primitive
+   --
+   procedure Drop_Generated_Create_Snap_Primitive (
+      Obj : in out Object_Type;
+      Idx :        Pool_Index_Type)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) or else
+         Index_Queue.Head (Obj.Indices) /= Idx
+      then
+         raise Program_Error;
+      end if;
+
+      case Obj.Items (Idx).State is
+      when Pending =>
+
+         case Request.Operation (Obj.Items (Idx).Req) is
+         when Create_Snapshot =>
+            Obj.Items (Idx).State := In_Progress;
+            Index_Queue.Dequeue_Head (Obj.Indices);
+
+         when others =>
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+         raise Program_Error;
+
+      end case;
+   end Drop_Generated_Create_Snap_Primitive;
 
    --
    --  Peek_Generated_Sync_Primitive

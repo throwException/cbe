@@ -46,12 +46,6 @@ is
       Snap_ID :        Snapshot_ID_Type);
 
    --
-   --  Peek_Pending_Request
-   --
-   function Peek_Pending_Request (Obj : Pool.Object_Type)
-   return Pool_Index_Slot_Type;
-
-   --
    --  Drop_Pending_Request
    --
    procedure Drop_Pending_Request (Obj : in out Object_Type);
@@ -95,6 +89,13 @@ is
    --
    function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
+
+   --
+   --  Drop_Generated_Create_Snap_Primitive
+   --
+   procedure Drop_Generated_Create_Snap_Primitive (
+      Obj : in out Object_Type;
+      Idx :        Pool_Index_Type);
 
    --
    --  Peek_Generated_Sync_Primitive

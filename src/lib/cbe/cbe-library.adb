@@ -1621,7 +1621,10 @@ is
                Obj.Cur_Gen);
 
             Obj.State := Sync_Request;
-            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Pool.Drop_Generated_Create_Snap_Primitive (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
             Progress := True;
 
          end Declare_Create_Snap_Prim;
