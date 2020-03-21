@@ -44,7 +44,10 @@ is
       Tag_VBD_Dump_Blk_IO,
       Tag_FT_Dump_Blk_Alloc,
       Tag_FT_Dump_Blk_IO,
-      Tag_Splitter,
+      Tag_Pool_Discard_Snap,
+      Tag_Pool_Create_Snap,
+      Tag_Pool_Sync,
+      Tag_Pool_VBD,
       Tag_IO,
       Tag_Translation,
       Tag_Write_Back,
@@ -99,7 +102,10 @@ is
       when Tag_VBD_Dump_Blk_IO => "VBD_Dump_Blk_IO",
       when Tag_FT_Dump_Blk_Alloc => "FT_Dump_Blk_Alloc",
       when Tag_FT_Dump_Blk_IO => "FT_Dump_Blk_IO",
-      when Tag_Splitter => "Splitter",
+      when Tag_Pool_Discard_Snap => "Pool_Discard_Snap",
+      when Tag_Pool_Create_Snap => "Pool_Create_Snap",
+      when Tag_Pool_Sync => "Pool_Sync",
+      when Tag_Pool_VBD => "Pool_VBD",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
       when Tag_Write_Back => "Write_Back",
@@ -274,7 +280,10 @@ is
    function Has_Tag_VBD_Dump_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Dump_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Dump_Blk_IO (Obj : Object_Type) return Boolean;
-   function Has_Tag_Splitter (Obj : Object_Type) return Boolean;
+   function Has_Tag_Pool_Discard_Snap (Obj : Object_Type) return Boolean;
+   function Has_Tag_Pool_Create_Snap (Obj : Object_Type) return Boolean;
+   function Has_Tag_Pool_Sync (Obj : Object_Type) return Boolean;
+   function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean;
    function Has_Tag_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Translation (Obj : Object_Type) return Boolean;
    function Has_Tag_Write_Back (Obj : Object_Type) return Boolean;

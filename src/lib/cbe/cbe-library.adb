@@ -235,7 +235,6 @@ is
                   Cnt    => 1,
                   Tg     => 0);
          begin
-            --  XXX check request acceptable
             Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
          end Declare_Discard_Sync_Request;
 
@@ -448,11 +447,17 @@ is
 
       Data_Index_Valid := True;
       Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
-      Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+      Pool.Mark_Generated_Primitive_Complete (
+         Obj.Request_Pool_Obj,
+         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+         Primitive.Success (Prim));
+
       pragma Debug (Debug.Print_String (
          "========> Pool.Mark_Completed_Primitive: "
          & Primitive.To_String (Prim)));
+
       Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+
    end Obtain_Client_Data;
 
    procedure Client_Data_Required (
@@ -969,7 +974,10 @@ is
                --  raise Program_Error;
             end if;
 
-            Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+            Pool.Mark_Generated_Primitive_Complete (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Primitive.Success (Prim));
 
             --  FIXME
             Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
@@ -1568,8 +1576,6 @@ is
       Progress : in out Boolean)
    is
    begin
-      Pool.Execute (Obj.Request_Pool_Obj, Progress);
-
       Loop_Pool_Generated_Sync_Prims :
       loop
          Declare_Sync_Prim :
@@ -1590,7 +1596,10 @@ is
                Obj.Cur_Gen);
 
             Obj.State := Sync_Request;
-            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Pool.Drop_Generated_Primitive (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
             Progress := True;
 
          end Declare_Sync_Prim;
@@ -1621,7 +1630,7 @@ is
                Obj.Cur_Gen);
 
             Obj.State := Sync_Request;
-            Pool.Drop_Generated_Create_Snap_Primitive (
+            Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -1653,7 +1662,10 @@ is
                Obj.Cur_Gen);
 
             Obj.State := Sync_Request;
-            Pool.Drop_Pending_Request (Obj.Request_Pool_Obj);
+            Pool.Drop_Generated_Primitive (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
             Progress := True;
 
          end Declare_Discard_Snap_Prim;
@@ -1675,7 +1687,9 @@ is
             Declare_Snap_Slot_Idx :
             declare
                Snap_ID : constant Snapshot_ID_Type :=
-                  Pool.Peek_Generated_VBD_Primitive_ID (Obj.Request_Pool_Obj);
+                  Pool.Peek_Generated_VBD_Primitive_ID (
+                     Obj.Request_Pool_Obj,
+                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
                Snap_Slot_Idx : constant Snapshots_Index_Type := (
                   if Snap_ID = 0 then Curr_Snap (Obj)
@@ -1698,7 +1712,10 @@ is
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
                   Prim);
 
-               Pool.Drop_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
+               Pool.Drop_Generated_Primitive (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
                Progress := True;
 
             end Declare_Snap_Slot_Idx;
@@ -1762,7 +1779,10 @@ is
             --  at some place "save" (leafs on the block device, inner nodes
             --  within the Cache, acknowledge the primitive.
             --
-            Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+            Pool.Mark_Generated_Primitive_Complete (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Primitive.Success (Prim));
 
             pragma Debug (Debug.Print_String (
                "========> Pool.Mark_Completed_Primitive: "
@@ -2051,7 +2071,12 @@ is
             pragma Debug (Debug.Print_String ("Complete Sync_Request"));
 
             if not Obj.Write_Stalled then
-               Pool.Mark_Completed_Primitive (Obj.Request_Pool_Obj, Prim);
+
+               Pool.Mark_Generated_Primitive_Complete (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+                  Primitive.Success (Prim));
+
                pragma Debug (Debug.Print_String (
                   "========> Pool.Mark_Completed_Primitive: "
                   & Primitive.To_String (Prim)));

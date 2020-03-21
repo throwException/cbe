@@ -31,13 +31,6 @@ is
    return Boolean;
 
    --
-   --  Execute
-   --
-   procedure Execute (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean);
-
-   --
    --  Submit_Request
    --
    procedure Submit_Request (
@@ -46,16 +39,51 @@ is
       Snap_ID :        Snapshot_ID_Type);
 
    --
-   --  Drop_Pending_Request
+   --  Peek_Generated_Discard_Snap_Primitive
    --
-   procedure Drop_Pending_Request (Obj : in out Object_Type);
+   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
 
    --
-   --  Mark_Completed_Primitive
+   --  Peek_Generated_Create_Snap_Primitive
    --
-   procedure Mark_Completed_Primitive (
+   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Sync_Primitive
+   --
+   function Peek_Generated_Sync_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_VBD_Primitive
+   --
+   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_VBD_Primitive_ID
+   --
+   function Peek_Generated_VBD_Primitive_ID (
+      Obj : Object_Type;
+      Idx : Pool_Index_Type)
+   return Snapshot_ID_Type;
+
+   --
+   --  Drop_Generated_Primitive
+   --
+   procedure Drop_Generated_Primitive (
       Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type);
+      Idx  :        Pool_Index_Type);
+
+   --
+   --  Mark_Generated_Primitive_Complete
+   --
+   procedure Mark_Generated_Primitive_Complete (
+      Obj     : in out Object_Type;
+      Idx     :        Pool_Index_Type;
+      Success :        Boolean);
 
    --
    --  Peek_Completed_Request
@@ -77,48 +105,6 @@ is
       Obj : Object_Type;
       Idx : Pool_Index_Type)
    return Request.Object_Type;
-
-   --
-   --  Peek_Generated_Discard_Snap_Primitive
-   --
-   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_Create_Snap_Primitive
-   --
-   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Drop_Generated_Create_Snap_Primitive
-   --
-   procedure Drop_Generated_Create_Snap_Primitive (
-      Obj : in out Object_Type;
-      Idx :        Pool_Index_Type);
-
-   --
-   --  Peek_Generated_Sync_Primitive
-   --
-   function Peek_Generated_Sync_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_VBD_Primitive
-   --
-   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_VBD_Primitive_ID
-   --
-   function Peek_Generated_VBD_Primitive_ID (Obj : Object_Type)
-   return Snapshot_ID_Type;
-
-   --
-   --  Drop_Generated_VBD_Primitive
-   --
-   procedure Drop_Generated_VBD_Primitive (Obj : in out Object_Type);
 
 private
 
@@ -187,13 +173,6 @@ private
    --
    function Item_Invalid
    return Item_Type;
-
-   --
-   --  Item_Mark_Completed_Primitive
-   --
-   procedure Item_Mark_Completed_Primitive (
-      Itm  : in out Item_Type;
-      Prim :        Primitive.Object_Type);
 
    --
    --  Item_Nr_Of_Prims

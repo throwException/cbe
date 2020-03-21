@@ -216,8 +216,17 @@ is
    function Has_Tag_FT_Dump_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_Dump_Blk_IO);
 
-   function Has_Tag_Splitter (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_Splitter);
+   function Has_Tag_Pool_Discard_Snap (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_Discard_Snap);
+
+   function Has_Tag_Pool_Create_Snap (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_Create_Snap);
+
+   function Has_Tag_Pool_Sync (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_Sync);
+
+   function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_VBD);
 
    function Has_Tag_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_IO);
