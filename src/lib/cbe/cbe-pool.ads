@@ -10,6 +10,7 @@ pragma Ada_2012;
 
 with CBE.Request;
 with CBE.Primitive;
+with CBE.Generic_Index_Queue;
 
 package CBE.Pool
 with SPARK_Mode
@@ -108,50 +109,6 @@ is
 
 private
 
-   package Index_Queue
-   with SPARK_Mode
-   is
-      type Queue_Index_Type is new Pool_Index_Type;
-      type Used_Type is range 0 .. Max_Number_Of_Requests_In_Pool;
-      type Item_Indices_Type
-      is array (Queue_Index_Type) of Pool_Index_Type;
-
-      type Index_Queue_Type is private;
-
-      function Empty_Index_Queue
-      return Index_Queue_Type;
-
-      procedure Enqueue (
-         Obj : in out Index_Queue_Type;
-         Idx   :      Pool_Index_Type);
-
-      function Head (Obj : Index_Queue_Type)
-      return Pool_Index_Type;
-
-      procedure Dequeue_Head (Obj : in out Index_Queue_Type);
-
-      function Empty (Obj : Index_Queue_Type)
-      return Boolean;
-
-      function Full (Obj : Index_Queue_Type)
-      return Boolean;
-
-      function Avail (
-         Obj : Index_Queue_Type;
-         Num : Natural)
-      return Boolean;
-
-   private
-
-      type Index_Queue_Type is record
-         Head    : Queue_Index_Type;
-         Tail    : Queue_Index_Type;
-         Used    : Used_Type;
-         Indices : Item_Indices_Type;
-      end record;
-
-   end Index_Queue;
-
    type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
 
    type Item_Type is record
@@ -163,9 +120,14 @@ private
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
 
+   type Index_Queue_Index_Type is range 0 .. Pool_Index_Type'Range_Length;
+
+   package Index_Queue is new Generic_Index_Queue (
+      Pool_Index_Type, Index_Queue_Index_Type);
+
    type Object_Type is record
       Items   : Items_Type;
-      Indices : Index_Queue.Index_Queue_Type;
+      Indices : Index_Queue.Queue_Type;
    end record;
 
    --

@@ -261,7 +261,7 @@ is
          Obj.Items (Idx).State := Pending;
       else
          Obj.Items (Idx).State := Complete;
-         Index_Queue.Dequeue_Head (Obj.Indices);
+         Index_Queue.Dequeue (Obj.Indices, Idx);
       end if;
 
    end Mark_Generated_Primitive_Complete;
@@ -347,73 +347,7 @@ is
    function Initialized_Object
    return Object_Type
    is (
-      Items => (others => Item_Invalid),
-      Indices => Index_Queue.Empty_Index_Queue);
-
-   --
-   --  Index_Queue
-   --
-   package body Index_Queue
-   with SPARK_Mode
-   is
-      function Empty_Index_Queue
-      return Index_Queue_Type
-      is (
-         Head   => Queue_Index_Type'First,
-         Tail   => Queue_Index_Type'First,
-         Used   => Used_Type'First,
-         Indices => (others => Pool_Index_Type'First));
-
-      procedure Enqueue (
-         Obj : in out Index_Queue_Type;
-         Idx :        Pool_Index_Type)
-      is
-      begin
-         Obj.Indices (Obj.Tail) := Idx;
-
-         if Obj.Tail < Queue_Index_Type'Last then
-            Obj.Tail := Queue_Index_Type'Succ (Obj.Tail);
-         else
-            Obj.Tail := Queue_Index_Type'First;
-         end if;
-         Obj.Used := Used_Type'Succ (Obj.Used);
-      end Enqueue;
-
-      function Head (Obj : Index_Queue_Type)
-      return Pool_Index_Type
-      is (Obj.Indices (Obj.Head));
-
-      procedure Dequeue_Head (Obj : in out Index_Queue_Type)
-      is
-      begin
-         if Obj.Head < Queue_Index_Type'Last then
-            Obj.Head := Queue_Index_Type'Succ (Obj.Head);
-         else
-            Obj.Head := Queue_Index_Type'First;
-         end if;
-         Obj.Used := Used_Type'Pred (Obj.Used);
-      end Dequeue_Head;
-
-      function Empty (Obj : Index_Queue_Type)
-      return Boolean
-      is (Obj.Used = Used_Type'First);
-
-      function Full (Obj : Index_Queue_Type)
-      return Boolean
-      is (Obj.Used = Used_Type'Last);
-
-      function Avail (
-         Obj : Index_Queue_Type;
-         Num : Natural)
-      return Boolean
-      is
-      begin
-         if Obj.Used <= Used_Type'Last - Used_Type (Num) then
-            return True;
-         else
-            return False;
-         end if;
-      end Avail;
-   end Index_Queue;
+      Items   => (others => Item_Invalid),
+      Indices => Index_Queue.Empty_Queue);
 
 end CBE.Pool;
