@@ -204,6 +204,13 @@ private
    return Boolean;
 
    --
+   --  Write_Back_One_Dirty_Slot
+   --
+   procedure Write_Back_One_Dirty_Slot (
+      Slots      : in out Slots_Type;
+      Progress   : in out Boolean);
+
+   --
    --  Submit_Primitive_Assertions
    --
    procedure Submit_Primitive_Assertions (

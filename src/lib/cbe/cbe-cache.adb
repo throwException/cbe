@@ -252,6 +252,37 @@ is
    end Clean_Slot_Evictable;
 
    --
+   --  Write_Back_One_Dirty_Slot
+   --
+   procedure Write_Back_One_Dirty_Slot (
+      Slots    : in out Slots_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      Find_Dirty_Slot :
+      for Idx in Slots'Range loop
+
+         if Slots (Idx).State = Dirty then
+
+            Slots (Idx).State := Write_Generated;
+            Slots (Idx).Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Write, False, Primitive.Tag_Cache_Blk_IO,
+                  Block_Number_Type (Slots (Idx).PBA),
+                  Primitive.Index_Type (Idx));
+
+            Progress := True;
+            return;
+
+         end if;
+
+      end loop Find_Dirty_Slot;
+
+      raise Program_Error;
+
+   end Write_Back_One_Dirty_Slot;
+
+   --
    --  Job_Execute_Sync
    --
    procedure Job_Execute_Sync (
@@ -261,7 +292,7 @@ is
    is
       Dirty_Slot_Found : Boolean := False;
    begin
-      Find_Dirty_Slot :
+      Find_Dirty_Slots :
       for Idx in Slots'Range loop
 
          case Slots (Idx).State is
@@ -286,7 +317,7 @@ is
 
          end case;
 
-      end loop Find_Dirty_Slot;
+      end loop Find_Dirty_Slots;
 
       if not Dirty_Slot_Found then
 
@@ -309,6 +340,7 @@ is
       Job_Data   : in out Block_Data_Type;
       Progress   : in out Boolean)
    is
+      Write_Back_In_Progress : Boolean := False;
    begin
       Find_Matching_Slot :
       for Idx in Slots'Range loop
@@ -371,15 +403,21 @@ is
 
             end if;
 
-         when
-            Dirty | Read_Generated | Read_In_Progress | Write_Generated |
-            Write_In_Progress
-         =>
+         when Write_Generated | Write_In_Progress =>
+
+            Write_Back_In_Progress := True;
+
+         when Dirty | Read_Generated | Read_In_Progress =>
+
             null;
 
          end case;
 
       end loop Find_Evictable_Slot;
+
+      if not Write_Back_In_Progress then
+         Write_Back_One_Dirty_Slot (Slots, Progress);
+      end if;
 
    end Job_Execute_Read;
 
@@ -394,6 +432,7 @@ is
       Job_Data   :        Block_Data_Type;
       Progress   : in out Boolean)
    is
+      Write_Back_In_Progress : Boolean := False;
    begin
       Find_Matching_Slot :
       for Idx in Slots'Range loop
@@ -456,15 +495,21 @@ is
 
             end if;
 
-         when
-            Dirty | Read_Generated | Read_In_Progress | Write_Generated |
-            Write_In_Progress
-         =>
+         when Write_Generated | Write_In_Progress =>
+
+            Write_Back_In_Progress := True;
+
+         when Dirty | Read_Generated | Read_In_Progress =>
+
             null;
 
          end case;
 
       end loop Find_Evictable_Slot;
+
+      if not Write_Back_In_Progress then
+         Write_Back_One_Dirty_Slot (Slots, Progress);
+      end if;
 
    end Job_Execute_Write;
 
