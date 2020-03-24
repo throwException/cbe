@@ -877,4 +877,19 @@ is
       end if;
    end Advance_Index;
 
+   --
+   --  Op_From_Request_Op
+   --
+   function Op_From_Request_Op (Input : Request_Operation_Type)
+   return Operation_Type
+   is
+   begin
+      case Input is
+      when Read => return Read;
+      when Write => return Write;
+      when Sync => return Sync;
+      when others => raise Program_Error;
+      end case;
+   end Op_From_Request_Op;
+
 end CBE;

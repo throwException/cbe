@@ -83,9 +83,11 @@ is
    type Number_Of_Blocks_Type is range 0 .. 2**32 - 1;
    type Snapshot_ID_Type is range 0 .. 2**32 - 1;
    type Key_ID_Type is range 0 .. 2**32 - 1;
-   type Operation_Type is
-      (Read, Write, Sync,
-       Create_Snapshot, Discard_Snapshot);
+
+   type Request_Operation_Type is (
+      Read, Write, Sync, Create_Snapshot, Discard_Snapshot);
+
+   type Operation_Type is (Read, Write, Sync);
 
    type Hash_Index_Type is range 0 .. Hash_Size_Bytes - 1;
    type Hash_Type is array (Hash_Index_Type) of Byte_Type;
@@ -538,5 +540,22 @@ private
       Valid   : Boolean;
       Content : Index_Type;
    end record;
+
+   --
+   --  Op_To_Request_Op
+   --
+   function Op_To_Request_Op (Input : Operation_Type)
+   return Request_Operation_Type
+   is (
+      case Input is
+      when Read => Read,
+      when Write => Write,
+      when Sync => Sync);
+
+   --
+   --  Op_From_Request_Op
+   --
+   function Op_From_Request_Op (Input : Request_Operation_Type)
+   return Operation_Type;
 
 end CBE;

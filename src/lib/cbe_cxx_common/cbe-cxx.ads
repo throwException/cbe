@@ -108,7 +108,7 @@ is
    function CXX_Success_To_SPARK (Input : CXX_Success_Type)
    return Request.Success_Type;
 
-   function CXX_Operation_From_SPARK (Input : Operation_Type)
+   function CXX_Operation_From_SPARK (Input : Request_Operation_Type)
    return CXX_Operation_Type
    is (
       case Input is
@@ -120,7 +120,7 @@ is
 
    function CXX_Request_Valid_To_SPARK (
       Req : CXX_Request_Type;
-      Op  : Operation_Type)
+      Op  : Request_Operation_Type)
    return Request.Object_Type
    is (
       Request.Valid_Object (

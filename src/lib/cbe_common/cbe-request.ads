@@ -30,7 +30,7 @@ is
    --  Valid_Object
    --
    function Valid_Object (
-      Op     : Operation_Type;
+      Op     : Request_Operation_Type;
       Succ   : Success_Type;
       Blk_Nr : Block_Number_Type;
       Off    : Offset_Type;
@@ -65,7 +65,7 @@ is
    return Boolean;
 
    function Operation (Obj : Object_Type)
-   return Operation_Type
+   return Request_Operation_Type
    with Pre => (Valid (Obj));
 
    function Success (Obj : Object_Type)
@@ -104,7 +104,7 @@ private
    --
    type Object_Type is record
       Valid        : Boolean;
-      Operation    : Operation_Type;
+      Operation    : Request_Operation_Type;
       Success      : Success_Type;
       Block_Number : Block_Number_Type;
       Offset       : Offset_Type;

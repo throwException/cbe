@@ -31,7 +31,7 @@ is
    --  Valid_Object
    --
    function Valid_Object (
-      Op     : Operation_Type;
+      Op     : Request_Operation_Type;
       Succ   : Request.Success_Type;
       Blk_Nr : Block_Number_Type;
       Off    : Offset_Type;
@@ -66,7 +66,7 @@ is
    function Valid       (Obj : Object_Type) return Boolean
    is (Obj.Valid);
 
-   function Operation   (Obj : Object_Type) return Operation_Type
+   function Operation   (Obj : Object_Type) return Request_Operation_Type
    is (Obj.Operation);
 
    function Success     (Obj : Object_Type) return Success_Type

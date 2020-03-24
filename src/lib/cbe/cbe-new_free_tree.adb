@@ -392,10 +392,6 @@ is
          Obj.Cache_Request.State := Complete;
 
          case Primitive.Operation (Obj.Cache_Request.Prim) is
-            when Create_Snapshot | Discard_Snapshot =>
-
-               raise Program_Error;
-
             when Sync =>
 
                null;

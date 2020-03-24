@@ -77,7 +77,7 @@ is
 
          return
             Primitive.Valid_Object (
-               Request.Operation (Itm.Req),
+               Read,
                Request.Success (Itm.Req),
                Primitive.Tag_Pool_Discard_Snap,
                Idx,
@@ -112,7 +112,7 @@ is
 
          return
             Primitive.Valid_Object (
-               Request.Operation (Itm.Req),
+               Read,
                Request.Success (Itm.Req),
                Primitive.Tag_Pool_Create_Snap,
                Idx,
@@ -147,7 +147,7 @@ is
 
          return
             Primitive.Valid_Object (
-               Request.Operation (Itm.Req),
+               Sync,
                Request.Success (Itm.Req),
                Primitive.Tag_Pool_Sync,
                Idx,
@@ -183,7 +183,7 @@ is
 
          return
             Primitive.Valid_Object (
-               Request.Operation (Itm.Req),
+               Op_From_Request_Op (Request.Operation (Itm.Req)),
                Request.Success (Itm.Req),
                Primitive.Tag_Pool_VBD,
                Idx,

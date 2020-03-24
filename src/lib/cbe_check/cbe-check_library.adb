@@ -440,13 +440,13 @@ is
       begin
          if Primitive.Valid (Prim) then
             Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.Blk_IO, Prim);
-            Req      := Request.Valid_Object (
-               Op     => Primitive.Operation (Prim),
-               Succ   => False,
+            Req := Request.Valid_Object (
+               Op => Op_To_Request_Op (Primitive.Operation (Prim)),
+               Succ => False,
                Blk_Nr => Primitive.Block_Number (Prim),
-               Off    => 0,
-               Cnt    => 1,
-               Tg     => 0);
+               Off => 0,
+               Cnt => 1,
+               Tg => 0);
          end if;
       end;
    end Has_IO_Request;
