@@ -163,7 +163,7 @@ is
    --  Valid_Object
    --
    function Valid_Object (
-      Op     : Operation_Type;
+      Op     : Primitive_Operation_Type;
       Succ   : Request.Success_Type;
       Tg     : Tag_Type;
       Pl_Idx : Pool_Index_Type;
@@ -183,7 +183,7 @@ is
    --  Valid_Object_No_Pool_Idx
    --
    function Valid_Object_No_Pool_Idx (
-      Op     : Operation_Type;
+      Op     : Primitive_Operation_Type;
       Succ   : Request.Success_Type;
       Tg     : Tag_Type;
       Blk_Nr : Block_Number_Type;
@@ -214,7 +214,7 @@ is
 
    function Valid (Obj : Object_Type) return Boolean;
 
-   function Operation (Obj : Object_Type) return Operation_Type
+   function Operation (Obj : Object_Type) return Primitive_Operation_Type
    with Pre => (Valid (Obj));
 
    function Success (Obj : Object_Type) return Request.Success_Type
@@ -238,17 +238,17 @@ is
 
    procedure Success (
       Obj   : in out Object_Type;
-      Value : Request.Success_Type)
+      Value :        Request.Success_Type)
    with Pre => (Valid (Obj));
 
    procedure Block_Number (
       Obj   : in out Object_Type;
-      Value : Block_Number_Type)
+      Value :        Block_Number_Type)
    with Pre => (Valid (Obj));
 
    procedure Operation (
       Obj   : in out Object_Type;
-      Value : Operation_Type)
+      Value :        Primitive_Operation_Type)
    with Pre => (Valid (Obj));
 
    function To_String (Obj : Object_Type) return String;
@@ -312,7 +312,7 @@ private
    --
    type Object_Type is record
       Valid         : Boolean;
-      Operation     : Operation_Type;
+      Operation     : Primitive_Operation_Type;
       Success       : Request.Success_Type;
       Tag           : Tag_Type;
       Pool_Idx_Slot : Pool_Index_Slot_Type;

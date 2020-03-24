@@ -878,10 +878,10 @@ is
    end Advance_Index;
 
    --
-   --  Op_From_Request_Op
+   --  Prim_Op_From_Req_Op
    --
-   function Op_From_Request_Op (Input : Request_Operation_Type)
-   return Operation_Type
+   function Prim_Op_From_Req_Op (Input : Request_Operation_Type)
+   return Primitive_Operation_Type
    is
    begin
       case Input is
@@ -890,6 +890,6 @@ is
       when Sync => return Sync;
       when others => raise Program_Error;
       end case;
-   end Op_From_Request_Op;
+   end Prim_Op_From_Req_Op;
 
 end CBE;

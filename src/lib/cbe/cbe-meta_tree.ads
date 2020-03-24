@@ -208,7 +208,7 @@ private
 
    function New_Cache_Request (
       PBA        : Physical_Block_Address_Type;
-      Op         : Operation_Type;
+      Op         : Primitive_Operation_Type;
       Level      : Tree_Level_Index_Type;
       Block_Data : Block_Data_Type)
    return Cache_Request_Type

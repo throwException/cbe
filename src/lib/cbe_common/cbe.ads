@@ -87,7 +87,7 @@ is
    type Request_Operation_Type is (
       Read, Write, Sync, Create_Snapshot, Discard_Snapshot);
 
-   type Operation_Type is (Read, Write, Sync);
+   type Primitive_Operation_Type is (Read, Write, Sync);
 
    type Hash_Index_Type is range 0 .. Hash_Size_Bytes - 1;
    type Hash_Type is array (Hash_Index_Type) of Byte_Type;
@@ -542,9 +542,9 @@ private
    end record;
 
    --
-   --  Op_To_Request_Op
+   --  Prim_Op_To_Req_Op
    --
-   function Op_To_Request_Op (Input : Operation_Type)
+   function Prim_Op_To_Req_Op (Input : Primitive_Operation_Type)
    return Request_Operation_Type
    is (
       case Input is
@@ -553,9 +553,9 @@ private
       when Sync => Sync);
 
    --
-   --  Op_From_Request_Op
+   --  Prim_Op_From_Request_Op
    --
-   function Op_From_Request_Op (Input : Request_Operation_Type)
-   return Operation_Type;
+   function Prim_Op_From_Req_Op (Input : Request_Operation_Type)
+   return Primitive_Operation_Type;
 
 end CBE;

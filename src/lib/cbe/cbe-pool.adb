@@ -183,7 +183,7 @@ is
 
          return
             Primitive.Valid_Object (
-               Op_From_Request_Op (Request.Operation (Itm.Req)),
+               Prim_Op_From_Req_Op (Request.Operation (Itm.Req)),
                Request.Success (Itm.Req),
                Primitive.Tag_Pool_VBD,
                Idx,

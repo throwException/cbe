@@ -70,7 +70,7 @@ is
    --  Valid_Object
    --
    function Valid_Object (
-      Op     : Operation_Type;
+      Op     : Primitive_Operation_Type;
       Succ   : Request.Success_Type;
       Tg     : Tag_Type;
       Pl_Idx : Pool_Index_Type;
@@ -96,7 +96,7 @@ is
    --  Valid_Object_No_Pool_Idx
    --
    function Valid_Object_No_Pool_Idx (
-      Op     : Operation_Type;
+      Op     : Primitive_Operation_Type;
       Succ   : Request.Success_Type;
       Tg     : Tag_Type;
       Blk_Nr : Block_Number_Type;
@@ -295,7 +295,7 @@ is
    function Valid (Obj : Object_Type) return Boolean
    is (Obj.Valid);
 
-   function Operation (Obj : Object_Type) return Operation_Type
+   function Operation (Obj : Object_Type) return Primitive_Operation_Type
    is (Obj.Operation);
 
    function Success (Obj : Object_Type) return Request.Success_Type
@@ -325,7 +325,9 @@ is
    is
    begin Obj.Block_Number := Value; end Block_Number;
 
-   procedure Operation (Obj : in out Object_Type; Value : Operation_Type)
+   procedure Operation (
+      Obj : in out Object_Type;
+      Value : Primitive_Operation_Type)
    is
    begin Obj.Operation := Value; end Operation;
 
