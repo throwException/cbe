@@ -13,7 +13,6 @@
 #include <base/component.h>
 #include <base/heap.h>
 #include <base/thread.h>
-#include <block/request_stream.h>
 #include <root/root.h>
 #include <terminal_session/connection.h>
 #include <util/bit_allocator.h>
@@ -42,132 +41,11 @@
 
 using namespace Genode;
 
-static char const *to_string(Block::Operation::Type type)
-{
-	struct Unknown_operation_type : Exception { };
-	switch (type) {
-	case Block::Operation::Type::INVALID: return "invalid";
-	case Block::Operation::Type::READ: return "read";
-	case Block::Operation::Type::WRITE: return "write";
-	case Block::Operation::Type::SYNC: return "sync";
-	case Block::Operation::Type::TRIM: return "trim";
-	}
-	throw Unknown_operation_type();
-}
-
-static char const *to_string(Cbe::Request::Operation op)
-{
-	struct Unknown_operation_type : Exception { };
-	switch (op) {
-	case Cbe::Request::Operation::INVALID: return "invalid";
-	case Cbe::Request::Operation::READ: return "read";
-	case Cbe::Request::Operation::WRITE: return "write";
-	case Cbe::Request::Operation::SYNC: return "sync";
-	}
-	throw Unknown_operation_type();
-}
-
 namespace Cbe {
 
 	struct Block_session_component;
 	struct Main;
-
-	/**
-	 * Convert CBE primitive to CBE request
-	 *
-	 * \param p refrence to primitive
-	 *
-	 * \return Cbe::Request object
-	 */
-	static inline Cbe::Request convert_from(Cbe::Primitive const &p)
-	{
-		auto convert_op = [&] (Cbe::Primitive::Operation o) {
-			switch (o) {
-			case Cbe::Primitive::Operation::INVALID: return Cbe::Request::Operation::INVALID;
-			case Cbe::Primitive::Operation::READ:    return Cbe::Request::Operation::READ;
-			case Cbe::Primitive::Operation::WRITE:   return Cbe::Request::Operation::WRITE;
-			case Cbe::Primitive::Operation::SYNC:    return Cbe::Request::Operation::SYNC;
-			}
-			return Cbe::Request::Operation::INVALID;
-		};
-		return Cbe::Request {
-			.operation    = convert_op(p.operation),
-			.success      = Cbe::Request::Success::FALSE,
-			.block_number = p.block_number,
-			.offset       = 0,
-			.count        = 1,
-			.tag          = 0,
-		};
-	}
-
-	/**
-	 * Convert CBE request
-	 *
-	 * \param r  reference to CBE request object
-	 *
-	 * \return  Block request object
-	 */
-	static inline Block::Request convert_from(Cbe::Request const &r)
-	{
-		auto convert_op = [&] (Cbe::Request::Operation o) {
-			switch (o) {
-			case Cbe::Request::Operation::INVALID: return Block::Operation::Type::INVALID;
-			case Cbe::Request::Operation::READ:    return Block::Operation::Type::READ;
-			case Cbe::Request::Operation::WRITE:   return Block::Operation::Type::WRITE;
-			case Cbe::Request::Operation::SYNC:    return Block::Operation::Type::SYNC;
-			}
-			return Block::Operation::Type::INVALID;
-		};
-		auto convert_success = [&] (Cbe::Request::Success s) {
-			return s == Cbe::Request::Success::TRUE ? true : false;
-		};
-		return Block::Request {
-			.operation = {
-				.type         = convert_op(r.operation),
-				.block_number = r.block_number,
-				.count        = r.count,
-			},
-			.success   = convert_success(r.success),
-			.offset    = (Block::off_t)r.offset,
-			.tag       = { .value = r.tag },
-		};
-	}
-
-	/**
-	 * Convert Block request
-	 *
-	 * \param r  reference to Block request object
-	 *
-	 * \return  CBE request object
-	 */
-	static inline Cbe::Request convert_to(Block::Request const &r)
-	{
-		auto convert_op = [&] (Block::Operation::Type t) {
-			switch (t) {
-			case Block::Operation::Type::INVALID: return Cbe::Request::Operation::INVALID;
-			case Block::Operation::Type::READ:    return Cbe::Request::Operation::READ;
-			case Block::Operation::Type::WRITE:   return Cbe::Request::Operation::WRITE;
-			case Block::Operation::Type::SYNC:    return Cbe::Request::Operation::SYNC;
-			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID; // XXX fix
-			}
-			return Cbe::Request::Operation::INVALID;
-		};
-		auto convert_success = [&] (bool success) {
-			return success ? Cbe::Request::Success::TRUE : Cbe::Request::Success::FALSE;
-		};
-
-		return Cbe::Request {
-			.operation    = convert_op(r.operation.type),
-			.success      = convert_success(r.success),
-			.block_number = r.operation.block_number,
-			.offset       = (Genode::uint64_t)r.offset,
-			.count        = (Genode::uint32_t)r.operation.count,
-			.tag          = (Genode::uint32_t)r.tag.value,
-		};
-	}
-
-} /* namespace Cbe */
-
+}
 
 struct Create_snapshot
 {

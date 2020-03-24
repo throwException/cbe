@@ -12,6 +12,7 @@
 /* Genode includes */
 #include <base/stdint.h>
 #include <base/output.h>
+#include <block/request_stream.h>
 
 namespace Cbe {
 
@@ -128,8 +129,16 @@ namespace Cbe {
 	 */
 	struct Request
 	{
-		enum class Operation : uint32_t { INVALID = 0, READ = 1, WRITE = 2, SYNC = 3 };
-		enum class Success   : uint32_t { FALSE = 0, TRUE = 1 };
+		enum class Operation : uint32_t {
+			INVALID = 0,
+			READ = 1,
+			WRITE = 2,
+			SYNC = 3,
+			CREATE_SNAPSHOT = 4,
+			DISCARD_SNAPSHOT = 5
+		};
+
+		enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
 
 		Operation operation;
 		Success   success;
@@ -138,15 +147,23 @@ namespace Cbe {
 		uint32_t  count;
 		uint32_t  tag;
 
-		bool read()  const { return operation == Operation::READ; }
-		bool write() const { return operation == Operation::WRITE; }
-		bool sync()  const { return operation == Operation::SYNC; }
+		bool read()             const { return operation == Operation::READ; }
+		bool write()            const { return operation == Operation::WRITE; }
+		bool sync()             const { return operation == Operation::SYNC; }
+		bool create_snapshot()  const { return operation == Operation::CREATE_SNAPSHOT; }
+		bool discard_snapshot() const { return operation == Operation::DISCARD_SNAPSHOT; }
 
 		bool valid() const
 		{
-			return operation == Operation::READ
-			    || operation == Operation::WRITE
-			    || operation == Operation::SYNC;
+			switch (operation) {
+			case Operation::INVALID         : return false;
+			case Operation::READ            : return true;
+			case Operation::WRITE           : return true;
+			case Operation::SYNC            : return true;
+			case Operation::CREATE_SNAPSHOT : return true;
+			case Operation::DISCARD_SNAPSHOT: return true;
+			}
+			return false;
 		}
 
 		bool equal(Request const &rhs) const
@@ -157,31 +174,8 @@ namespace Cbe {
 		}
 
 		/* debug */
-		void print(Genode::Output &out) const
-		{
-			if (!valid()) {
-				Genode::print(out, "<invalid>");
-				return;
-			}
-			Genode::print(out, "tag: ", tag);
+		void print(Genode::Output &out) const;
 
-			Genode::print(out, " block_number: ", block_number);
-			Genode::print(out, " count: ", count);
-			Genode::print(out, " offset: ", offset);
-			Genode::print(out, " op: ");
-			switch (operation) {
-			case Operation::READ:  Genode::print(out, "READ"); break;
-			case Operation::WRITE: Genode::print(out, "WRITE"); break;
-			case Operation::SYNC:  Genode::print(out, "SYNC"); break;
-			case Operation::INVALID: [[fallthrough]]
-			default: Genode::print(out, "INVALID"); break;
-			}
-			Genode::print(out, " success: ");
-			switch (success) {
-			case Success::FALSE: Genode::print(out, "no"); break;
-			case Success::TRUE:  Genode::print(out, "yes"); break;
-			}
-		}
 	} __attribute__((packed));
 
 
@@ -756,5 +750,154 @@ namespace Cbe {
 	constexpr size_t TYPE_2_PER_BLOCK = BLOCK_SIZE / sizeof (Type_ii_node);
 
 } /* namespace Cbe */
+
+
+char const *to_string(Block::Operation::Type type)
+{
+	struct Unknown_operation_type : Genode::Exception { };
+	switch (type) {
+	case Block::Operation::Type::INVALID: return "invalid";
+	case Block::Operation::Type::READ: return "read";
+	case Block::Operation::Type::WRITE: return "write";
+	case Block::Operation::Type::SYNC: return "sync";
+	case Block::Operation::Type::TRIM: return "trim";
+	}
+	throw Unknown_operation_type();
+}
+
+char const *to_string(Cbe::Request::Operation op)
+{
+	struct Unknown_operation_type : Genode::Exception { };
+	switch (op) {
+	case Cbe::Request::Operation::INVALID: return "invalid";
+	case Cbe::Request::Operation::READ: return "read";
+	case Cbe::Request::Operation::WRITE: return "write";
+	case Cbe::Request::Operation::SYNC: return "sync";
+	case Cbe::Request::Operation::CREATE_SNAPSHOT: return "create_snapshot";
+	case Cbe::Request::Operation::DISCARD_SNAPSHOT: return "discard_snapshot";
+	}
+	throw Unknown_operation_type();
+}
+
+namespace Cbe {
+
+	/**
+	 * Convert CBE primitive to CBE request
+	 *
+	 * \param p refrence to primitive
+	 *
+	 * \return Cbe::Request object
+	 */
+	static inline Cbe::Request convert_from(Cbe::Primitive const &p)
+	{
+		auto convert_op = [&] (Cbe::Primitive::Operation o) {
+			switch (o) {
+			case Cbe::Primitive::Operation::INVALID: return Cbe::Request::Operation::INVALID;
+			case Cbe::Primitive::Operation::READ:    return Cbe::Request::Operation::READ;
+			case Cbe::Primitive::Operation::WRITE:   return Cbe::Request::Operation::WRITE;
+			case Cbe::Primitive::Operation::SYNC:    return Cbe::Request::Operation::SYNC;
+			}
+			return Cbe::Request::Operation::INVALID;
+		};
+		return Cbe::Request {
+			.operation    = convert_op(p.operation),
+			.success      = Cbe::Request::Success::FALSE,
+			.block_number = p.block_number,
+			.offset       = 0,
+			.count        = 1,
+			.tag          = 0,
+		};
+	}
+
+	/**
+	 * Convert CBE request
+	 *
+	 * \param r  reference to CBE request object
+	 *
+	 * \return  Block request object
+	 */
+	static inline Block::Request convert_from(Cbe::Request const &r)
+	{
+		struct Operation_type_not_convertable : Genode::Exception { };
+		auto convert_op = [&] (Cbe::Request::Operation o) {
+			switch (o) {
+			case Cbe::Request::Operation::INVALID:          return Block::Operation::Type::INVALID;
+			case Cbe::Request::Operation::READ:             return Block::Operation::Type::READ;
+			case Cbe::Request::Operation::WRITE:            return Block::Operation::Type::WRITE;
+			case Cbe::Request::Operation::SYNC:             return Block::Operation::Type::SYNC;
+			case Cbe::Request::Operation::CREATE_SNAPSHOT:  throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::DISCARD_SNAPSHOT: throw Operation_type_not_convertable();
+			}
+			return Block::Operation::Type::INVALID;
+		};
+		auto convert_success = [&] (Cbe::Request::Success s) {
+			return s == Cbe::Request::Success::TRUE ? true : false;
+		};
+		return Block::Request {
+			.operation = {
+				.type         = convert_op(r.operation),
+				.block_number = r.block_number,
+				.count        = r.count,
+			},
+			.success   = convert_success(r.success),
+			.offset    = (Block::off_t)r.offset,
+			.tag       = { .value = r.tag },
+		};
+	}
+
+	/**
+	 * Convert Block request
+	 *
+	 * \param r  reference to Block request object
+	 *
+	 * \return  CBE request object
+	 */
+	static inline Cbe::Request convert_to(Block::Request const &r)
+	{
+		auto convert_op = [&] (Block::Operation::Type t) {
+			switch (t) {
+			case Block::Operation::Type::INVALID: return Cbe::Request::Operation::INVALID;
+			case Block::Operation::Type::READ:    return Cbe::Request::Operation::READ;
+			case Block::Operation::Type::WRITE:   return Cbe::Request::Operation::WRITE;
+			case Block::Operation::Type::SYNC:    return Cbe::Request::Operation::SYNC;
+			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID; // XXX fix
+			}
+			return Cbe::Request::Operation::INVALID;
+		};
+		auto convert_success = [&] (bool success) {
+			return success ? Cbe::Request::Success::TRUE : Cbe::Request::Success::FALSE;
+		};
+
+		return Cbe::Request {
+			.operation    = convert_op(r.operation.type),
+			.success      = convert_success(r.success),
+			.block_number = r.operation.block_number,
+			.offset       = (Genode::uint64_t)r.offset,
+			.count        = (Genode::uint32_t)r.operation.count,
+			.tag          = (Genode::uint32_t)r.tag.value,
+		};
+	}
+
+} /* namespace Cbe */
+
+
+void Cbe::Request::print(Genode::Output &out) const
+{
+	if (!valid()) {
+		Genode::print(out, "<invalid>");
+		return;
+	}
+	Genode::print(out, "tag: ", tag);
+
+	Genode::print(out, " block_number: ", block_number);
+	Genode::print(out, " count: ", count);
+	Genode::print(out, " offset: ", offset);
+	Genode::print(out, " op: ", to_string (operation));
+	Genode::print(out, " success: ");
+	switch (success) {
+	case Success::FALSE: Genode::print(out, "no"); break;
+	case Success::TRUE:  Genode::print(out, "yes"); break;
+	}
+}
 
 #endif /* _CBE_TYPES_H_ */
