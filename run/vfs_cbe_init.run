@@ -26,8 +26,6 @@ exec rm -rf var/libcache/cbe
 exec rm -rf var/libcache/cbe_cxx
 exec rm -rf var/libcache/cbe_init
 exec rm -rf var/libcache/cbe_init_cxx
-exec rm -rf var/libcache/external_crypto_init
-exec rm -rf var/libcache/external_crypto_init_cxx
 exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
 
@@ -36,7 +34,6 @@ append build_components {
 	app/cbe_init
 	server/log_terminal
 	server/report_rom
-	server/cbe
 	server/lx_block
 	app/block_tester
 }
