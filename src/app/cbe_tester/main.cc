@@ -1091,7 +1091,6 @@ class Cbe::Main
 
 		void _execute_cbe (bool &progress)
 		{
-			if (_state == INVALID || _state == CBE)
 			_block_session->with_requests([&] (Block::Request request) {
 				using namespace Genode;
 
