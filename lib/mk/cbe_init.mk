@@ -1,4 +1,4 @@
-LIBS    += spark sha256_4k cbe_common
+LIBS    += spark sha256_4k cbe_common cbe_cxx_common
 
 INC_DIR += $(REP_DIR)/src/lib/cbe_init
 

@@ -1,4 +1,4 @@
-LIBS += spark aes_cbc_4k
+LIBS += spark aes_cbc_4k cbe_cxx_common
 
 INC_DIR += $(REP_DIR)/src/lib/cbe_dump
 INC_DIR += $(REP_DIR)/src/lib/cbe_common

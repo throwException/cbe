@@ -15,22 +15,22 @@ with SPARK_Mode
 is
    pragma Pure;
 
-   type CXX_UInt8_Type           is range 0 .. 2**8  - 1 with Size => 1 * 8;
-   type CXX_UInt32_Type          is range 0 .. 2**32 - 1 with Size => 4 * 8;
-   type CXX_UInt64_Type          is mod        2**64     with Size => 8 * 8;
-   type CXX_Bool_Type            is range 0 .. 1         with Size => 1 * 8;
-   type CXX_Operation_Type       is range 0 .. 5         with Size => 4 * 8;
-   type CXX_Success_Type         is range 0 .. 1         with Size => 4 * 8;
-   type CXX_Object_Size_Type     is new CXX_UInt32_Type;
-   type CXX_Block_Number_Type    is new CXX_UInt64_Type;
-   type CXX_Timestamp_Type       is new CXX_UInt64_Type;
-   type CXX_Tag_Type             is new CXX_UInt32_Type;
-   type CXX_Block_Offset_Type    is new CXX_UInt64_Type;
-   type CXX_Block_Count_Type     is new CXX_UInt32_Type;
-   type CXX_Primitive_Index_Type is new CXX_UInt64_Type;
-   type CXX_Snapshot_ID_Type     is new CXX_UInt64_Type;
-   type CXX_Token_Type           is new CXX_UInt64_Type;
+   type CXX_UInt8_Type  is range 0 .. 2**8  - 1 with Size => 1 * 8;
+   type CXX_UInt32_Type is range 0 .. 2**32 - 1 with Size => 4 * 8;
+   type CXX_UInt64_Type is mod        2**64     with Size => 8 * 8;
 
+   type CXX_Bool_Type                 is new CXX_UInt8_Type;
+   type CXX_Operation_Type            is new CXX_UInt32_Type;
+   type CXX_Success_Type              is new CXX_UInt32_Type;
+   type CXX_Object_Size_Type          is new CXX_UInt32_Type;
+   type CXX_Block_Number_Type         is new CXX_UInt64_Type;
+   type CXX_Timestamp_Type            is new CXX_UInt64_Type;
+   type CXX_Tag_Type                  is new CXX_UInt32_Type;
+   type CXX_Block_Offset_Type         is new CXX_UInt64_Type;
+   type CXX_Block_Count_Type          is new CXX_UInt32_Type;
+   type CXX_Primitive_Index_Type      is new CXX_UInt64_Type;
+   type CXX_Snapshot_ID_Type          is new CXX_UInt64_Type;
+   type CXX_Token_Type                is new CXX_UInt64_Type;
    type CXX_Tree_Level_Index_Type     is new CXX_UInt64_Type;
    type CXX_Tree_Degree_Type          is new CXX_UInt64_Type;
    type CXX_Tree_Number_Of_Leafs_Type is new CXX_UInt64_Type;
@@ -89,12 +89,11 @@ is
       when False => 0,
       when True  => 1);
 
+   --
+   --  CXX_Bool_To_SPARK
+   --
    function CXX_Bool_To_SPARK (Input : CXX_Bool_Type)
-   return Boolean
-   is (
-      case Input is
-      when 0 => False,
-      when 1 => True);
+   return Boolean;
 
    function CXX_Success_From_SPARK (Input : Request.Success_Type)
    return CXX_Success_Type
@@ -103,12 +102,11 @@ is
       when False => 0,
       when True  => 1);
 
+   --
+   --  CXX_Success_To_SPARK
+   --
    function CXX_Success_To_SPARK (Input : CXX_Success_Type)
-   return Request.Success_Type
-   is (
-      case Input is
-      when 0 => False,
-      when 1 => True);
+   return Request.Success_Type;
 
    function CXX_Operation_From_SPARK (Input : Operation_Type)
    return CXX_Operation_Type
@@ -133,16 +131,11 @@ is
          Request.Count_Type   (Req.Count),
          Request.Tag_Type     (Req.Tag)));
 
+   --
+   --  CXX_Request_To_SPARK
+   --
    function CXX_Request_To_SPARK (Input : CXX_Request_Type)
-   return Request.Object_Type
-   is (
-      case Input.Operation is
-      when 0 => Request.Invalid_Object,
-      when 1 => CXX_Request_Valid_To_SPARK (Input, Read),
-      when 2 => CXX_Request_Valid_To_SPARK (Input, Write),
-      when 3 => CXX_Request_Valid_To_SPARK (Input, Sync),
-      when 4 => CXX_Request_Valid_To_SPARK (Input, Create_Snapshot),
-      when 5 => CXX_Request_Valid_To_SPARK (Input, Discard_Snapshot));
+   return Request.Object_Type;
 
    function CXX_Request_From_SPARK (Obj : Request.Object_Type)
    return CXX_Request_Type
