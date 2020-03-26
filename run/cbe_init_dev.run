@@ -89,6 +89,7 @@ append config {
 	<start name="cbe_init">
 		<resource name="RAM" quantum="4M"/>
 		<config>
+			<key id="7" />
 			<virtual-block-device
 				nr_of_levels="4"
 				nr_of_children="64"

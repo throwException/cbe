@@ -682,7 +682,8 @@ struct Cbe::Block_session_component
 		});
 
 		log("initialize started:  vbd:",
-		    " lvls ", _test_in_progress->initialize->vbd_nr_of_lvls(),
+		    " key ", _test_in_progress->initialize->key_id(),
+		    ", lvls ", _test_in_progress->initialize->vbd_nr_of_lvls(),
 		    ", degr ", _test_in_progress->initialize->vbd_nr_of_children(),
 		    ", leafs ", _test_in_progress->initialize->vbd_nr_of_leafs(),
 		    "  ft:",
@@ -1568,6 +1569,7 @@ class Cbe::Main
 						Cbe::Request(
 							Cbe::Request::Operation::READ,
 							Cbe::Request::Success::FALSE, 0, 0, 0, 0),
+						cfg.key_id(),
 						cfg.vbd_nr_of_lvls() - 1,
 						cfg.vbd_nr_of_children(),
 						cfg.vbd_nr_of_leafs(),

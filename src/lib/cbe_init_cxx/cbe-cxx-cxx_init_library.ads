@@ -40,6 +40,7 @@ is
    procedure Submit_Client_Request (
       Obj             : in out Init_Library.Object_Type;
       Req             :        CXX_Request_Type;
+      Key_ID          :        CXX_Key_ID_Type;
       VBD_Max_Lvl_Idx :        CXX_Tree_Level_Index_Type;
       VBD_Degree      :        CXX_Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        CXX_Tree_Number_Of_Leafs_Type;
@@ -50,7 +51,7 @@ is
       Export,
       Convention    => C,
       External_Name =>
-         "_ZN8Cbe_init7Library21submit_client_requestERKN3Cbe7RequestEyyyyyy";
+         "_ZN8Cbe_init7Library21submit_client_requestERKN3Cbe7RequestEjyyyyyy";
 
    function Peek_Completed_Client_Request (Obj : Init_Library.Object_Type)
    return CXX_Request_Type

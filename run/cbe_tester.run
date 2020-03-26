@@ -95,6 +95,8 @@ append config {
 			<tests>
 
 				<initialize>
+					<key id="12" />
+
 					<virtual-block-device
 						nr_of_levels="3"
 						nr_of_children="64"

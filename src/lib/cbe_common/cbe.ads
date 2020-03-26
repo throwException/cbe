@@ -240,7 +240,23 @@ is
       ID    : Key_ID_Type;
    end record;
 
+   --
+   --  Key_ID_Invalid
+   --
+   function Key_ID_Invalid
+   return Key_ID_Type
+   is (Key_ID_Type'First);
+
+   --
+   --  Key_Invalid
+   --
    function Key_Invalid
+   return Key_Type;
+
+   --
+   --  Key_Valid
+   --
+   function Key_Valid (ID : Key_ID_Type)
    return Key_Type;
 
    type Keys_Index_Type is range 0 .. Superblock_Nr_Of_Keys - 1;

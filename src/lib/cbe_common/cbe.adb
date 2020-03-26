@@ -191,15 +191,34 @@ is
    return String
    is ("</t1>");
 
+   --
+   --  Key_Invalid
+   --
    function Key_Invalid
    return Key_Type
    is
       Result : Key_Type;
    begin
       Result.Value := (others => Byte_Type'First);
-      Result.ID    := Key_ID_Type'First;
+      Result.ID    := Key_ID_Invalid;
       return Result;
    end Key_Invalid;
+
+   --
+   --  Key_Valid
+   --
+   function Key_Valid (ID : Key_ID_Type)
+   return Key_Type
+   is
+      Result : Key_Type;
+   begin
+      if ID = Key_ID_Invalid then
+         raise Program_Error;
+      end if;
+      Result.Value := (others => Byte_Type'First);
+      Result.ID    := ID;
+      return Result;
+   end Key_Valid;
 
    function Superblock_Valid (SB : Superblock_Type)
    return Boolean

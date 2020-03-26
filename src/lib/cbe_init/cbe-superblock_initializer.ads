@@ -25,6 +25,7 @@ is
    procedure Submit_Primitive (
       Obj             : in out Object_Type;
       Prim            :        Primitive.Object_Type;
+      Key_ID          :        Key_ID_Type;
       VBD_Max_Lvl_Idx :        Tree_Level_Index_Type;
       VBD_Degree      :        Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
@@ -122,6 +123,7 @@ private
       SB_Slot_State    : SB_Slot_State_Type;
       SB_Slot_Idx      : Superblocks_Index_Type;
       SB_Slot          : Superblock_Type;
+      Key_ID           : Key_ID_Type;
       VBD              : Type_1_Node_Type;
       VBD_Max_Lvl_Idx  : Tree_Level_Index_Type;
       VBD_Degree       : Tree_Degree_Type;

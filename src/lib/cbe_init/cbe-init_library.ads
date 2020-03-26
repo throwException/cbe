@@ -30,6 +30,7 @@ is
    procedure Submit_Client_Request (
       Obj             : in out Object_Type;
       Req             :        Request.Object_Type;
+      Key_ID          :        Key_ID_Type;
       VBD_Max_Lvl_Idx :        Tree_Level_Index_Type;
       VBD_Degree      :        Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;

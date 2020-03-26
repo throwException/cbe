@@ -47,10 +47,11 @@ is
          end if;
       end loop For_Snapshots;
 
-      For_Keys :
-      for Idx in Keys_Index_Type loop
+      SB.Keys (Keys_Index_Type'First) := Key_Valid (Obj.Key_ID);
+      For_Keys_Except_First :
+      for Idx in Keys_Index_Type'First + 1 .. Keys_Index_Type'Last loop
          SB.Keys (Idx) := Key_Invalid;
-      end loop For_Keys;
+      end loop For_Keys_Except_First;
 
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
@@ -101,6 +102,7 @@ is
    procedure Submit_Primitive (
       Obj             : in out Object_Type;
       Prim            :        Primitive.Object_Type;
+      Key_ID          :        Key_ID_Type;
       VBD_Max_Lvl_Idx :        Tree_Level_Index_Type;
       VBD_Degree      :        Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
@@ -117,6 +119,7 @@ is
       end if;
       Obj.Submitted_Prim := Prim;
       Obj.SB_Slot_State := Init;
+      Obj.Key_ID := Key_ID;
       Obj.VBD_Max_Lvl_Idx := VBD_Max_Lvl_Idx;
       Obj.VBD_Degree := VBD_Degree;
       Obj.VBD_Nr_Of_Leafs := VBD_Nr_Of_Leafs;

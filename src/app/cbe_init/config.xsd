@@ -19,6 +19,12 @@
 		<xs:complexType>
 			<xs:choice minOccurs="0" maxOccurs="unbounded">
 
+				<xs:element name="key">
+					<xs:complexType>
+						<xs:attribute name="id" type="xs:positiveInteger" />
+					</xs:complexType>
+				</xs:element><!-- key -->
+
 				<xs:element name="virtual-block-device">
 					<xs:complexType>
 						<xs:attribute name="nr_of_levels"   type="Nr_of_levels" />

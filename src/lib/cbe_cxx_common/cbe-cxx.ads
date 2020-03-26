@@ -31,6 +31,7 @@ is
    type CXX_Primitive_Index_Type      is new CXX_UInt64_Type;
    type CXX_Snapshot_ID_Type          is new CXX_UInt64_Type;
    type CXX_Token_Type                is new CXX_UInt64_Type;
+   type CXX_Key_ID_Type               is new CXX_UInt32_Type;
    type CXX_Tree_Level_Index_Type     is new CXX_UInt64_Type;
    type CXX_Tree_Degree_Type          is new CXX_UInt64_Type;
    type CXX_Tree_Number_Of_Leafs_Type is new CXX_UInt64_Type;

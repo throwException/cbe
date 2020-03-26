@@ -35,6 +35,7 @@ is
    procedure Submit_Client_Request (
       Obj             : in out Object_Type;
       Req             :        Request.Object_Type;
+      Key_ID          :        Key_ID_Type;
       VBD_Max_Lvl_Idx :        Tree_Level_Index_Type;
       VBD_Degree      :        Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
@@ -47,6 +48,7 @@ is
          Obj.SB_Init,
          Primitive.Valid_Object_No_Pool_Idx (
             Read, False, Primitive.Tag_Lib_SB_Init, 0, 0),
+         Key_ID,
          VBD_Max_Lvl_Idx,
          VBD_Degree,
          VBD_Nr_Of_Leafs,
