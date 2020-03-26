@@ -127,54 +127,91 @@ namespace Cbe {
 	 * (It stands to reason if this type is strictly necessary by now as
 	 *  it also lacks certain operations like TRIM.)
 	 */
-	struct Request
+	class Request
 	{
-		enum class Operation : uint32_t {
-			INVALID = 0,
-			READ = 1,
-			WRITE = 2,
-			SYNC = 3,
-			CREATE_SNAPSHOT = 4,
-			DISCARD_SNAPSHOT = 5
-		};
+		public:
 
-		enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
+			enum class Operation : uint32_t {
+				INVALID = 0,
+				READ = 1,
+				WRITE = 2,
+				SYNC = 3,
+				CREATE_SNAPSHOT = 4,
+				DISCARD_SNAPSHOT = 5
+			};
 
-		Operation operation;
-		Success   success;
-		uint64_t  block_number;
-		uint64_t  offset;
-		uint32_t  count;
-		uint32_t  tag;
+			enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
 
-		bool read()             const { return operation == Operation::READ; }
-		bool write()            const { return operation == Operation::WRITE; }
-		bool sync()             const { return operation == Operation::SYNC; }
-		bool create_snapshot()  const { return operation == Operation::CREATE_SNAPSHOT; }
-		bool discard_snapshot() const { return operation == Operation::DISCARD_SNAPSHOT; }
+		private:
 
-		bool valid() const
-		{
-			switch (operation) {
-			case Operation::INVALID         : return false;
-			case Operation::READ            : return true;
-			case Operation::WRITE           : return true;
-			case Operation::SYNC            : return true;
-			case Operation::CREATE_SNAPSHOT : return true;
-			case Operation::DISCARD_SNAPSHOT: return true;
+			Operation _operation;
+			Success   _success;
+			uint64_t  _block_number;
+			uint64_t  _offset;
+			uint32_t  _count;
+			uint32_t  _tag;
+
+		public:
+
+			Request(Operation operation,
+			        Success   success,
+			        uint64_t  block_number,
+			        uint64_t  offset,
+			        uint32_t  count,
+			        uint32_t  tag)
+			:
+				_operation    { operation    },
+				_success      { success      },
+				_block_number { block_number },
+				_offset       { offset       },
+				_count        { count        },
+				_tag          { tag          }
+			{ }
+
+			Request()
+			:
+				_operation    { Operation::INVALID },
+				_success      { Success::FALSE },
+				_block_number { 0 },
+				_offset       { 0 },
+				_count        { 0 },
+				_tag          { 0 }
+			{ }
+
+			bool valid() const
+			{
+				switch (_operation) {
+				case Operation::INVALID         : return false;
+				case Operation::READ            : return true;
+				case Operation::WRITE           : return true;
+				case Operation::SYNC            : return true;
+				case Operation::CREATE_SNAPSHOT : return true;
+				case Operation::DISCARD_SNAPSHOT: return true;
+				}
+				return false;
 			}
-			return false;
-		}
 
-		bool equal(Request const &rhs) const
-		{
-			return tag          == rhs.tag
-			    && block_number == rhs.block_number
-			    && operation    == rhs.operation;
-		}
+			void print(Genode::Output &out) const;
 
-		/* debug */
-		void print(Genode::Output &out) const;
+			/***************
+			 ** Accessors **
+			 ***************/
+
+			bool read()             const { return _operation == Operation::READ; }
+			bool write()            const { return _operation == Operation::WRITE; }
+			bool sync()             const { return _operation == Operation::SYNC; }
+			bool create_snapshot()  const { return _operation == Operation::CREATE_SNAPSHOT; }
+			bool discard_snapshot() const { return _operation == Operation::DISCARD_SNAPSHOT; }
+
+			Operation operation()    const { return _operation; }
+			Success   success()      const { return _success; }
+			uint64_t  block_number() const { return _block_number; }
+			uint64_t  offset()       const { return _offset; }
+			uint32_t  count()        const { return _count; }
+			uint32_t  tag()          const { return _tag; }
+
+			void success(Success arg) { _success = arg; }
+			void tag(uint32_t arg)    { _tag = arg; }
 
 	} __attribute__((packed));
 
@@ -797,14 +834,13 @@ namespace Cbe {
 			}
 			return Cbe::Request::Operation::INVALID;
 		};
-		return Cbe::Request {
-			.operation    = convert_op(p.operation),
-			.success      = Cbe::Request::Success::FALSE,
-			.block_number = p.block_number,
-			.offset       = 0,
-			.count        = 1,
-			.tag          = 0,
-		};
+		return Cbe::Request(
+			convert_op(p.operation),
+			Cbe::Request::Success::FALSE,
+			p.block_number,
+			0,
+			1,
+			0);
 	}
 
 	/**
@@ -833,13 +869,13 @@ namespace Cbe {
 		};
 		return Block::Request {
 			.operation = {
-				.type         = convert_op(r.operation),
-				.block_number = r.block_number,
-				.count        = r.count,
+				.type         = convert_op(r.operation()),
+				.block_number = r.block_number(),
+				.count        = r.count(),
 			},
-			.success   = convert_success(r.success),
-			.offset    = (Block::off_t)r.offset,
-			.tag       = { .value = r.tag },
+			.success   = convert_success(r.success()),
+			.offset    = (Block::off_t)r.offset(),
+			.tag       = { .value = r.tag() },
 		};
 	}
 
@@ -866,14 +902,13 @@ namespace Cbe {
 			return success ? Cbe::Request::Success::TRUE : Cbe::Request::Success::FALSE;
 		};
 
-		return Cbe::Request {
-			.operation    = convert_op(r.operation.type),
-			.success      = convert_success(r.success),
-			.block_number = r.operation.block_number,
-			.offset       = (Genode::uint64_t)r.offset,
-			.count        = (Genode::uint32_t)r.operation.count,
-			.tag          = (Genode::uint32_t)r.tag.value,
-		};
+		return Cbe::Request(
+			convert_op(r.operation.type),
+			convert_success(r.success),
+			r.operation.block_number,
+			(Genode::uint64_t)r.offset,
+			(Genode::uint32_t)r.operation.count,
+			(Genode::uint32_t)r.tag.value);
 	}
 
 } /* namespace Cbe */
@@ -885,14 +920,13 @@ void Cbe::Request::print(Genode::Output &out) const
 		Genode::print(out, "<invalid>");
 		return;
 	}
-	Genode::print(out, "tag: ", tag);
-
-	Genode::print(out, " block_number: ", block_number);
-	Genode::print(out, " count: ", count);
-	Genode::print(out, " offset: ", offset);
-	Genode::print(out, " op: ", to_string (operation));
+	Genode::print(out, "tag: ", _tag);
+	Genode::print(out, " block_number: ", _block_number);
+	Genode::print(out, " count: ", _count);
+	Genode::print(out, " offset: ", _offset);
+	Genode::print(out, " op: ", to_string (_operation));
 	Genode::print(out, " success: ");
-	switch (success) {
+	switch (_success) {
 	case Success::FALSE: Genode::print(out, "no"); break;
 	case Success::TRUE:  Genode::print(out, "yes"); break;
 	}

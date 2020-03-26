@@ -53,7 +53,7 @@ class Main
 
 				if (req.valid()) {
 					_cbe_dump.drop_completed_client_request(req);
-					if (req.success == Cbe::Request::Success::TRUE) {
+					if (req.success() == Cbe::Request::Success::TRUE) {
 						_env.parent().exit(0);
 					} else {
 						error("request was not successful");;
@@ -76,9 +76,9 @@ class Main
 						break;
 					}
 					try {
-						request.tag = data_index.value;
+						request.tag(data_index.value);
 						Block::Packet_descriptor::Opcode op;
-						switch (request.operation) {
+						switch (request.operation()) {
 						case Cbe::Request::Operation::READ:
 							op = Block::Packet_descriptor::READ;
 							break;
@@ -90,10 +90,10 @@ class Main
 						}
 						Block::Packet_descriptor packet {
 							_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-							request.block_number * _blk_ratio,
-							request.count * _blk_ratio };
+							request.block_number() * _blk_ratio,
+							request.count() * _blk_ratio };
 
-						if (request.operation == Cbe::Request::Operation::WRITE) {
+						if (request.operation() == Cbe::Request::Operation::WRITE) {
 							*reinterpret_cast<Cbe::Block_data*>(
 								_blk.tx()->packet_content(packet)) =
 									_blk_buf.item(data_index);
@@ -128,18 +128,17 @@ class Main
 						(write && _blk_req.write());
 
 					bool const bn_match =
-						packet.block_number() / _blk_ratio == _blk_req.block_number;
+						packet.block_number() / _blk_ratio == _blk_req.block_number();
 
 					if (!bn_match || !op_match) {
 						break;
 					}
 
-					_blk_req.success =
-						packet.succeeded() ? Cbe::Request::Success::TRUE
-						                   : Cbe::Request::Success::FALSE;
+					_blk_req.success(packet.succeeded() ? Cbe::Request::Success::TRUE
+						                                : Cbe::Request::Success::FALSE);
 
-					Cbe::Io_buffer::Index const data_index { _blk_req.tag };
-					bool                  const success    { _blk_req.success == Cbe::Request::Success::TRUE };
+					Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
+					bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
 
 					if (read && success) {
 						_blk_buf.item(data_index) =
@@ -182,7 +181,7 @@ class Main
 
 				_cbe_dump.submit_client_request(
 					Cbe::Request { Cbe::Request::Operation::READ,
-					               Cbe::Request::Success::FALSE, 0, 0, 0, 0 },
+					               Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0 },
 					cfg);
 			}
 			catch (Xml_node::Nonexistent_sub_node) {

@@ -768,9 +768,9 @@ class Cbe::Main
 					break;
 				}
 				try {
-					request.tag = data_index.value;
+					request.tag(data_index.value);
 					Block::Packet_descriptor::Opcode op;
-					switch (request.operation) {
+					switch (request.operation()) {
 					case Cbe::Request::Operation::READ:
 						op = Block::Packet_descriptor::READ;
 						break;
@@ -782,16 +782,16 @@ class Cbe::Main
 					}
 					Block::Packet_descriptor packet {
 						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number, request.count };
+						request.block_number(), request.count() };
 
-					if (request.operation == Cbe::Request::Operation::WRITE) {
+					if (request.operation() == Cbe::Request::Operation::WRITE) {
 						*reinterpret_cast<Cbe::Block_data*>(
 							_blk.tx()->packet_content(packet)) =
 								_blk_buf.item(data_index);
 					}
 					_blk.tx()->try_submit_packet(packet);
 					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation), ": pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 					}
 					_blk_req = request;
 					_cbe_check.io_request_in_progress(data_index);
@@ -822,18 +822,18 @@ class Cbe::Main
 					(write && _blk_req.write());
 
 				bool const bn_match =
-					packet.block_number() == _blk_req.block_number;
+					packet.block_number() == _blk_req.block_number();
 
 				if (!bn_match || !op_match) {
 					break;
 				}
 
-				_blk_req.success =
+				_blk_req.success(
 					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE;
+					                   : Cbe::Request::Success::FALSE);
 
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag };
-				bool                  const success    { _blk_req.success == Cbe::Request::Success::TRUE };
+				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
+				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -842,7 +842,7 @@ class Cbe::Main
 				}
 				_cbe_check.io_request_completed(data_index, success);
 				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request { };
+				_blk_req = Cbe::Request();
 				progress = true;
 			}
 
@@ -853,7 +853,7 @@ class Cbe::Main
 				if (req.valid()) {
 					_cbe_check.drop_completed_client_request(req);
 					_block_session->check_done(
-						req.success == Cbe::Request::Success::TRUE ?
+						req.success() == Cbe::Request::Success::TRUE ?
 							true : false);
 					_state = INVALID;
 				}
@@ -883,9 +883,9 @@ class Cbe::Main
 					break;
 				}
 				try {
-					request.tag = data_index.value;
+					request.tag(data_index.value);
 					Block::Packet_descriptor::Opcode op;
-					switch (request.operation) {
+					switch (request.operation()) {
 					case Cbe::Request::Operation::READ:
 						op = Block::Packet_descriptor::READ;
 						break;
@@ -897,16 +897,16 @@ class Cbe::Main
 					}
 					Block::Packet_descriptor packet {
 						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number, request.count };
+						request.block_number(), request.count() };
 
-					if (request.operation == Cbe::Request::Operation::WRITE) {
+					if (request.operation() == Cbe::Request::Operation::WRITE) {
 						*reinterpret_cast<Cbe::Block_data*>(
 							_blk.tx()->packet_content(packet)) =
 								_blk_buf.item(data_index);
 					}
 					_blk.tx()->try_submit_packet(packet);
 					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation), ": pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 					}
 					_blk_req = request;
 					_cbe_dump.io_request_in_progress(data_index);
@@ -937,18 +937,18 @@ class Cbe::Main
 					(write && _blk_req.write());
 
 				bool const bn_match =
-					packet.block_number() == _blk_req.block_number;
+					packet.block_number() == _blk_req.block_number();
 
 				if (!bn_match || !op_match) {
 					break;
 				}
 
-				_blk_req.success =
+				_blk_req.success(
 					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE;
+					                   : Cbe::Request::Success::FALSE);
 
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag };
-				bool                  const success    { _blk_req.success == Cbe::Request::Success::TRUE };
+				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
+				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -957,7 +957,7 @@ class Cbe::Main
 				}
 				_cbe_dump.io_request_completed(data_index, success);
 				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request { };
+				_blk_req = Cbe::Request();
 				progress = true;
 			}
 
@@ -968,7 +968,7 @@ class Cbe::Main
 				if (req.valid()) {
 					_cbe_dump.drop_completed_client_request(req);
 					_block_session->dump_done(
-						req.success == Cbe::Request::Success::TRUE ?
+						req.success() == Cbe::Request::Success::TRUE ?
 							true : false);
 					_state = INVALID;
 				}
@@ -997,9 +997,9 @@ class Cbe::Main
 					break;
 				}
 				try {
-					request.tag = data_index.value;
+					request.tag(data_index.value);
 					Block::Packet_descriptor::Opcode op;
-					switch (request.operation) {
+					switch (request.operation()) {
 					case Cbe::Request::Operation::READ:
 						op = Block::Packet_descriptor::READ;
 						break;
@@ -1011,16 +1011,16 @@ class Cbe::Main
 					}
 					Block::Packet_descriptor packet {
 						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number, request.count };
+						request.block_number(), request.count() };
 
-					if (request.operation == Cbe::Request::Operation::WRITE) {
+					if (request.operation() == Cbe::Request::Operation::WRITE) {
 						*reinterpret_cast<Cbe::Block_data*>(
 							_blk.tx()->packet_content(packet)) =
 								_blk_buf.item(data_index);
 					}
 					_blk.tx()->try_submit_packet(packet);
 					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation), ": pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 					}
 					_blk_req = request;
 					_cbe_init.io_request_in_progress(data_index);
@@ -1051,18 +1051,18 @@ class Cbe::Main
 					(write && _blk_req.write());
 
 				bool const bn_match =
-					packet.block_number() == _blk_req.block_number;
+					packet.block_number() == _blk_req.block_number();
 
 				if (!bn_match || !op_match) {
 					break;
 				}
 
-				_blk_req.success =
+				_blk_req.success(
 					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE;
+					                   : Cbe::Request::Success::FALSE);
 
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag };
-				bool                  const success    { _blk_req.success == Cbe::Request::Success::TRUE };
+				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
+				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -1071,7 +1071,7 @@ class Cbe::Main
 				}
 				_cbe_init.io_request_completed(data_index, success);
 				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request { };
+				_blk_req = Cbe::Request();
 				progress = true;
 			}
 
@@ -1082,7 +1082,7 @@ class Cbe::Main
 				if (req.valid()) {
 					_cbe_init.drop_completed_client_request(req);
 					_block_session->initialize_done(
-						req.success == Cbe::Request::Success::TRUE ?
+						req.success() == Cbe::Request::Success::TRUE ?
 							true : false);
 					_state = INVALID;
 				}
@@ -1224,7 +1224,7 @@ class Cbe::Main
 					}
 
 					Block::Request request { };
-					request.offset = cbe_request.offset + (prim_index * BLOCK_SIZE);
+					request.offset = cbe_request.offset() + (prim_index * BLOCK_SIZE);
 					request.operation.count = 1;
 
 					payload.with_content(request, [&] (void *addr, Genode::size_t) {
@@ -1255,7 +1255,7 @@ class Cbe::Main
 					}
 
 					Block::Request request { };
-					request.offset = cbe_request.offset + (prim_index * BLOCK_SIZE);
+					request.offset = cbe_request.offset() + (prim_index * BLOCK_SIZE);
 					request.operation.count = 1;
 
 					payload.with_content(request, [&] (void *addr, Genode::size_t) {
@@ -1288,9 +1288,9 @@ class Cbe::Main
 					break;
 				}
 				try {
-					request.tag = data_index.value;
+					request.tag(data_index.value);
 					Block::Packet_descriptor::Opcode op;
-					switch (request.operation) {
+					switch (request.operation()) {
 					case Request::Operation::READ:
 						op = Block::Packet_descriptor::READ;
 						break;
@@ -1305,16 +1305,16 @@ class Cbe::Main
 					}
 					Block::Packet_descriptor packet {
 						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number, request.count };
+						request.block_number(), request.count() };
 
-					if (request.operation == Request::Operation::WRITE) {
+					if (request.operation() == Request::Operation::WRITE) {
 						*reinterpret_cast<Cbe::Block_data*>(
 							_blk.tx()->packet_content(packet)) =
 								_blk_buf.item(data_index);
 					}
 					_blk.tx()->try_submit_packet(packet);
 					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation), ": pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 					}
 					_blk_req = request;
 
@@ -1340,16 +1340,16 @@ class Cbe::Main
 					(write && _blk_req.write()) ||
 					(sync && _blk_req.sync());
 
-				bool const bn_match = packet.block_number() == _blk_req.block_number;
+				bool const bn_match = packet.block_number() == _blk_req.block_number();
 				// assert packet descriptor belongs to stored backend request
 				if (!bn_match || !op_match) { break; }
 
-				_blk_req.success =
+				_blk_req.success(
 					packet.succeeded() ? Cbe::Request::Success::TRUE
-									   : Cbe::Request::Success::FALSE;
+									   : Cbe::Request::Success::FALSE);
 
-				Io_buffer::Index const data_index { _blk_req.tag };
-				bool             const success    { _blk_req.success == Request::Success::TRUE };
+				Io_buffer::Index const data_index { _blk_req.tag() };
+				bool             const success    { _blk_req.success() == Request::Success::TRUE };
 				if (read && success) {
 					_blk_buf.item(data_index) =
 						*reinterpret_cast<Cbe::Block_data*>(
@@ -1360,7 +1360,7 @@ class Cbe::Main
 
 				_blk.tx()->release_packet(packet);
 
-				_blk_req = Cbe::Request { };
+				_blk_req = Cbe::Request();
 				io_progress |= true;
 			}
 
@@ -1382,11 +1382,11 @@ class Cbe::Main
 				if (!_crypto.encryption_request_acceptable()) {
 					break;
 				}
-				request.tag = data_index.value;
+				request.tag(data_index.value);
 				_crypto.submit_encryption_request(request, _crypto_plain_buf.item(data_index), 0);
 				_cbe->crypto_cipher_data_requested(data_index);
 				if (_verbose_back_end_crypto) {
-					log ("   encrypt: pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+					log ("   encrypt: pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 				}
 				progress |= true;
 			}
@@ -1395,11 +1395,11 @@ class Cbe::Main
 				if (!request.valid()) {
 					break;
 				}
-				Crypto_cipher_buffer::Index const data_index(request.tag);
+				Crypto_cipher_buffer::Index const data_index(request.tag());
 				if (!_crypto.supply_cipher_data(request, _crypto_cipher_buf.item(data_index))) {
 					break;
 				}
-				_cbe->supply_crypto_cipher_data(data_index, request.success == Request::Success::TRUE);
+				_cbe->supply_crypto_cipher_data(data_index, request.success() == Request::Success::TRUE);
 				progress |= true;
 			}
 
@@ -1413,11 +1413,11 @@ class Cbe::Main
 				if (!_crypto.decryption_request_acceptable()) {
 					break;
 				}
-				request.tag = data_index.value;
+				request.tag(data_index.value);
 				_crypto.submit_decryption_request(request, _crypto_cipher_buf.item(data_index), 0);
 				_cbe->crypto_plain_data_requested(data_index);
 				if (_verbose_back_end_crypto) {
-					log ("   decrypt: pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+					log ("   decrypt: pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 				}
 				progress |= true;
 			}
@@ -1426,11 +1426,11 @@ class Cbe::Main
 				if (!request.valid()) {
 					break;
 				}
-				Crypto_plain_buffer::Index const data_index(request.tag);
+				Crypto_plain_buffer::Index const data_index(request.tag());
 				if (!_crypto.supply_plain_data(request, _crypto_plain_buf.item(data_index))) {
 					break;
 				}
-				_cbe->supply_crypto_plain_data(data_index, request.success == Request::Success::TRUE);
+				_cbe->supply_crypto_plain_data(data_index, request.success() == Request::Success::TRUE);
 				progress |= true;
 			}
 
@@ -1460,14 +1460,14 @@ class Cbe::Main
 					Block::Packet_descriptor packet {
 						_blk.alloc_packet(Cbe::BLOCK_SIZE),
 						Block::Packet_descriptor::READ,
-						request.block_number, request.count };
+						request.block_number(), request.count() };
 
 					_blk.tx()->try_submit_packet(packet);
 					if (_nr_of_sbs_requested == 0) {
 						log("cbe construction started");
 					}
 					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation), ": pba ", (unsigned long)request.block_number, ", cnt ", (unsigned long)request.count);
+						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
 					}
 					_nr_of_sbs_requested++;
 					progress = true;
@@ -1553,9 +1553,9 @@ class Cbe::Main
 						_env.parent().exit(-1);
 					}
 					_cbe_init.submit_client_request(
-						Cbe::Request {
+						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0 },
+							Cbe::Request::Success::FALSE, 0, 0, 0, 0),
 						cfg.vbd_nr_of_lvls() - 1,
 						cfg.vbd_nr_of_children(),
 						cfg.vbd_nr_of_leafs(),
@@ -1575,9 +1575,9 @@ class Cbe::Main
 						_env.parent().exit(-1);
 					}
 					_cbe_check.submit_client_request(
-						Cbe::Request {
+						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0 });
+							Cbe::Request::Success::FALSE, 0, 0, 0, 0));
 
 					_state = CBE_CHECK;
 					progress = true;
@@ -1591,9 +1591,9 @@ class Cbe::Main
 						_env.parent().exit(-1);
 					}
 					_cbe_dump.submit_client_request(
-						Cbe::Request {
+						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0 },
+							Cbe::Request::Success::FALSE, 0, 0, 0, 0 ),
 						cfg);
 
 					_state = CBE_DUMP;
