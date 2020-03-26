@@ -79,6 +79,7 @@ is
       Block_Number : CXX_Block_Number_Type;
       Offset       : CXX_Block_Offset_Type;
       Count        : CXX_Block_Count_Type;
+      Key_ID       : CXX_Key_ID_Type;
       Tag          : CXX_Tag_Type;
    end record;
    pragma Pack (CXX_Request_Type);
@@ -130,6 +131,7 @@ is
          Block_Number_Type    (Req.Block_Number),
          Request.Offset_Type  (Req.Offset),
          Request.Count_Type   (Req.Count),
+         Key_ID_Type          (Req.Key_ID),
          Request.Tag_Type     (Req.Tag)));
 
    --
@@ -148,6 +150,7 @@ is
          Block_Number => CXX_Block_Number_Type    (Request.Block_Number (Obj)),
          Offset       => CXX_Block_Offset_Type    (Request.Offset (Obj)),
          Count        => CXX_Block_Count_Type     (Request.Count (Obj)),
+         Key_ID       => CXX_Key_ID_Type          (Request.Key_ID (Obj)),
          Tag          => CXX_Tag_Type             (Request.Tag (Obj))),
       when False => (
          Operation    => 0,
@@ -155,6 +158,7 @@ is
          Block_Number => 0,
          Offset       => 0,
          Count        => 0,
+         Key_ID       => 0,
          Tag          => 0));
 
    function CXX_Dump_Configuration_To_SPARK (Cfg : CXX_Dump_Configuration_Type)

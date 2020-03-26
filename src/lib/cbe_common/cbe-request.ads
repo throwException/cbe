@@ -35,6 +35,7 @@ is
       Blk_Nr : Block_Number_Type;
       Off    : Offset_Type;
       Cnt    : Count_Type;
+      Key    : Key_ID_Type;
       Tg     : Tag_Type)
    return Object_Type
    with
@@ -45,6 +46,7 @@ is
             Block_Number (Valid_Object'Result) = Blk_Nr and then
             Offset       (Valid_Object'Result) = Off    and then
             Count        (Valid_Object'Result) = Cnt    and then
+            Key_ID       (Valid_Object'Result) = Key    and then
             Tag          (Valid_Object'Result) = Tg));
 
    --
@@ -84,6 +86,10 @@ is
    return Count_Type
    with Pre => (Valid (Obj));
 
+   function Key_ID (Obj : Object_Type)
+   return Key_ID_Type
+   with Pre => (Valid (Obj));
+
    function Tag (Obj : Object_Type)
    return Tag_Type
    with Pre => (Valid (Obj));
@@ -109,6 +115,7 @@ private
       Block_Number : Block_Number_Type;
       Offset       : Offset_Type;
       Count        : Count_Type;
+      Key_ID       : Key_ID_Type;
       Tag          : Tag_Type;
    end record;
 

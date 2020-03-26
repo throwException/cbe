@@ -149,6 +149,7 @@ namespace Cbe {
 			uint64_t  _block_number;
 			uint64_t  _offset;
 			uint32_t  _count;
+			uint32_t  _key_id;
 			uint32_t  _tag;
 
 		public:
@@ -158,6 +159,7 @@ namespace Cbe {
 			        uint64_t  block_number,
 			        uint64_t  offset,
 			        uint32_t  count,
+			        uint32_t  key_id,
 			        uint32_t  tag)
 			:
 				_operation    { operation    },
@@ -165,6 +167,7 @@ namespace Cbe {
 				_block_number { block_number },
 				_offset       { offset       },
 				_count        { count        },
+				_key_id       { key_id       },
 				_tag          { tag          }
 			{ }
 
@@ -175,6 +178,7 @@ namespace Cbe {
 				_block_number { 0 },
 				_offset       { 0 },
 				_count        { 0 },
+				_key_id       { 0 },
 				_tag          { 0 }
 			{ }
 
@@ -208,6 +212,7 @@ namespace Cbe {
 			uint64_t  block_number() const { return _block_number; }
 			uint64_t  offset()       const { return _offset; }
 			uint32_t  count()        const { return _count; }
+			uint32_t  key_id()       const { return _key_id; }
 			uint32_t  tag()          const { return _tag; }
 
 			void success(Success arg) { _success = arg; }
@@ -840,6 +845,7 @@ namespace Cbe {
 			p.block_number,
 			0,
 			1,
+			0,
 			0);
 	}
 
@@ -908,6 +914,7 @@ namespace Cbe {
 			r.operation.block_number,
 			(Genode::uint64_t)r.offset,
 			(Genode::uint32_t)r.operation.count,
+			0,
 			(Genode::uint32_t)r.tag.value);
 	}
 
@@ -923,6 +930,7 @@ void Cbe::Request::print(Genode::Output &out) const
 	Genode::print(out, "tag: ", _tag);
 	Genode::print(out, " block_number: ", _block_number);
 	Genode::print(out, " count: ", _count);
+	Genode::print(out, " key_id: ", _key_id);
 	Genode::print(out, " offset: ", _offset);
 	Genode::print(out, " op: ", to_string (_operation));
 	Genode::print(out, " success: ");

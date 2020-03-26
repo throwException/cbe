@@ -452,6 +452,7 @@ is
                Blk_Nr => Primitive.Block_Number (Prim),
                Off    => 0,
                Cnt    => 1,
+               Key    => 0,
                Tg     => 0);
          end if;
       end;

@@ -25,6 +25,7 @@ is
       Block_Number => 0,
       Offset       => 0,
       Count        => 0,
+      Key_ID       => 0,
       Tag          => 0);
 
    --
@@ -36,6 +37,7 @@ is
       Blk_Nr : Block_Number_Type;
       Off    : Offset_Type;
       Cnt    : Count_Type;
+      Key    : Key_ID_Type;
       Tg     : Tag_Type)
    return Object_Type
    is (
@@ -45,6 +47,7 @@ is
       Block_Number => Blk_Nr,
       Offset       => Off,
       Count        => Cnt,
+      Key_ID       => Key,
       Tag          => Tg);
 
    --
@@ -80,6 +83,9 @@ is
 
    function Count       (Obj : Object_Type) return Count_Type
    is (Obj.Count);
+
+   function Key_ID      (Obj : Object_Type) return Key_ID_Type
+   is (Obj.Key_ID);
 
    function Tag         (Obj : Object_Type) return Tag_Type
    is (Obj.Tag);
@@ -121,6 +127,8 @@ is
          Debug.To_String (Debug.Uint64_Type (Obj.Offset)) &
          " Count=" &
          Debug.To_String (Debug.Uint64_Type (Obj.Count)) &
+         " Key_ID=" &
+         Debug.To_String (Debug.Uint64_Type (Obj.Key_ID)) &
          ")");
 
 end CBE.Request;

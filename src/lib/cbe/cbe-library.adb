@@ -152,6 +152,7 @@ is
                Blk_Nr => Block_Number_Type (0),
                Off    => 0,
                Cnt    => 1,
+               Key    => 0,
                Tg     => 0);
       begin
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
@@ -226,6 +227,7 @@ is
                   Blk_Nr => Block_Number_Type (0),
                   Off    => 0,
                   Cnt    => 1,
+                  Key    => 0,
                   Tg     => 0);
          begin
             Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
@@ -348,6 +350,7 @@ is
                Blk_Nr => Primitive.Block_Number (Prim),
                Off    => 0,
                Cnt    => 1,
+               Key    => 0,
                Tg     => 0);
          end if;
       end;
@@ -543,6 +546,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
+         Key    => Obj.Superblock.Keys (Keys_Index_Type'First).ID,
          Tg     => 0);
    end Crypto_Cipher_Data_Required;
 
@@ -587,6 +591,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
+         Key    => Obj.Superblock.Keys (Keys_Index_Type'First).ID,
          Tg     => 0);
    end Crypto_Plain_Data_Required;
 
