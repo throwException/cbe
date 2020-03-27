@@ -48,6 +48,39 @@ is
    end Set_Key;
 
    --
+   --  Key_Idx_For_Job
+   --
+   function Key_Idx_For_Job (
+      Job  : Job_Type;
+      Keys : Keys_Type)
+   return Keys_Index_Type
+   is
+      use CBE;
+
+      Result_Valid : Boolean := False;
+      Result       : Keys_Index_Type := Keys_Index_Type'First;
+   begin
+
+      For_Each_Key :
+      for Idx in Keys'Range loop
+
+         if Keys (Idx).Valid and then
+            Keys (Idx).ID = Request.Key_ID (Job.Request)
+         then
+            Result := Idx;
+            Result_Valid := True;
+         end if;
+
+      end loop For_Each_Key;
+
+      if not Result_Valid then
+         raise Program_Error;
+      end if;
+      return Result;
+
+   end Key_Idx_For_Job;
+
+   --
    --  Execute_Decrypt
    --
    procedure Execute_Decrypt (
@@ -61,7 +94,7 @@ is
       when Submitted =>
 
          Aes_Cbc_4k.Decrypt (
-            Keys (1).Data,
+            Keys (Key_Idx_For_Job (Job, Keys)).Data,
             Aes_Cbc_4k.Block_Number_Type (
                CBE.Request.Block_Number (Job.Request)),
             Job.Cipher_Data,
@@ -93,7 +126,7 @@ is
       when Submitted =>
 
          Aes_Cbc_4k.Encrypt (
-            Keys (1).Data,
+            Keys (Key_Idx_For_Job (Job, Keys)).Data,
             Aes_Cbc_4k.Block_Number_Type (
                CBE.Request.Block_Number (Job.Request)),
             Job.Plain_Data,

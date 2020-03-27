@@ -175,4 +175,12 @@ private
    function Invalid_Job
    return Job_Type;
 
+   --
+   --  Key_Idx_For_Job
+   --
+   function Key_Idx_For_Job (
+      Job  : Job_Type;
+      Keys : Keys_Type)
+   return Keys_Index_Type;
+
 end External.Crypto;
