@@ -1715,9 +1715,28 @@ class Cbe::Main
 		:
 			_env { env }
 		{
-			External::Crypto::Key_data key { };
-			Genode::memcpy(key.value, "All your base are belong to us  ", 32);
-			_crypto.set_key(0, 0, key);
+			struct Failed_to_set_key : Exception { };
+
+			_config_rom.xml().with_sub_node ("crypto", [&] (Xml_node const &crypto) {
+				crypto.for_each_sub_node("key", [&] (Xml_node const &key) {
+					External::Crypto::Key_data data { };
+
+					Genode::memcpy(
+						data.value,
+						key.attribute_value ("value", String<33>("")).string(),
+						32);
+
+					unsigned const slot { key.attribute_value ("slot", (unsigned)0) };
+					unsigned const id   { key.attribute_value ("id", (unsigned)0) };
+
+					log("set crypto key ", slot, " ", id, " ",
+					    String<33>(Cstring((char const*)data.value)).string());
+
+					if (!_crypto.set_key(slot, id, data)) {
+						throw Failed_to_set_key();
+					}
+				});
+			});
 
 			/*
 			 * Install signal handler for the backend Block connection.

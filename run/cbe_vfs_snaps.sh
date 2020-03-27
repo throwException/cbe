@@ -15,7 +15,7 @@ test_key() {
 	local cbe_dir="$1"
 
 	echo "Write key to CBE"
-	echo "All your base are belong to us" > $cbe_dir/control/key
+	echo -n "23 All your base are belong to usxxx" > $cbe_dir/control/key
 }
 
 test_create_snapshot() {

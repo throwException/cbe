@@ -1013,7 +1013,7 @@ append config {
 			<vfs>
 				<fs label="fs_backend"/>
 				<dir name="dev">
-					<cbe name="cbe" show_progress="no" passphrase="All your base are belong" block="/} [cbe_image_file] {"/>
+					<cbe name="cbe" show_progress="no" key_id="23" passphrase="All your base are belong" block="/} [cbe_image_file] {"/>
 				</dir>
 			</vfs>
 		</config>

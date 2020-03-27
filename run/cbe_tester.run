@@ -92,6 +92,12 @@ append config {
 	<start name="cbe_tester" caps="200">
 		<resource name="RAM" quantum="80M"/>
 		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
+
+			<crypto>
+				<key slot="0" id="3"  value="This is a creative key value   !"/>
+				<key slot="1" id="12" value="All your base are belong to us ?"/>
+			</crypto>
+
 			<tests>
 
 				<initialize>
@@ -139,6 +145,20 @@ append config {
 				      vbd_vba_filter="0x13"
 				      free_tree="no"
 				      hashes="no"/>
+
+				<initialize>
+					<key id="3" />
+
+					<virtual-block-device
+						nr_of_levels="4"
+						nr_of_children="4"
+						nr_of_leafs="40" />
+
+					<free-tree
+						nr_of_levels="4"
+						nr_of_children="4"
+						nr_of_leafs="40" />
+				</initialize>
 
 				<replay verbose="yes" bulk="no">
 					<request type="write" lba="7"  count="5"/>

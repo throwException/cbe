@@ -135,13 +135,15 @@ class Vfs_cbe::Wrapper
 			using Passphrase = Genode::String<32+1>;
 			Passphrase passphrase = config.attribute_value("passphrase", Passphrase());
 
-			if (passphrase.valid()) {
+			uint32_t const key_id = config.attribute_value("key_id", 0u);
+
+			if (passphrase.valid() && key_id) {
 
 				External::Crypto::Key_data key { }; // XXX clear key material
 				Genode::memset(key.value, 0xa5, sizeof (key.value));
 				Genode::memcpy(key.value, passphrase.string(), passphrase.length()-1);
 
-				set_key(0, 0, key);
+				set_key(0, key_id, key);
 			}
 		}
 
@@ -1356,16 +1358,37 @@ class Vfs_cbe::Key_file_system : public Vfs::Single_file_system
 
 			Write_result write(char const *src, file_size count, file_size &out_count) override
 			{
-				out_count = 0;
+				/* at least (10 for 2^32 in digits, 1, ' ' delim, 32 key
+ 				 * and 1 NUL) 54 bytes needed, copy up to 63 bytes */
+				char input_buffer[64] { };
+				if (count > sizeof (input_buffer)) {
+					count = sizeof (input_buffer) - 1;
+				}
+				Genode::strncpy(input_buffer, src, count+1);
+				char *p = input_buffer;
 
-				if (seek() > (file_size)MAX_KEY_SIZE || count > (file_size)MAX_KEY_SIZE)
+				out_count = 0;
+				uint32_t key_id { 0 };
+				size_t consumed = Genode::ascii_to(p, key_id);
+
+				/* no key specified */
+				if (key_id == 0 || consumed == count || input_buffer[consumed] == '\0') {
+					Genode::error("cannot parse malformed key");
 					return WRITE_ERR_INVALID;
+				}
+				/* eat delimiter */
+				consumed++;
+
+				p     += consumed;
+				count -= consumed;
 
 				External::Crypto::Key_data key { }; // XXX clear key material
 				Genode::memset(key.value, 0xa5, sizeof (key.value));
-				Genode::memcpy(key.value, src, count);
+				size_t const limit = count > sizeof (key.value)
+				                   ? sizeof (key.value) : count;
+				Genode::memcpy(key.value, p, limit);
 
-				_w.set_key(0, 0, key);
+				_w.set_key(0, key_id, key);
 
 				out_count = count;
 				return WRITE_OK;
