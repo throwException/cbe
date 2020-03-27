@@ -29,15 +29,12 @@ is
       Key_Data :        External.Crypto.Key_Data_Type;
       Result   :    out CBE.CXX.CXX_Bool_Type)
    is
-      SPARK_Result : Boolean;
    begin
       External.Crypto.Set_Key (
-         Obj      => Obj,
-         Slot     => CXX_Slot_To_SPARK (Slot),
-         Key_Id   => CXX_Key_Id_To_SPARK (Key_Id),
-         Key_Data => Key_Data,
-         Result   => SPARK_Result);
-      Result := CBE.CXX.CXX_Bool_From_SPARK (SPARK_Result);
+         Obj, Crypto.Keys_Index_Type (Slot), CBE.Key_ID_Type (Key_Id),
+         Key_Data);
+
+      Result := CBE.CXX.CXX_Bool_From_SPARK (True);
    end Set_Key;
 
    procedure Execute (
@@ -66,9 +63,7 @@ is
    is
    begin
       External.Crypto.Submit_Encryption_Request (
-         Obj => Obj,
-         Req => CBE.CXX.CXX_Request_To_SPARK (Req),
-         Data => Data);
+         Obj, CBE.CXX.CXX_Request_To_SPARK (Req), Data);
 
       Res := CBE.CXX.CXX_Bool_From_SPARK (True);
    end Submit_Encryption_Request;
@@ -91,10 +86,7 @@ is
       SPARK_Result : Boolean;
    begin
       External.Crypto.Supply_Cipher_Data (
-         Obj  => Obj,
-         Req  => CBE.CXX.CXX_Request_To_SPARK (Req),
-         Data => Data,
-         Res  => SPARK_Result);
+         Obj, CBE.CXX.CXX_Request_To_SPARK (Req), Data, SPARK_Result);
 
       Res := CBE.CXX.CXX_Bool_From_SPARK (SPARK_Result);
    end Supply_Cipher_Data;
@@ -115,9 +107,7 @@ is
    is
    begin
       External.Crypto.Submit_Decryption_Request (
-         Obj  => Obj,
-         Req  => CBE.CXX.CXX_Request_To_SPARK (Req),
-         Data => Data);
+         Obj, CBE.CXX.CXX_Request_To_SPARK (Req), Data);
 
       Res := CBE.CXX.CXX_Bool_From_SPARK (True);
    end Submit_Decryption_Request;
@@ -140,10 +130,8 @@ is
       SPARK_Result : Boolean;
    begin
       External.Crypto.Supply_Plain_Data (
-         Obj  => Obj,
-         Req  => CBE.CXX.CXX_Request_To_SPARK (Req),
-         Data => Data,
-         Res  => SPARK_Result);
+         Obj, CBE.CXX.CXX_Request_To_SPARK (Req), Data, SPARK_Result);
+
       Res := CBE.CXX.CXX_Bool_From_SPARK (SPARK_Result);
    end Supply_Plain_Data;
 

@@ -28,14 +28,6 @@ is
    type CXX_Cipher_Data_Type
    is array (0 .. 4095) of CXX_Byte_Type with Size => 4096 * 8;
 
-   function CXX_Slot_To_SPARK (Slot : CXX_Key_Slot_Type)
-   return External.Crypto.Key_Slot_Type
-   is (External.Crypto.Key_Slot_Type (Slot));
-
-   function CXX_Key_Id_To_SPARK (Slot : CXX_Key_Id_Type)
-   return External.Crypto.Key_Id_Type
-   is (External.Crypto.Key_Id_Type (Slot));
-
    function Object_Size (Obj : External.Crypto.Object_Type)
    return CBE.CXX.CXX_Object_Size_Type
    with

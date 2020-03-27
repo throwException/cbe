@@ -14,44 +14,25 @@ with Aes_Cbc_4k;
 package External.Crypto
 with SPARK_Mode
 is
-   --  Disable for now because of libsparkcrypto
+   --  FIXME Not pure yet because of libsparkcrypto
    --  pragma Pure;
 
-   subtype Key_Data_Type    is Aes_Cbc_4k.Key_Type;
-   subtype Plain_Data_Type  is Aes_Cbc_4k.Plaintext_Type;
+   Nr_Of_Keys : constant := 2;
+
+   type Keys_Index_Type is range 0 .. Nr_Of_Keys - 1;
+
+   subtype Key_Data_Type is Aes_Cbc_4k.Key_Type;
+
+   subtype Plain_Data_Type is Aes_Cbc_4k.Plaintext_Type;
+
    subtype Cipher_Data_Type is Aes_Cbc_4k.Ciphertext_Type;
 
    type Object_Type is private;
 
-   type Key_Id_Type   is mod 2**32;
-   type Key_Slot_Type is mod 2**32;
-
-   type Key_Type is record
-      Data  : Key_Data_Type;
-      Id    : Key_Id_Type;
-      Valid : Boolean;
-   end record;
-
-   function Invalid_Key
-   return Key_Type
-   is (
-      Data  => (others => 0),
-      Id    => 0,
-      Valid => False);
-
-   function Key_Invalid (Key : Key_Type)
-   return Boolean is (Key.Valid = False);
-
-   function Key_Data (Key : Key_Type)
-   return Key_Data_Type is (Key.Data);
-
    --
    --  Initialize_Object
    --
-   --  FIXME will not be used anymore when the library module is in spark
-   --
-   procedure Initialize_Object (
-      Obj : out Object_Type);
+   procedure Initialize_Object (Obj : out Object_Type);
 
    --
    --  Initialized_Object
@@ -64,10 +45,9 @@ is
    --
    procedure Set_Key (
       Obj      : in out Object_Type;
-      Slot     :        Key_Slot_Type;
-      Key_Id   :        Key_Id_Type;
-      Key_Data :        Key_Data_Type;
-      Result   :    out Boolean);
+      Key_Idx  :        Keys_Index_Type;
+      Key_ID   :        CBE.Key_ID_Type;
+      Key_Data :        Key_Data_Type);
 
    --
    --  Execute
@@ -79,19 +59,30 @@ is
    --
    --  Encryption_Request_Acceptable
    --
-   function Encryption_Request_Acceptable (Obj : Object_Type) return Boolean;
+   function Encryption_Request_Acceptable (Obj : Object_Type)
+   return Boolean;
+
+   --
+   --  Decryption_Request_Acceptable
+   --
+   function Decryption_Request_Acceptable (Obj : Object_Type)
+   return Boolean;
 
    --
    --  Submit_Encryption_Request
    --
    procedure Submit_Encryption_Request (
-      Obj  : in out Object_Type;
-      Req  :        CBE.Request.Object_Type;
-      Data :        Plain_Data_Type)
-   with
-      Pre => (
-         Encryption_Request_Acceptable (Obj) and then
-         CBE.Request.Valid (Req));
+      Obj        : in out Object_Type;
+      Request    :        CBE.Request.Object_Type;
+      Plain_Data :        Plain_Data_Type);
+
+   --
+   --  Submit_Decryption_Request
+   --
+   procedure Submit_Decryption_Request (
+      Obj         : in out Object_Type;
+      Request     :        CBE.Request.Object_Type;
+      Cipher_Data :        Cipher_Data_Type);
 
    --
    --  Peek_Completed_Encryption_Request
@@ -100,110 +91,88 @@ is
    return CBE.Request.Object_Type;
 
    --
-   --  Supply_Cipher_Data
-   --
-   procedure Supply_Cipher_Data (
-      Obj  : in out Object_Type;
-      Req  :        CBE.Request.Object_Type;
-      Data :    out Cipher_Data_Type;
-      Res  :    out Boolean);
-
-   --
-   --  Decryption_Request_Acceptable
-   --
-   function Decryption_Request_Acceptable (Obj : Object_Type) return Boolean;
-
-   --
-   --  Submit_Decryption_Request
-   --
-   procedure Submit_Decryption_Request (
-      Obj  : in out Object_Type;
-      Req  :        CBE.Request.Object_Type;
-      Data :        Cipher_Data_Type);
-
-   --
-   --  Peek_Completed_Decryption_Request ()
+   --  Peek_Completed_Decryption_Request
    --
    function Peek_Completed_Decryption_Request (Obj : Object_Type)
    return CBE.Request.Object_Type;
 
    --
+   --  Supply_Cipher_Data
+   --
+   procedure Supply_Cipher_Data (
+      Obj         : in out Object_Type;
+      Request     :        CBE.Request.Object_Type;
+      Cipher_Data :    out Cipher_Data_Type;
+      Success     :    out Boolean);
+
+   --
    --  Supply_Plain_Data
    --
    procedure Supply_Plain_Data (
-      Obj  : in out Object_Type;
-      Req  :        CBE.Request.Object_Type;
-      Data :    out Plain_Data_Type;
-      Res  :    out Boolean);
+      Obj        : in out Object_Type;
+      Request    :        CBE.Request.Object_Type;
+      Plain_Data :    out Plain_Data_Type;
+      Success    :    out Boolean);
 
 private
 
-   --
-   --  Item
-   --
-   package Item
-   with SPARK_Mode
-   is
-      type State_Type is (Invalid, Pending, Complete);
-      type Item_Type  is private;
+   Nr_Of_Jobs : constant := 2;
 
-      --
-      --  Invalid_Object
-      --
-      function Invalid_Object
-      return Item_Type;
+   type Job_Operation_Type is (Invalid, Decrypt, Encrypt);
 
-      function Initialized_Object (
-         S : Item.State_Type;
-         R : CBE.Request.Object_Type)
-      return Item_Type;
+   type Job_State_Type is (Submitted, Completed);
 
-      --
-      --  Write accessors
-      --
-      procedure State (Obj : in out Item_Type; S : State_Type);
-
-      procedure Request_Success (
-         Obj : in out Item_Type;
-         S   :        CBE.Request.Success_Type);
-
-      --
-      --  Read accessors
-      --
-      function Invalid  (Obj : Item_Type) return Boolean;
-      function Pending  (Obj : Item_Type) return Boolean;
-      function Complete (Obj : Item_Type) return Boolean;
-
-      function Request     (Obj : Item_Type) return CBE.Request.Object_Type;
-
-   private
-
-      --
-      --  Item_Type
-      --
-      type Item_Type is record
-         State       : State_Type;
-         Req         : CBE.Request.Object_Type;
-      end record;
-
-   end Item;
-
-   --  1 for encryption and 2 for decryption
-   type Items_Type is array (1 .. 2) of Item.Item_Type;
-   type Cipher_Data_Array_Type is array (1 .. 2) of Cipher_Data_Type;
-   type Plain_Data_Array_Type is array (1 .. 2) of Plain_Data_Type;
-
-   type Key_Array_Type is array (1 .. 2) of Key_Type;
-
-   --
-   --  Object_Type
-   --
-   type Object_Type is record
-      Items            : Items_Type;
-      Keys             : Key_Array_Type;
-      Cipher_Data      : Cipher_Data_Array_Type;
-      Plain_Data       : Plain_Data_Array_Type;
-      Execute_Progress : Boolean;
+   type Job_Type is record
+      Operation   : Job_Operation_Type;
+      State       : Job_State_Type;
+      Request     : CBE.Request.Object_Type;
+      Cipher_Data : Cipher_Data_Type;
+      Plain_Data  : Plain_Data_Type;
    end record;
+
+   type Jobs_Index_Type is range 0 .. Nr_Of_Jobs - 1;
+
+   type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
+
+   type Key_Type is record
+      Data  : Key_Data_Type;
+      ID    : CBE.Key_ID_Type;
+      Valid : Boolean;
+   end record;
+
+   type Keys_Type is array (Keys_Index_Type) of Key_Type;
+
+   type Object_Type is record
+      Jobs : Jobs_Type;
+      Keys : Keys_Type;
+   end record;
+
+   --
+   --  Execute_Decrypt
+   --
+   procedure Execute_Decrypt (
+      Job      : in out Job_Type;
+      Keys     :        Keys_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Encrypt
+   --
+   procedure Execute_Encrypt (
+      Job      : in out Job_Type;
+      Keys     :        Keys_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Invalid_Key
+   --
+   function Invalid_Key
+   return Key_Type;
+
+   --
+   --  Invalid_Job
+   --
+   function Invalid_Job
+   return Job_Type;
 
 end External.Crypto;
