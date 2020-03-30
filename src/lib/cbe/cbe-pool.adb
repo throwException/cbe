@@ -327,7 +327,7 @@ is
       case Request.Operation (Itm.Req) is
       when Read | Write =>
          Number_Of_Primitives_Type (Request.Count (Itm.Req)),
-      when Sync | Create_Snapshot | Discard_Snapshot =>
+      when Sync | Create_Snapshot | Discard_Snapshot | Rekey =>
          1);
 
    --

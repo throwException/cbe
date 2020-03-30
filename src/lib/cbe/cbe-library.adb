@@ -298,6 +298,9 @@ is
       when Create_Snapshot | Discard_Snapshot =>
          raise Program_Error;
 
+      when Rekey =>
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
+
       end case;
 
    end Submit_Client_Request;
@@ -311,7 +314,7 @@ is
 
       case Request.Operation (Req) is
 
-      when Read | Write | Sync =>
+      when Read | Write | Sync | Rekey =>
          return Req;
 
       when Create_Snapshot | Discard_Snapshot =>

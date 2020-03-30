@@ -118,7 +118,8 @@ is
       when Write            => 2,
       when Sync             => 3,
       when Create_Snapshot  => 4,
-      when Discard_Snapshot => 5);
+      when Discard_Snapshot => 5,
+      when Rekey            => 6);
 
    function CXX_Request_Valid_To_SPARK (
       Req : CXX_Request_Type;
