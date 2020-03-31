@@ -74,6 +74,17 @@ struct Discard_snapshot
 };
 
 
+struct Rekey
+{
+	uint32_t key_id;
+
+	Rekey(uint32_t key_id)
+	:
+		key_id { key_id }
+	{ }
+};
+
+
 struct Cbe::Block_session_component
 {
 	enum class Response { ACCEPTED, REJECTED, RETRY };
@@ -108,6 +119,7 @@ struct Cbe::Block_session_component
 			REQUEST,
 			CREATE_SNAPSHOT,
 			DISCARD_SNAPSHOT,
+			REKEY,
 			INITIALIZE,
 			CHECK,
 			DUMP
@@ -117,6 +129,7 @@ struct Cbe::Block_session_component
 		Constructible<Block::Request>          request          { };
 		Constructible<Create_snapshot>         create_snapshot  { };
 		Constructible<Discard_snapshot>        discard_snapshot { };
+		Constructible<Rekey>                   rekey            { };
 		Constructible<Cbe_init::Configuration> initialize       { };
 		Constructible<Cbe_dump::Configuration> dump             { };
 
@@ -134,6 +147,9 @@ struct Cbe::Block_session_component
 			}
 			if (other.discard_snapshot.constructed()) {
 				discard_snapshot.construct(*other.discard_snapshot);
+			}
+			if (other.rekey.constructed()) {
+				rekey.construct(*other.rekey);
 			}
 			if (other.initialize.constructed()) {
 				initialize.construct(*other.initialize);
@@ -251,6 +267,25 @@ struct Cbe::Block_session_component
 		}
 	}
 
+	void _read_rekey_node(Xml_node const &node)
+	{
+		struct Bad_rekey_node : Exception { };
+		try {
+			uint32_t key_id { 0 };
+			if (!node.attribute("key_id").value(key_id)) {
+				error("rekey node has bad key_id attribute");
+				throw Bad_rekey_node();
+			}
+			Test &test = *new (_alloc) Test;
+			test.type = Test::REKEY;
+			test.rekey.construct(key_id);
+			_test_queue.enqueue(test);
+		} catch (Xml_node::Nonexistent_attribute) {
+			error("rekey node misses attribute");
+			throw Bad_rekey_node();
+		}
+	}
+
 	void _read_replay_node (Xml_node const &node)
 	{
 		struct Bad_replay_sub_node : Exception { };
@@ -263,6 +298,8 @@ struct Cbe::Block_session_component
 					_read_create_snapshot_node(sub_node);
 				} else if (sub_node.has_type("discard-snapshot")) {
 					_read_discard_snapshot_node(sub_node);
+				} else if (sub_node.has_type("rekey")) {
+					_read_rekey_node(sub_node);
 				} else {
 					error("replay sub-node has bad type");
 					throw Bad_replay_sub_node();
@@ -536,6 +573,54 @@ struct Cbe::Block_session_component
 		_test_in_progress.destruct();
 	}
 
+	template <typename FN>
+	void with_rekey(FN const &fn)
+	{
+		if (_test_in_progress.constructed()) {
+			return;
+		}
+		bool head_available { false };
+		bool head_is_snap_discard { false };
+		_test_queue.head([&] (Test &test) {
+			head_available = true;
+			if (test.type == Test::REKEY) {
+				head_is_snap_discard = true;
+			}
+		});
+		if (!head_available) {
+			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
+			if (_nr_of_failed_tests > 0) {
+				_env.parent().exit(-1);
+			} else {
+				_env.parent().exit(0);
+			}
+		}
+		if (!head_is_snap_discard) {
+			return;
+		}
+		_test_queue.dequeue([&] (Test &test) {
+			_test_in_progress.construct(test);
+			destroy(_alloc, &test);
+		});
+		log("rekey started: key_id ",
+		    _test_in_progress->rekey->key_id);
+
+		fn(*_test_in_progress->rekey);
+	}
+
+	void rekey_done(bool success)
+	{
+		if (success) {
+			log("rekey succeeded: id ",
+		    _test_in_progress->rekey->key_id);
+		} else {
+			_nr_of_failed_tests++;
+			log("rekey failed: id ",
+		    _test_in_progress->rekey->key_id);
+		}
+		_test_in_progress.destruct();
+	}
+
 	bool cbe_request_next() const
 	{
 		bool result = false;
@@ -543,6 +628,7 @@ struct Cbe::Block_session_component
 			result |= test.type == Test::REQUEST;
 			result |= test.type == Test::CREATE_SNAPSHOT;
 			result |= test.type == Test::DISCARD_SNAPSHOT;
+			result |= test.type == Test::REKEY;
 		});
 		return result;
 	}
@@ -758,6 +844,8 @@ class Cbe::Main
 		bool                                    _creating_snapshot       { false };
 		bool                                    _discard_snapshot        { false };
 		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
+		bool                                    _rekey                   { false };
+		Rekey                                   _rekey_obj               { 0 };
 
 		void _execute_cbe_check (bool &progress)
 		{
@@ -1135,25 +1223,28 @@ class Cbe::Main
 			 * Acknowledge finished Block session requests.
 			 */
 
-			_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
+			if (!_rekey) {
 
-				Cbe::Request const &req = _cbe->peek_completed_client_request();
-				if (!req.valid()) { return; }
+				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
 
-				_cbe->drop_completed_client_request(req);
+					Cbe::Request const &req = _cbe->peek_completed_client_request();
+					if (!req.valid()) { return; }
 
-				Block::Request request = convert_from(req);
+					_cbe->drop_completed_client_request(req);
 
-				ack.submit(request);
+					Block::Request request = convert_from(req);
 
-				if (_block_session->cbe_request_next()) {
-					_state = CBE;
-				} else {
-					_state = INVALID;
-				}
+					ack.submit(request);
 
-				progress |= true;
-			});
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
+					}
+
+					progress |= true;
+				});
+			}
 
 			if (!_creating_snapshot) {
 				_block_session->with_create_snapshot([&] (Create_snapshot const cs) {
@@ -1203,6 +1294,58 @@ class Cbe::Main
 					_block_session->discard_snapshot_done(true);
 					_discard_snapshot_obj = { 0, 0 };
 					_discard_snapshot = false;
+
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
+					}
+					progress |= true;
+				}
+			}
+
+			if (!_rekey) {
+				_block_session->with_rekey([&] (Rekey const rekey) {
+
+					struct Rekey_request_not_acceptable { };
+					if (!_cbe->client_request_acceptable()) {
+						throw Rekey_request_not_acceptable();
+					}
+
+					Cbe::Request req(
+						Cbe::Request::Operation::REKEY,
+						Cbe::Request::Success::FALSE,
+						0,
+						0,
+						0,
+						rekey.key_id,
+						0);
+
+					_cbe->submit_client_request(req, 0);
+					_rekey_obj = { rekey.key_id };
+					_rekey = true;
+					progress |= true;
+				});
+			}
+
+			if (_rekey) {
+
+				Cbe::Request const &req = _cbe->peek_completed_client_request();
+				if (req.valid()) {
+
+					struct Unexpected_request : Genode::Exception { };
+					if (req.operation() != Cbe::Request::Operation::REKEY ||
+					    req.key_id() != _rekey_obj.key_id)
+					{
+						throw Unexpected_request();
+					}
+					_block_session->rekey_done(
+						req.success() ==
+							Cbe::Request::Success::TRUE ? true : false);
+
+					_rekey_obj = { 0 };
+					_rekey = false;
+					_cbe->drop_completed_client_request(req);
 
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;
