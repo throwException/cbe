@@ -35,15 +35,40 @@ is
       for Idx in Obj.Items'Range loop
 
          if Obj.Items (Idx).State = Invalid then
-            Obj.Items (Idx) := (
-               State                 => Pending,
-               Req                   => Req,
-               Snap_ID               => Snap_ID,
-               Nr_Of_Prims_Completed => 0);
 
-            Request.Success (Obj.Items (Idx).Req, True);
-            Index_Queue.Enqueue (Obj.Indices, Idx);
-            return;
+            case Request.Operation (Req) is
+            when Rekey =>
+
+               Obj.Items (Idx) := (
+                  State   => Rekey_Init_Pending,
+                  Req     => Req,
+                  Snap_ID => Snap_ID,
+                  Prim    => Primitive.Valid_Object (
+                     Op     => Read,
+                     Succ   => False,
+                     Tg     => Primitive.Tag_Pool_SB_Ctrl_Init_Rekey,
+                     Pl_Idx => Idx,
+                     Blk_Nr => 0,
+                     Idx    => 0),
+                  Nr_Of_Prims_Completed => 0);
+
+               Index_Queue.Enqueue (Obj.Indices, Idx);
+               return;
+
+            when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+
+               Obj.Items (Idx) := (
+                  State                 => Pending,
+                  Req                   => Req,
+                  Snap_ID               => Snap_ID,
+                  Prim                  => Primitive.Invalid_Object,
+                  Nr_Of_Prims_Completed => 0);
+
+               Request.Success (Obj.Items (Idx).Req, True);
+               Index_Queue.Enqueue (Obj.Indices, Idx);
+               return;
+
+            end case;
 
          end if;
 
@@ -195,6 +220,27 @@ is
    end Peek_Generated_VBD_Primitive;
 
    --
+   --  Peek_Generated_SB_Ctrl_Primitive
+   --
+   function Peek_Generated_SB_Ctrl_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type
+   is
+   begin
+      if not Index_Queue.Empty (Obj.Indices) then
+         Declare_Item :
+         declare
+            Itm : constant Item_Type :=
+               Obj.Items (Index_Queue.Head (Obj.Indices));
+         begin
+            if Itm.State = Rekey_Init_Pending then
+               return Itm.Prim;
+            end if;
+         end Declare_Item;
+      end if;
+      return Primitive.Invalid_Object;
+   end Peek_Generated_SB_Ctrl_Primitive;
+
+   --
    --  Peek_Generated_VBD_Primitive_ID
    --
    function Peek_Generated_VBD_Primitive_ID (
@@ -224,15 +270,21 @@ is
       Idx  :        Pool_Index_Type)
    is
    begin
-      if Index_Queue.Empty (Obj.Indices) or else
-         Index_Queue.Head (Obj.Indices) /= Idx or else
-         Obj.Items (Idx).State /= Pending
+      if not Index_Queue.Empty (Obj.Indices) and then
+         Index_Queue.Head (Obj.Indices) = Idx
       then
-         raise Program_Error;
+         case Obj.Items (Idx).State is
+         when Pending =>
+            Obj.Items (Idx).State := In_Progress;
+            return;
+         when Rekey_Init_Pending =>
+            Obj.Items (Idx).State := Rekey_Init_In_Progress;
+            return;
+         when others =>
+            null;
+         end case;
       end if;
-
-      Obj.Items (Idx).State := In_Progress;
-
+      raise Program_Error;
    end Drop_Generated_Primitive;
 
    --
@@ -339,6 +391,7 @@ is
       State                 => Invalid,
       Req                   => Request.Invalid_Object,
       Snap_ID               => 0,
+      Prim                  => Primitive.Invalid_Object,
       Nr_Of_Prims_Completed => 0);
 
    --

@@ -72,6 +72,12 @@ is
    return Snapshot_ID_Type;
 
    --
+   --  Peek_Generated_SB_Ctrl_Primitive
+   --
+   function Peek_Generated_SB_Ctrl_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -109,12 +115,19 @@ is
 
 private
 
-   type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
+   type Item_State_Type is (
+      Invalid,
+      Pending,
+      In_Progress,
+      Complete,
+      Rekey_Init_Pending,
+      Rekey_Init_In_Progress);
 
    type Item_Type is record
       State                 : Item_State_Type;
       Req                   : Request.Object_Type;
       Snap_ID               : Snapshot_ID_Type;
+      Prim                  : Primitive.Object_Type;
       Nr_Of_Prims_Completed : Number_Of_Primitives_Type;
    end record;
 

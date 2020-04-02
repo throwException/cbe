@@ -228,6 +228,9 @@ is
    function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Pool_VBD);
 
+   function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Init_Rekey);
+
    function Has_Tag_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_IO);
 

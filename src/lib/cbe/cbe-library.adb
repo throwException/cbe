@@ -1698,6 +1698,31 @@ is
 
       end loop Loop_Pool_Generated_VBD_Prims;
 
+      Loop_Pool_Generated_SB_Ctrl_Prims :
+      loop
+         Declare_SB_Ctrl_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Pool.Peek_Generated_SB_Ctrl_Primitive (Obj.Request_Pool_Obj);
+         begin
+
+            exit Loop_Pool_Generated_SB_Ctrl_Prims when
+               not Primitive.Valid (Prim);
+               --  or else
+               --  not Superblock_Control.Primitive_Acceptable (Obj.SB_Ctrl);
+
+            --  Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
+
+            Pool.Drop_Generated_Primitive (
+               Obj.Request_Pool_Obj,
+               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
+            Progress := True;
+
+         end Declare_SB_Ctrl_Prim;
+
+      end loop Loop_Pool_Generated_SB_Ctrl_Prims;
+
    end Execute_Request_Pool;
 
    procedure Execute_Writeback (
