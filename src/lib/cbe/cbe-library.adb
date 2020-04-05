@@ -120,6 +120,8 @@ is
 
       Obj.WB_Prim := Primitive.Invalid_Object;
 
+      Superblock_Control.Initialize_Control (Obj.SB_Ctrl);
+
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
@@ -1546,6 +1548,9 @@ is
 
    end Execute_Cache;
 
+   --
+   --  Execute_Request_Pool
+   --
    procedure Execute_Request_Pool (
       Obj      : in out Object_Type;
       Progress : in out Boolean)
@@ -1711,7 +1716,7 @@ is
                --  or else
                --  not Superblock_Control.Primitive_Acceptable (Obj.SB_Ctrl);
 
-            --  Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
+            Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
 
             Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
@@ -1724,6 +1729,36 @@ is
       end loop Loop_Pool_Generated_SB_Ctrl_Prims;
 
    end Execute_Request_Pool;
+
+   --
+   --  Execute_SB_Ctrl
+   --
+   procedure Execute_SB_Ctrl (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      Superblock_Control.Execute (Obj.SB_Ctrl, Progress);
+
+      Loop_Generated_TA_Prims :
+      loop
+         Declare_TA_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_TA_Primitive (Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_TA_Prims when
+               not Primitive.Valid (Prim); --  or else
+               --  not Trust_Anchor.Primitive_Acceptable (Obj.TA);
+
+            --  Trust_Acnhor.Submit_Primitive (Obj.TA, Prim);
+            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+            Progress := True;
+
+         end Declare_TA_Prim;
+      end loop Loop_Generated_TA_Prims;
+
+   end Execute_SB_Ctrl;
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;
@@ -2369,6 +2404,7 @@ is
 
       Execute_SCD (Obj, Progress);
       Execute_Request_Pool (Obj, Progress);
+      Execute_SB_Ctrl (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);

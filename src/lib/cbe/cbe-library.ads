@@ -19,6 +19,7 @@ with CBE.Primitive;
 with CBE.Cache;
 with CBE.New_Free_Tree;
 with CBE.Meta_Tree;
+with CBE.Superblock_Control;
 
 package CBE.Library
 with SPARK_Mode
@@ -476,6 +477,8 @@ private
       WB_Cache_Prim_3_Data  : Block_Data_Type;
       WB_Prim               : Primitive.Object_Type;
 
+      SB_Ctrl : Superblock_Control.Control_Type;
+
    end record;
 
    procedure Try_Discard_Snapshot (
@@ -535,7 +538,17 @@ private
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 
+   --
+   --  Execute_Request_Pool
+   --
    procedure Execute_Request_Pool (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_SB_Ctrl
+   --
+   procedure Execute_SB_Ctrl (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 
