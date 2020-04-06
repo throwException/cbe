@@ -121,6 +121,7 @@ is
       Obj.WB_Prim := Primitive.Invalid_Object;
 
       Superblock_Control.Initialize_Control (Obj.SB_Ctrl);
+      Trust_Anchor.Initialize_Anchor (Obj.TA);
 
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
@@ -1748,10 +1749,10 @@ is
                Superblock_Control.Peek_Generated_TA_Primitive (Obj.SB_Ctrl);
          begin
             exit Loop_Generated_TA_Prims when
-               not Primitive.Valid (Prim); --  or else
-               --  not Trust_Anchor.Primitive_Acceptable (Obj.TA);
+               not Primitive.Valid (Prim) or else
+               not Trust_Anchor.Primitive_Acceptable (Obj.TA);
 
-            --  Trust_Acnhor.Submit_Primitive (Obj.TA, Prim);
+            Trust_Anchor.Submit_Primitive (Obj.TA, Prim);
             Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
             Progress := True;
 
@@ -1759,6 +1760,46 @@ is
       end loop Loop_Generated_TA_Prims;
 
    end Execute_SB_Ctrl;
+
+   --
+   --  Execute_TA
+   --
+   procedure Execute_TA (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      Trust_Anchor.Execute (Obj.TA, Progress);
+
+      Loop_Completed_Prims :
+      loop
+         Declare_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Trust_Anchor.Peek_Completed_Primitive (Obj.TA);
+         begin
+            exit Loop_Completed_Prims when not Primitive.Valid (Prim);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_TA_Create_Key =>
+
+               Superblock_Control.Mark_Generated_Primitive_Complete (
+                  Obj.SB_Ctrl, Prim,
+                  Trust_Anchor.Peek_Completed_Key (Obj.TA, Prim));
+
+               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Prim;
+      end loop Loop_Completed_Prims;
+
+   end Execute_TA;
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;
@@ -2405,6 +2446,7 @@ is
       Execute_SCD (Obj, Progress);
       Execute_Request_Pool (Obj, Progress);
       Execute_SB_Ctrl (Obj, Progress);
+      Execute_TA (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);

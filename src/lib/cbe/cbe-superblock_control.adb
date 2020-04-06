@@ -19,7 +19,12 @@ is
    begin
       Initialize_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
-         Job_Initialize (Ctrl.Jobs (Idx));
+         Ctrl.Jobs (Idx) := (
+            Operation => Invalid,
+            State => Job_State_Type'First,
+            Submitted_Prim => Primitive.Invalid_Object,
+            Generated_Prim => Primitive.Invalid_Object,
+            Key => (others => Byte_Type'First));
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -202,7 +207,8 @@ is
    --
    procedure Mark_Generated_Primitive_Complete (
       Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Type)
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
@@ -210,8 +216,9 @@ is
       if Ctrl.Jobs (Idx).Operation /= Invalid then
          case Ctrl.Jobs (Idx).State is
          when Create_Key_In_Progress =>
-            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim) then
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Create_Key_Completed;
+               Ctrl.Jobs (Idx).Key := Key;
                return;
             end if;
             raise Program_Error;
@@ -221,18 +228,5 @@ is
       end if;
       raise Program_Error;
    end Mark_Generated_Primitive_Complete;
-
-   --
-   --  Job_Initialize
-   --
-   procedure Job_Initialize (Job : out Job_Type)
-   is
-   begin
-      Job := (
-         Operation => Invalid,
-         State => Job_State_Type'First,
-         Submitted_Prim => Primitive.Invalid_Object,
-         Generated_Prim => Primitive.Invalid_Object);
-   end Job_Initialize;
 
 end CBE.Superblock_Control;

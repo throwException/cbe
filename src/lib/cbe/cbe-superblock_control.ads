@@ -15,7 +15,7 @@ with SPARK_Mode
 is
    pragma Pure;
 
-   Nr_Of_Jobs : constant := 4;
+   Nr_Of_Jobs : constant := 2;
 
    type Control_Type is private;
 
@@ -77,7 +77,8 @@ is
    --
    procedure Mark_Generated_Primitive_Complete (
       Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type);
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Type);
 
 private
 
@@ -109,6 +110,7 @@ private
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
       Generated_Prim : Primitive.Object_Type;
+      Key : Key_Value_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -116,11 +118,6 @@ private
    type Control_Type is record
       Jobs : Jobs_Type;
    end record;
-
-   --
-   --  Job_Initialize
-   --
-   procedure Job_Initialize (Job : out Job_Type);
 
    --
    --  Execute_Initialize_Rekeying

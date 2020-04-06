@@ -20,6 +20,7 @@ with CBE.Cache;
 with CBE.New_Free_Tree;
 with CBE.Meta_Tree;
 with CBE.Superblock_Control;
+with CBE.Trust_Anchor;
 
 package CBE.Library
 with SPARK_Mode
@@ -478,6 +479,7 @@ private
       WB_Prim               : Primitive.Object_Type;
 
       SB_Ctrl : Superblock_Control.Control_Type;
+      TA : Trust_Anchor.Anchor_Type;
 
    end record;
 
@@ -549,6 +551,13 @@ private
    --  Execute_SB_Ctrl
    --
    procedure Execute_SB_Ctrl (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_TA
+   --
+   procedure Execute_TA (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 
