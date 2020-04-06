@@ -36,18 +36,34 @@ is
       Prim   :        Primitive.Object_Type);
 
    --
+   --  Submit_Primitive_Key_Plaintext
+   --
+   procedure Submit_Primitive_Key_Plaintext (
+      Anchor : in out Anchor_Type;
+      Prim   :        Primitive.Object_Type;
+      Key    :        Key_Plaintext_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Anchor : Anchor_Type)
    return Primitive.Object_Type;
 
    --
-   --  Peek_Completed_Key
+   --  Peek_Completed_Key_Plaintext
    --
-   function Peek_Completed_Key (
+   function Peek_Completed_Key_Plaintext (
       Anchor : Anchor_Type;
       Prim   : Primitive.Object_Type)
-   return Key_Value_Type;
+   return Key_Plaintext_Type;
+
+   --
+   --  Peek_Completed_Key_Ciphertext
+   --
+   function Peek_Completed_Key_Ciphertext (
+      Anchor : Anchor_Type;
+      Prim   : Primitive.Object_Type)
+   return Key_Ciphertext_Type;
 
    --
    --  Drop_Completed_Primitive
@@ -71,7 +87,8 @@ private
 
    type Job_Operation_Type is (
       Invalid,
-      Create_Key);
+      Create_Key,
+      Encrypt_Key);
 
    type Job_State_Type is (
       Submitted,
@@ -81,20 +98,30 @@ private
       Operation : Job_Operation_Type;
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
-      Key : Key_Value_Type;
+      Key_Plaintext : Key_Plaintext_Type;
+      Key_Ciphertext : Key_Ciphertext_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
 
    type Anchor_Type is record
       Jobs : Jobs_Type;
-      Next_Key_Byte : Byte_Type;
+      Next_Key_Plaintext_Byte : Byte_Type;
+      Next_Key_Ciphertext_Byte : Byte_Type;
    end record;
 
    --
    --  Execute_Create_Key
    --
    procedure Execute_Create_Key (
+      Anchor   : in out Anchor_Type;
+      Idx      :        Jobs_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Encrypt_Key
+   --
+   procedure Execute_Encrypt_Key (
       Anchor   : in out Anchor_Type;
       Idx      :        Jobs_Index_Type;
       Progress : in out Boolean);

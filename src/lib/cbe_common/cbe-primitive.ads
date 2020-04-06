@@ -50,6 +50,7 @@ is
       Tag_Pool_VBD,
       Tag_Pool_SB_Ctrl_Init_Rekey,
       Tag_SB_Ctrl_TA_Create_Key,
+      Tag_SB_Ctrl_TA_Encrypt_Key,
       Tag_IO,
       Tag_Translation,
       Tag_Write_Back,
@@ -110,6 +111,7 @@ is
       when Tag_Pool_VBD => "Pool_VBD",
       when Tag_Pool_SB_Ctrl_Init_Rekey => "Pool_SB_Ctrl_Init_Rekey",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
+      when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
       when Tag_Write_Back => "Write_Back",
@@ -290,6 +292,7 @@ is
    function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Translation (Obj : Object_Type) return Boolean;
    function Has_Tag_Write_Back (Obj : Object_Type) return Boolean;

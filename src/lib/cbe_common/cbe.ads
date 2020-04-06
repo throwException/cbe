@@ -222,7 +222,8 @@ is
       Keep        => False);
 
    type Key_Value_Index_Type is range 0 .. Key_Value_Size_Bytes - 1;
-   type Key_Value_Type is array (Key_Value_Index_Type) of Byte_Type;
+   type Key_Plaintext_Type is array (Key_Value_Index_Type) of Byte_Type;
+   type Key_Ciphertext_Type is array (Key_Value_Index_Type) of Byte_Type;
 
    --
    --  The CBE::Key contains the key-material that is used to
@@ -232,7 +233,7 @@ is
    --  by type 2 nodes.)
    --
    type Key_Type is record
-      Value : Key_Value_Type;
+      Value : Key_Plaintext_Type;
       ID    : Key_ID_Type;
    end record;
 

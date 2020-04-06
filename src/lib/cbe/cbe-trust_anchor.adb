@@ -19,14 +19,18 @@ is
    begin
       Initialize_Each_Job :
       for Idx in Anchor.Jobs'Range loop
+
          Anchor.Jobs (Idx) := (
             Operation => Invalid,
             State => Job_State_Type'First,
             Submitted_Prim => Primitive.Invalid_Object,
-            Key => (others => Byte_Type'First));
+            Key_Plaintext => (others => Byte_Type'First),
+            Key_Ciphertext => (others => Byte_Type'First));
+
       end loop Initialize_Each_Job;
 
-      Anchor.Next_Key_Byte := 65;
+      Anchor.Next_Key_Plaintext_Byte := 65;
+      Anchor.Next_Key_Ciphertext_Byte := 97;
 
    end Initialize_Anchor;
 
@@ -68,6 +72,38 @@ is
    end Submit_Primitive;
 
    --
+   --  Submit_Primitive_Key_Plaintext
+   --
+   procedure Submit_Primitive_Key_Plaintext (
+      Anchor : in out Anchor_Type;
+      Prim   :        Primitive.Object_Type;
+      Key    :        Key_Plaintext_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Anchor.Jobs'Range loop
+         if Anchor.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
+
+               Anchor.Jobs (Idx).Operation := Encrypt_Key;
+               Anchor.Jobs (Idx).State := Submitted;
+               Anchor.Jobs (Idx).Submitted_Prim := Prim;
+               Anchor.Jobs (Idx).Key_Plaintext := Key;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_Key_Plaintext;
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Anchor : Anchor_Type)
@@ -86,12 +122,12 @@ is
    end Peek_Completed_Primitive;
 
    --
-   --  Peek_Completed_Key
+   --  Peek_Completed_Key_Plaintext
    --
-   function Peek_Completed_Key (
+   function Peek_Completed_Key_Plaintext (
       Anchor : Anchor_Type;
       Prim   : Primitive.Object_Type)
-   return Key_Value_Type
+   return Key_Plaintext_Type
    is
    begin
       Find_Corresponding_Job :
@@ -100,11 +136,35 @@ is
             Anchor.Jobs (Idx).State = Completed and then
             Primitive.Equal (Prim, Anchor.Jobs (Idx).Submitted_Prim)
          then
-            return Anchor.Jobs (Idx).Key;
+            return Anchor.Jobs (Idx).Key_Plaintext;
          end if;
       end loop Find_Corresponding_Job;
       raise Program_Error;
-   end Peek_Completed_Key;
+   end Peek_Completed_Key_Plaintext;
+
+   --
+   --  Peek_Completed_Key_Ciphertext
+   --
+   function Peek_Completed_Key_Ciphertext (
+      Anchor : Anchor_Type;
+      Prim   : Primitive.Object_Type)
+   return Key_Ciphertext_Type
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Encrypt_Key and then
+            Anchor.Jobs (Idx).State = Completed and then
+            Primitive.Equal (Prim, Anchor.Jobs (Idx).Submitted_Prim)
+         then
+            return Anchor.Jobs (Idx).Key_Ciphertext;
+         end if;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Key_Ciphertext;
 
    --
    --  Drop_Completed_Primitive
@@ -139,9 +199,11 @@ is
       case Anchor.Jobs (Idx).State is
       when Submitted =>
 
-         Anchor.Jobs (Idx).Key := (others => Anchor.Next_Key_Byte);
+         Anchor.Jobs (Idx).Key_Plaintext := (
+            others => Anchor.Next_Key_Plaintext_Byte);
+
          Anchor.Jobs (Idx).State := Completed;
-         Anchor.Next_Key_Byte := Anchor.Next_Key_Byte + 1;
+         Anchor.Next_Key_Plaintext_Byte := Anchor.Next_Key_Plaintext_Byte + 1;
          Progress := True;
 
       when others =>
@@ -150,6 +212,34 @@ is
 
       end case;
    end Execute_Create_Key;
+
+   --
+   --  Execute_Encrypt_Key
+   --
+   procedure Execute_Encrypt_Key (
+      Anchor   : in out Anchor_Type;
+      Idx      :        Jobs_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      case Anchor.Jobs (Idx).State is
+      when Submitted =>
+
+         Anchor.Jobs (Idx).Key_Ciphertext := (
+            others => Anchor.Next_Key_Ciphertext_Byte);
+
+         Anchor.Jobs (Idx).State := Completed;
+         Anchor.Next_Key_Ciphertext_Byte :=
+            Anchor.Next_Key_Ciphertext_Byte + 1;
+
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+   end Execute_Encrypt_Key;
 
    --
    --  Execute
@@ -161,12 +251,22 @@ is
    begin
       Execute_Each_Valid_Job :
       for Idx in Anchor.Jobs'Range loop
+
          case Anchor.Jobs (Idx).Operation is
          when Create_Key =>
+
             Execute_Create_Key (Anchor, Idx, Progress);
+
+         when Encrypt_Key =>
+
+            Execute_Encrypt_Key (Anchor, Idx, Progress);
+
          when Invalid =>
+
             null;
+
          end case;
+
       end loop Execute_Each_Valid_Job;
    end Execute;
 

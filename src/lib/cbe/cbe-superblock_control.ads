@@ -67,6 +67,14 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_Plain_Key
+   --
+   function Peek_Generated_Key_Plaintext (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type)
+   return Key_Plaintext_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -74,12 +82,20 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Mark_Generated_Primitive_Complete
+   --  Mark_Generated_Prim_Complete_Key_Plaintext
    --
-   procedure Mark_Generated_Primitive_Complete (
+   procedure Mark_Generated_Prim_Complete_Key_Plaintext (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type;
-      Key  :        Key_Value_Type);
+      Key  :        Key_Plaintext_Type);
+
+   --
+   --  Mark_Generated_Prim_Complete_Key_Ciphertext
+   --
+   procedure Mark_Generated_Prim_Complete_Key_Ciphertext (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Ciphertext_Type);
 
 private
 
@@ -111,7 +127,8 @@ private
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
       Generated_Prim : Primitive.Object_Type;
-      Key : Key_Value_Type;
+      Key_Plaintext : Key_Plaintext_Type;
+      Key_Ciphertext : Key_Ciphertext_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;

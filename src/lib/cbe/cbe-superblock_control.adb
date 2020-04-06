@@ -24,7 +24,8 @@ is
             State => Job_State_Type'First,
             Submitted_Prim => Primitive.Invalid_Object,
             Generated_Prim => Primitive.Invalid_Object,
-            Key => (others => Byte_Type'First));
+            Key_Plaintext => (others => Byte_Type'First),
+            Key_Ciphertext => (others => Byte_Type'First));
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -137,8 +138,19 @@ is
          SB.State := Rekeying_Virtual_Block_Device;
          SB.Previous_Key := SB.Current_Key;
          SB.Current_Key := (
-            Value => Job.Key,
+            Value => Job.Key_Plaintext,
             ID => SB.Previous_Key.ID + 1);
+
+         Job.Generated_Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Pl_Idx => Pool_Index_Type'First,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Key_Pending;
+         Progress := True;
 
       when others =>
 
@@ -176,20 +188,61 @@ is
    begin
       Inspect_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
+
          case Ctrl.Jobs (Idx).Operation is
          when Initialize_Rekeying =>
+
             case Ctrl.Jobs (Idx).State is
-            when Create_Key_Pending =>
+            when Create_Key_Pending | Encrypt_Key_Pending =>
+
                return Ctrl.Jobs (Idx).Generated_Prim;
+
             when others =>
+
                null;
+
             end case;
          when Invalid =>
+
             null;
+
          end case;
+
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
    end Peek_Generated_TA_Primitive;
+
+   --
+   --  Peek_Generated_Key_Plaintext
+   --
+   function Peek_Generated_Key_Plaintext (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type)
+   return Key_Plaintext_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Encrypt_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Key_Plaintext;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Key_Plaintext;
 
    --
    --  Drop_Generated_Primitive
@@ -202,45 +255,103 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
       if Ctrl.Jobs (Idx).Operation /= Invalid then
+
          case Ctrl.Jobs (Idx).State is
          when Create_Key_Pending =>
+
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Create_Key_In_Progress;
                return;
             end if;
             raise Program_Error;
-         when others =>
+
+         when Encrypt_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Encrypt_Key_In_Progress;
+               return;
+            end if;
             raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
          end case;
+
       end if;
       raise Program_Error;
+
    end Drop_Generated_Primitive;
 
    --
-   --  Mark_Generated_Primitive_Complete
+   --  Mark_Generated_Prim_Complete_Key_Plaintext
    --
-   procedure Mark_Generated_Primitive_Complete (
+   procedure Mark_Generated_Prim_Complete_Key_Plaintext (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type;
-      Key  :        Key_Value_Type)
+      Key  :        Key_Plaintext_Type)
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
       if Ctrl.Jobs (Idx).Operation /= Invalid then
+
          case Ctrl.Jobs (Idx).State is
          when Create_Key_In_Progress =>
+
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Create_Key_Completed;
-               Ctrl.Jobs (Idx).Key := Key;
+               Ctrl.Jobs (Idx).Key_Plaintext := Key;
                return;
             end if;
             raise Program_Error;
+
          when others =>
+
             raise Program_Error;
+
          end case;
+
       end if;
       raise Program_Error;
-   end Mark_Generated_Primitive_Complete;
+
+   end Mark_Generated_Prim_Complete_Key_Plaintext;
+
+   --
+   --  Mark_Generated_Prim_Complete_Key_Ciphertext
+   --
+   procedure Mark_Generated_Prim_Complete_Key_Ciphertext (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Ciphertext_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Encrypt_Key_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Encrypt_Key_Completed;
+               Ctrl.Jobs (Idx).Key_Ciphertext := Key;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_Key_Ciphertext;
 
 end CBE.Superblock_Control;

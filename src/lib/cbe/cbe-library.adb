@@ -1752,7 +1752,24 @@ is
                not Primitive.Valid (Prim) or else
                not Trust_Anchor.Primitive_Acceptable (Obj.TA);
 
-            Trust_Anchor.Submit_Primitive (Obj.TA, Prim);
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_TA_Create_Key =>
+
+               Trust_Anchor.Submit_Primitive (Obj.TA, Prim);
+
+            when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
+
+               Trust_Anchor.Submit_Primitive_Key_Plaintext (
+                  Obj.TA, Prim,
+                  Superblock_Control.Peek_Generated_Key_Plaintext (
+                     Obj.SB_Ctrl, Prim));
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
             Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
             Progress := True;
 
@@ -1783,9 +1800,18 @@ is
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Ctrl_TA_Create_Key =>
 
-               Superblock_Control.Mark_Generated_Primitive_Complete (
+               Superblock_Control.Mark_Generated_Prim_Complete_Key_Plaintext (
                   Obj.SB_Ctrl, Prim,
-                  Trust_Anchor.Peek_Completed_Key (Obj.TA, Prim));
+                  Trust_Anchor.Peek_Completed_Key_Plaintext (Obj.TA, Prim));
+
+               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_Key_Ciphertext (
+                  Obj.SB_Ctrl, Prim,
+                  Trust_Anchor.Peek_Completed_Key_Ciphertext (Obj.TA, Prim));
 
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;
