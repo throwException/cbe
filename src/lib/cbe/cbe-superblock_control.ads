@@ -57,6 +57,7 @@ is
    --
    procedure Execute (
       Ctrl     : in out Control_Type;
+      SB       : in out Superblock_Type;
       Progress : in out Boolean);
 
    --
@@ -125,6 +126,7 @@ private
    procedure Execute_Initialize_Rekeying (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
+      SB       : in out Superblock_Type;
       Progress : in out Boolean);
 
 end CBE.Superblock_Control;

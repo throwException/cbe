@@ -1739,7 +1739,7 @@ is
       Progress : in out Boolean)
    is
    begin
-      Superblock_Control.Execute (Obj.SB_Ctrl, Progress);
+      Superblock_Control.Execute (Obj.SB_Ctrl, Obj.Superblock, Progress);
 
       Loop_Generated_TA_Prims :
       loop

@@ -110,6 +110,7 @@ is
    procedure Execute_Initialize_Rekeying (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
+      SB       : in out Superblock_Type;
       Progress : in out Boolean)
    is
    begin
@@ -127,6 +128,13 @@ is
          Job.State := Create_Key_Pending;
          Progress := True;
 
+      when Create_Key_Completed =>
+
+         SB.Previous_Key := SB.Current_Key;
+         SB.Current_Key := (
+            Value => Job.Key,
+            ID => SB.Previous_Key.ID + 1);
+
       when others =>
 
          null;
@@ -139,6 +147,7 @@ is
    --
    procedure Execute (
       Ctrl     : in out Control_Type;
+      SB       : in out Superblock_Type;
       Progress : in out Boolean)
    is
    begin
@@ -146,7 +155,7 @@ is
       for Idx in Ctrl.Jobs'Range loop
          case Ctrl.Jobs (Idx).Operation is
          when Initialize_Rekeying =>
-            Execute_Initialize_Rekeying (Ctrl.Jobs (Idx), Idx, Progress);
+            Execute_Initialize_Rekeying (Ctrl.Jobs (Idx), Idx, SB, Progress);
          when Invalid =>
             null;
          end case;
