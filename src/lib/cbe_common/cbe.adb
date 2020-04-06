@@ -114,6 +114,8 @@ is
       Debug.To_String (Debug.Uint64_Type (SB.Curr_Snap)) &
       """ degr=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Degree)) &
+      """ state=""" &
+      SB.State'Image &
       """>");
 
    function Superblock_XML_Tag_Invalid
@@ -229,6 +231,7 @@ is
    is
       Result : Superblock_Type;
    begin
+      Result.State                   := Superblock_State_Type'First;
       Result.Previous_Key            := Key_Invalid;
       Result.Current_Key             := Key_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
@@ -385,6 +388,39 @@ is
    is (
       if Data (Off + 0) = 1 then True else False);
 
+   --
+   --  SB_State_From_Block_Data
+   --
+   function SB_State_From_Block_Data (
+      Data : Block_Data_Type;
+      Off  : Block_Data_Index_Type)
+   return Superblock_State_Type
+   is
+   begin
+      case Data (Off) is
+      when 0 => return Normal;
+      when 1 => return Rekeying_Virtual_Block_Device;
+      when 2 => return Rekeying_Free_Tree;
+      when others => raise Program_Error;
+      end case;
+   end SB_State_From_Block_Data;
+
+   --
+   --  Block_Data_From_SB_State
+   --
+   procedure Block_Data_From_SB_State (
+      Data  : in out Block_Data_Type;
+      Off   :        Block_Data_Index_Type;
+      State :        Superblock_State_Type)
+   is
+   begin
+      case State is
+      when Normal => Data (Off) := 0;
+      when Rekeying_Virtual_Block_Device => Data (Off) := 1;
+      when Rekeying_Free_Tree => Data (Off) := 2;
+      end case;
+   end Block_Data_From_SB_State;
+
    function Unsigned_32_From_Block_Data (
       Data : Block_Data_Type;
       Off  : Block_Data_Index_Type)
@@ -496,12 +532,18 @@ is
       end loop For_Snaps;
    end Snapshots_From_Block_Data;
 
+   --
+   --  Superblock_From_Block_Data
+   --
    procedure Superblock_From_Block_Data (
       SB   : out Superblock_Type;
       Data :     Block_Data_Type)
    is
       Off : Block_Data_Index_Type := 0;
    begin
+      SB.State := SB_State_From_Block_Data (Data, Off);
+      Off := Off + 1;
+
       Key_From_Block_Data (SB.Previous_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
 
@@ -724,6 +766,9 @@ is
       end loop For_Snaps;
    end Block_Data_From_Snapshots;
 
+   --
+   --  Block_Data_From_Superblock
+   --
    procedure Block_Data_From_Superblock (
       Data  : out Block_Data_Type;
       SB    :     Superblock_Type)
@@ -731,6 +776,9 @@ is
       Off : Block_Data_Index_Type := 0;
    begin
       Data := (others => 0);
+
+      Block_Data_From_SB_State (Data, Off, SB.State);
+      Off := Off + 1;
 
       Block_Data_From_Key (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;

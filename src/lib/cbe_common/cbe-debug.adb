@@ -187,7 +187,9 @@ is
          " SN: " &
          Debug.To_String (Debug.Uint64_Type (SB.Curr_Snap)) &
          " LSGEN: " &
-         Debug.To_String (Debug.Uint64_Type (SB.Last_Secured_Generation)));
+         Debug.To_String (Debug.Uint64_Type (SB.Last_Secured_Generation)) &
+         " state: " &
+         SB.State'Image);
 
       for I in Snapshots_Index_Type loop
          if SB.Snapshots (I).Valid then

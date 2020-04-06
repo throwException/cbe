@@ -255,6 +255,11 @@ is
    function Key_Valid (ID : Key_ID_Type)
    return Key_Type;
 
+   type Superblock_State_Type is (
+      Normal,
+      Rekeying_Virtual_Block_Device,
+      Rekeying_Free_Tree);
+
    --
    --  The CBE::Superblock contains all information of a CBE
    --  instance including the list of active snapshots. For now
@@ -285,6 +290,7 @@ is
       --  reused blocks reference by a snapshot in the older SB.)
       --
 
+      State                   : Superblock_State_Type;
       Previous_Key            : Key_Type;
       Current_Key             : Key_Type;
       Snapshots               : Snapshots_Type;
@@ -401,6 +407,9 @@ is
       Nodes : out Type_1_Node_Block_Type;
       Data  :     Block_Data_Type);
 
+   --
+   --  Block_Data_From_Superblock
+   --
    procedure Block_Data_From_Superblock (
       Data  : out Block_Data_Type;
       SB    :     Superblock_Type);
@@ -435,6 +444,9 @@ is
    function Idx_Slot_Invalid
    return Index_Slot_Type;
 
+   --
+   --  Superblock_From_Block_Data
+   --
    procedure Superblock_From_Block_Data (
       SB   : out Superblock_Type;
       Data :     Block_Data_Type);
@@ -556,5 +568,21 @@ private
    --
    function Prim_Op_From_Req_Op (Input : Request_Operation_Type)
    return Primitive_Operation_Type;
+
+   --
+   --  SB_State_From_Block_Data
+   --
+   function SB_State_From_Block_Data (
+      Data : Block_Data_Type;
+      Off  : Block_Data_Index_Type)
+   return Superblock_State_Type;
+
+   --
+   --  Block_Data_From_SB_State
+   --
+   procedure Block_Data_From_SB_State (
+      Data  : in out Block_Data_Type;
+      Off   :        Block_Data_Index_Type;
+      State :        Superblock_State_Type);
 
 end CBE;

@@ -130,6 +130,11 @@ is
 
       when Create_Key_Completed =>
 
+         if SB.State /= Normal then
+            raise Program_Error;
+         end if;
+
+         SB.State := Rekeying_Virtual_Block_Device;
          SB.Previous_Key := SB.Current_Key;
          SB.Current_Key := (
             Value => Job.Key,

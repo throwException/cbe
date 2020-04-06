@@ -21,7 +21,7 @@ namespace Cbe_check {
 
 }
 
-struct Cbe_check::Library : Cbe::Spark_object<46088> // XXX check size
+struct Cbe_check::Library : Cbe::Spark_object<46096>
 {
 	Library();
 

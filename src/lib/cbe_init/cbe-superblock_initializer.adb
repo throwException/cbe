@@ -47,6 +47,7 @@ is
          end if;
       end loop For_Snapshots;
 
+      SB.State                   := Normal;
       SB.Current_Key             := Key_Valid (Obj.Key_ID);
       SB.Previous_Key            := Key_Invalid;
       SB.Curr_Snap               := 0;
