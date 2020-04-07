@@ -1526,6 +1526,13 @@ is
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
             Progress := True;
 
+         when Primitive.Tag_SB_Ctrl_Cache =>
+
+            Superblock_Control.Mark_Generated_Prim_Complete (
+               Obj.SB_Ctrl, Prim);
+
+            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+
          when others => raise Program_Error;
          end case;
 
@@ -1775,6 +1782,34 @@ is
 
          end Declare_TA_Prim;
       end loop Loop_Generated_TA_Prims;
+
+      Loop_Generated_Cache_Prims :
+      loop
+         Declare_Cache_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_Cache_Primitive (Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_Cache_Prims when
+               not Primitive.Valid (Prim) or else
+               not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_Cache =>
+
+               Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+            Progress := True;
+
+         end Declare_Cache_Prim;
+      end loop Loop_Generated_Cache_Prims;
 
    end Execute_SB_Ctrl;
 

@@ -75,6 +75,12 @@ is
    return Key_Plaintext_Type;
 
    --
+   --  Peek_Generated_Cache_Primitive
+   --
+   function Peek_Generated_Cache_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -97,6 +103,13 @@ is
       Prim :        Primitive.Object_Type;
       Key  :        Key_Ciphertext_Type);
 
+   --
+   --  Mark_Generated_Prim_Complete
+   --
+   procedure Mark_Generated_Prim_Complete (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type);
+
 private
 
    type Job_Operation_Type is (
@@ -111,12 +124,12 @@ private
       Encrypt_Key_Pending,
       Encrypt_Key_In_Progress,
       Encrypt_Key_Completed,
+      Sync_Cache_Pending,
+      Sync_Cache_In_Progress,
+      Sync_Cache_Completed,
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,
-      Sync_Pending,
-      Sync_In_Progress,
-      Sync_Completed,
       Secure_SB_Pending,
       Secure_SB_In_Progress,
       Secure_SB_Completed,
