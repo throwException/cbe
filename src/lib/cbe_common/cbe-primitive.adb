@@ -240,6 +240,12 @@ is
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Cache);
 
+   function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Write_SB);
+
+   function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Sync);
+
    function Has_Tag_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_IO);
 

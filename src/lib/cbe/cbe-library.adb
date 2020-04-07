@@ -1743,10 +1743,12 @@ is
    --
    procedure Execute_SB_Ctrl (
       Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
       Progress : in out Boolean)
    is
    begin
-      Superblock_Control.Execute (Obj.SB_Ctrl, Obj.Superblock, Progress);
+      Superblock_Control.Execute (
+         Obj.SB_Ctrl, Obj.Superblock, Obj.Cur_SB, Progress);
 
       Loop_Generated_TA_Prims :
       loop
@@ -1810,6 +1812,53 @@ is
 
          end Declare_Cache_Prim;
       end loop Loop_Generated_Cache_Prims;
+
+      Loop_Generated_Blk_IO_Prims :
+      loop
+         Declare_Blk_IO_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_Blk_IO_Primitive (
+                  Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_Blk_IO_Prims when
+               not Primitive.Valid (Prim) or else
+               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB =>
+
+               Declare_Data :
+               declare
+                  Data : Block_Data_Type;
+                  Data_Idx : Block_IO.Data_Index_Type;
+               begin
+
+                  Block_IO.Submit_Primitive (
+                     Obj.IO_Obj, Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB, Prim,
+                     Data_Idx);
+
+                  Block_Data_From_Superblock (Data, Obj.Superblock);
+                  IO_Buf (Data_Idx) := Data;
+
+               end Declare_Data;
+
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Sync =>
+
+               Block_IO.Submit_Primitive (
+                  Obj.IO_Obj, Primitive.Tag_SB_Ctrl_Blk_IO_Sync, Prim);
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+            Progress := True;
+
+         end Declare_Blk_IO_Prim;
+      end loop Loop_Generated_Blk_IO_Prims;
 
    end Execute_SB_Ctrl;
 
@@ -2477,6 +2526,14 @@ is
                   Sync_Superblock.Mark_Generated_Primitive_Complete (
                      Obj.Sync_SB_Obj, Prim);
 
+               elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Prim) then
+                  Superblock_Control.Mark_Generated_Prim_Complete (
+                     Obj.SB_Ctrl, Prim);
+
+               elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Sync (Prim) then
+                  Superblock_Control.Mark_Generated_Prim_Complete (
+                     Obj.SB_Ctrl, Prim);
+
                else
                   raise Program_Error;
                end if;
@@ -2506,7 +2563,7 @@ is
 
       Execute_SCD (Obj, Progress);
       Execute_Request_Pool (Obj, Progress);
-      Execute_SB_Ctrl (Obj, Progress);
+      Execute_SB_Ctrl (Obj, IO_Buf, Progress);
       Execute_TA (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);

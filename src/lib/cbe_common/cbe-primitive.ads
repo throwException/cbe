@@ -52,6 +52,8 @@ is
       Tag_SB_Ctrl_TA_Create_Key,
       Tag_SB_Ctrl_TA_Encrypt_Key,
       Tag_SB_Ctrl_Cache,
+      Tag_SB_Ctrl_Blk_IO_Write_SB,
+      Tag_SB_Ctrl_Blk_IO_Sync,
       Tag_IO,
       Tag_Translation,
       Tag_Write_Back,
@@ -114,6 +116,8 @@ is
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
       when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
       when Tag_SB_Ctrl_Cache => "SB_Ctrl_Cache",
+      when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
+      when Tag_SB_Ctrl_Blk_IO_Write_SB => "SB_Ctrl_Blk_IO_Write_SB",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
       when Tag_Write_Back => "Write_Back",
@@ -296,6 +300,8 @@ is
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Translation (Obj : Object_Type) return Boolean;
    function Has_Tag_Write_Back (Obj : Object_Type) return Boolean;

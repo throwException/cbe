@@ -58,6 +58,7 @@ is
    procedure Execute (
       Ctrl     : in out Control_Type;
       SB       : in out Superblock_Type;
+      SB_Idx   :        Superblocks_Index_Type;
       Progress : in out Boolean);
 
    --
@@ -78,6 +79,12 @@ is
    --  Peek_Generated_Cache_Primitive
    --
    function Peek_Generated_Cache_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Blk_IO_Primitive
+   --
+   function Peek_Generated_Blk_IO_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
 
    --
@@ -130,6 +137,9 @@ private
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,
+      Sync_Blk_IO_Pending,
+      Sync_Blk_IO_In_Progress,
+      Sync_Blk_IO_Completed,
       Secure_SB_Pending,
       Secure_SB_In_Progress,
       Secure_SB_Completed,
@@ -157,6 +167,7 @@ private
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       SB       : in out Superblock_Type;
+      SB_Idx   :        Superblocks_Index_Type;
       Progress : in out Boolean);
 
 end CBE.Superblock_Control;

@@ -552,6 +552,7 @@ private
    --
    procedure Execute_SB_Ctrl (
       Obj      : in out Object_Type;
+      IO_Buf   : in out Block_IO.Data_Type;
       Progress : in out Boolean);
 
    --

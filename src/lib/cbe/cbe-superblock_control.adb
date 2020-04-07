@@ -112,17 +112,17 @@ is
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       SB       : in out Superblock_Type;
+      SB_Idx   :        Superblocks_Index_Type;
       Progress : in out Boolean)
    is
    begin
       case Job.State is
       when Submitted =>
 
-         Job.Generated_Prim := Primitive.Valid_Object (
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_SB_Ctrl_TA_Create_Key,
-            Pl_Idx => Pool_Index_Type'First,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type (Job_Idx));
 
@@ -141,11 +141,10 @@ is
             Value => Job.Key_Plaintext,
             ID => SB.Previous_Key.ID + 1);
 
-         Job.Generated_Prim := Primitive.Valid_Object (
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
-            Pl_Idx => Pool_Index_Type'First,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type (Job_Idx));
 
@@ -166,7 +165,31 @@ is
 
       when Sync_Cache_Completed =>
 
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
          Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         Job.State := Secure_SB_Pending;
          Progress := True;
 
       when others =>
@@ -182,18 +205,28 @@ is
    procedure Execute (
       Ctrl     : in out Control_Type;
       SB       : in out Superblock_Type;
+      SB_Idx   :        Superblocks_Index_Type;
       Progress : in out Boolean)
    is
    begin
+
       Execute_Each_Valid_Job :
       for Idx in Ctrl.Jobs'Range loop
+
          case Ctrl.Jobs (Idx).Operation is
          when Initialize_Rekeying =>
-            Execute_Initialize_Rekeying (Ctrl.Jobs (Idx), Idx, SB, Progress);
+
+            Execute_Initialize_Rekeying (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Progress);
+
          when Invalid =>
+
             null;
+
          end case;
+
       end loop Execute_Each_Valid_Job;
+
    end Execute;
 
    --
@@ -297,6 +330,42 @@ is
    end Peek_Generated_Cache_Primitive;
 
    --
+   --  Peek_Generated_Blk_IO_Primitive
+   --
+   function Peek_Generated_Blk_IO_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type
+   is
+   begin
+
+      Inspect_Each_Job :
+      for Idx in Ctrl.Jobs'Range loop
+
+         case Ctrl.Jobs (Idx).Operation is
+         when Initialize_Rekeying =>
+
+            case Ctrl.Jobs (Idx).State is
+            when Sync_Blk_IO_Pending | Write_SB_Pending =>
+
+               return Ctrl.Jobs (Idx).Generated_Prim;
+
+            when others =>
+
+               null;
+
+            end case;
+
+         when Invalid =>
+
+            null;
+
+         end case;
+
+      end loop Inspect_Each_Job;
+      return Primitive.Invalid_Object;
+
+   end Peek_Generated_Blk_IO_Primitive;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -329,6 +398,22 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Sync_Cache_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Write_SB_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Write_SB_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Sync_Blk_IO_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Sync_Blk_IO_In_Progress;
                return;
             end if;
             raise Program_Error;
@@ -432,6 +517,26 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Sync_Cache_Completed;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Write_SB_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Write_SB_Completed;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Sync_Blk_IO_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Sync_Blk_IO_Completed;
                return;
 
             end if;
