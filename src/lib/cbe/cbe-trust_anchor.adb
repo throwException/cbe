@@ -25,12 +25,14 @@ is
             State => Job_State_Type'First,
             Submitted_Prim => Primitive.Invalid_Object,
             Key_Plaintext => (others => Byte_Type'First),
-            Key_Ciphertext => (others => Byte_Type'First));
+            Key_Ciphertext => (others => Byte_Type'First),
+            Hash => (others => Byte_Type'First));
 
       end loop Initialize_Each_Job;
 
       Anchor.Next_Key_Plaintext_Byte := 65;
       Anchor.Next_Key_Ciphertext_Byte := 97;
+      Anchor.Secured_SB_Hash := (others => Byte_Type'First);
 
    end Initialize_Anchor;
 
@@ -70,6 +72,38 @@ is
 
       raise Program_Error;
    end Submit_Primitive;
+
+   --
+   --  Submit_Primitive_Hash
+   --
+   procedure Submit_Primitive_Hash (
+      Anchor : in out Anchor_Type;
+      Prim   :        Primitive.Object_Type;
+      Hash   :        Hash_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Anchor.Jobs'Range loop
+         if Anchor.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_TA_Secure_SB =>
+
+               Anchor.Jobs (Idx).Operation := Secure_Superblock;
+               Anchor.Jobs (Idx).State := Submitted;
+               Anchor.Jobs (Idx).Submitted_Prim := Prim;
+               Anchor.Jobs (Idx).Hash := Hash;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_Hash;
 
    --
    --  Submit_Primitive_Key_Plaintext
@@ -244,6 +278,30 @@ is
    end Execute_Encrypt_Key;
 
    --
+   --  Execute_Secure_SB
+   --
+   procedure Execute_Secure_SB (
+      Anchor   : in out Anchor_Type;
+      Idx      :        Jobs_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      case Anchor.Jobs (Idx).State is
+      when Submitted =>
+
+         Anchor.Secured_SB_Hash := Anchor.Jobs (Idx).Hash;
+         Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
+         Anchor.Jobs (Idx).State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+   end Execute_Secure_SB;
+
+   --
    --  Execute
    --
    procedure Execute (
@@ -262,6 +320,10 @@ is
          when Encrypt_Key =>
 
             Execute_Encrypt_Key (Anchor, Idx, Progress);
+
+         when Secure_Superblock =>
+
+            Execute_Secure_SB (Anchor, Idx, Progress);
 
          when Invalid =>
 

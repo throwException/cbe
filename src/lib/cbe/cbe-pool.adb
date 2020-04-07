@@ -39,19 +39,8 @@ is
             case Request.Operation (Req) is
             when Rekey =>
 
-               Obj.Items (Idx) := (
-                  State   => Rekey_Init_Pending,
-                  Req     => Req,
-                  Snap_ID => Snap_ID,
-                  Prim    => Primitive.Valid_Object (
-                     Op     => Read,
-                     Succ   => False,
-                     Tg     => Primitive.Tag_Pool_SB_Ctrl_Init_Rekey,
-                     Pl_Idx => Idx,
-                     Blk_Nr => 0,
-                     Idx    => 0),
-                  Nr_Of_Prims_Completed => 0);
-
+               Obj.Items (Idx).State := Submitted;
+               Obj.Items (Idx).Req   := Req;
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
@@ -288,6 +277,79 @@ is
    end Drop_Generated_Primitive;
 
    --
+   --  Execute_Rekey
+   --
+   procedure Execute_Rekey (
+      Itm      : in out Item_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Itm.State is
+      when Submitted =>
+
+         Itm.Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Init_Rekey,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Itm.State := Rekey_Init_Pending;
+         Progress := True;
+
+      when Rekey_Init_Complete =>
+
+         if not Primitive.Success (Itm.Prim) then
+            raise Program_Error;
+         end if;
+
+         Itm.State := Rekey_VBA_Pending;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Rekey;
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      if not Index_Queue.Empty (Obj.Indices) then
+
+         Declare_Idx :
+         declare
+            Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
+         begin
+
+            case Request.Operation (Obj.Items (Idx).Req) is
+            when Rekey =>
+
+               Execute_Rekey (Obj.Items (Idx), Idx, Progress);
+
+            when others =>
+
+               null;
+
+            end case;
+
+         end Declare_Idx;
+
+      end if;
+
+   end Execute;
+
+   --
    --  Mark_Generated_Primitive_Complete
    --
    procedure Mark_Generated_Primitive_Complete (
@@ -296,25 +358,48 @@ is
       Success :        Boolean)
    is
    begin
+
       if Index_Queue.Empty (Obj.Indices) or else
-         Index_Queue.Head (Obj.Indices) /= Idx or else
-         Obj.Items (Idx).State /= In_Progress
+         Index_Queue.Head (Obj.Indices) /= Idx
       then
          raise Program_Error;
       end if;
 
-      Request.Success (Obj.Items (Idx).Req, Success);
-      Obj.Items (Idx).Nr_Of_Prims_Completed :=
-         Obj.Items (Idx).Nr_Of_Prims_Completed + 1;
+      case Request.Operation (Obj.Items (Idx).Req) is
+      when Rekey =>
 
-      if Obj.Items (Idx).Nr_Of_Prims_Completed <
-            Item_Nr_Of_Prims (Obj.Items (Idx))
-      then
-         Obj.Items (Idx).State := Pending;
-      else
-         Obj.Items (Idx).State := Complete;
-         Index_Queue.Dequeue (Obj.Indices, Idx);
-      end if;
+         case Obj.Items (Idx).State is
+         when Rekey_Init_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Rekey_Init_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+
+         if Obj.Items (Idx).State /= In_Progress then
+            raise Program_Error;
+         end if;
+
+         Request.Success (Obj.Items (Idx).Req, Success);
+         Obj.Items (Idx).Nr_Of_Prims_Completed :=
+            Obj.Items (Idx).Nr_Of_Prims_Completed + 1;
+
+         if Obj.Items (Idx).Nr_Of_Prims_Completed <
+               Item_Nr_Of_Prims (Obj.Items (Idx))
+         then
+            Obj.Items (Idx).State := Pending;
+         else
+            Obj.Items (Idx).State := Complete;
+            Index_Queue.Dequeue (Obj.Indices, Idx);
+         end if;
+
+      end case;
 
    end Mark_Generated_Primitive_Complete;
 

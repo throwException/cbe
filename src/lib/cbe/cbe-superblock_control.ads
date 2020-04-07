@@ -56,10 +56,12 @@ is
    --  Execute
    --
    procedure Execute (
-      Ctrl     : in out Control_Type;
-      SB       : in out Superblock_Type;
-      SB_Idx   :        Superblocks_Index_Type;
-      Progress : in out Boolean);
+      Ctrl          : in out Control_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Snap_Idx :        Snapshots_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
 
    --
    --  Peek_Generated_TA_Primitive
@@ -68,11 +70,19 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_Hash
+   --
+   function Peek_Generated_Hash (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Hash_Type;
+
+   --
    --  Peek_Generated_Plain_Key
    --
    function Peek_Generated_Key_Plaintext (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Key_Plaintext_Type;
 
    --
@@ -152,6 +162,8 @@ private
       Generated_Prim : Primitive.Object_Type;
       Key_Plaintext : Key_Plaintext_Type;
       Key_Ciphertext : Key_Ciphertext_Type;
+      Generation : Generation_Type;
+      Hash : Hash_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -164,10 +176,12 @@ private
    --  Execute_Initialize_Rekeying
    --
    procedure Execute_Initialize_Rekeying (
-      Job      : in out Job_Type;
-      Job_Idx  :        Jobs_Index_Type;
-      SB       : in out Superblock_Type;
-      SB_Idx   :        Superblocks_Index_Type;
-      Progress : in out Boolean);
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Snap_Idx :        Snapshots_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
 
 end CBE.Superblock_Control;

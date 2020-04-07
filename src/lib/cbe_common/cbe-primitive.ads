@@ -50,6 +50,7 @@ is
       Tag_Pool_VBD,
       Tag_Pool_SB_Ctrl_Init_Rekey,
       Tag_SB_Ctrl_TA_Create_Key,
+      Tag_SB_Ctrl_TA_Secure_SB,
       Tag_SB_Ctrl_TA_Encrypt_Key,
       Tag_SB_Ctrl_Cache,
       Tag_SB_Ctrl_Blk_IO_Write_SB,
@@ -114,6 +115,7 @@ is
       when Tag_Pool_VBD => "Pool_VBD",
       when Tag_Pool_SB_Ctrl_Init_Rekey => "Pool_SB_Ctrl_Init_Rekey",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
+      when Tag_SB_Ctrl_TA_Secure_SB => "SB_Ctrl_TA_Secure_SB",
       when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
       when Tag_SB_Ctrl_Cache => "SB_Ctrl_Cache",
       when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
@@ -298,6 +300,7 @@ is
    function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_TA_Secure_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean;

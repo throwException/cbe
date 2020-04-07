@@ -44,6 +44,14 @@ is
       Key    :        Key_Plaintext_Type);
 
    --
+   --  Submit_Primitive_Hash
+   --
+   procedure Submit_Primitive_Hash (
+      Anchor : in out Anchor_Type;
+      Prim   :        Primitive.Object_Type;
+      Hash   :        Hash_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Anchor : Anchor_Type)
@@ -88,6 +96,7 @@ private
    type Job_Operation_Type is (
       Invalid,
       Create_Key,
+      Secure_Superblock,
       Encrypt_Key);
 
    type Job_State_Type is (
@@ -100,6 +109,7 @@ private
       Submitted_Prim : Primitive.Object_Type;
       Key_Plaintext : Key_Plaintext_Type;
       Key_Ciphertext : Key_Ciphertext_Type;
+      Hash : Hash_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -108,7 +118,16 @@ private
       Jobs : Jobs_Type;
       Next_Key_Plaintext_Byte : Byte_Type;
       Next_Key_Ciphertext_Byte : Byte_Type;
+      Secured_SB_Hash : Hash_Type;
    end record;
+
+   --
+   --  Execute_Secure_SB
+   --
+   procedure Execute_Secure_SB (
+      Anchor   : in out Anchor_Type;
+      Idx      :        Jobs_Index_Type;
+      Progress : in out Boolean);
 
    --
    --  Execute_Create_Key

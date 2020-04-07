@@ -8,9 +8,88 @@
 
 pragma Ada_2012;
 
+with SHA256_4K;
+
 package body CBE.Superblock_Control
 with SPARK_Mode
 is
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type);
+
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type);
+
+   --
+   --  Hash_Of_Superblock
+   --
+   function Hash_Of_Superblock (SB : Superblock_Type)
+   return Hash_Type;
+
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type)
+   is
+      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
+   begin
+      for CBE_Idx in CBE_Hash'Range loop
+         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
+         if CBE_Idx < CBE_Hash'Last then
+            SHA_Idx := SHA_Idx + 1;
+         end if;
+      end loop;
+   end CBE_Hash_From_SHA256_4K_Hash;
+
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type)
+   is
+      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
+   begin
+      for SHA_Idx in SHA_Data'Range loop
+         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
+         if SHA_Idx < SHA_Data'Last then
+            CBE_Idx := CBE_Idx + 1;
+         end if;
+      end loop;
+   end SHA256_4K_Data_From_CBE_Data;
+
+   --
+   --  Hash_Of_Superblock
+   --
+   function Hash_Of_Superblock (SB : Superblock_Type)
+   return Hash_Type
+   is
+   begin
+      Declare_Hash_Data :
+      declare
+         SHA_Hash : SHA256_4K.Hash_Type;
+         SHA_Data : SHA256_4K.Data_Type;
+         CBE_Data : Block_Data_Type;
+         CBE_Hash : Hash_Type;
+      begin
+         Block_Data_From_Superblock (CBE_Data, SB);
+         SHA256_4K_Data_From_CBE_Data (SHA_Data, CBE_Data);
+         SHA256_4K.Hash (SHA_Data, SHA_Hash);
+         CBE_Hash_From_SHA256_4K_Hash (CBE_Hash, SHA_Hash);
+         return CBE_Hash;
+      end Declare_Hash_Data;
+
+   end Hash_Of_Superblock;
+
    --
    --  Initialize_Control
    --
@@ -25,7 +104,9 @@ is
             Submitted_Prim => Primitive.Invalid_Object,
             Generated_Prim => Primitive.Invalid_Object,
             Key_Plaintext => (others => Byte_Type'First),
-            Key_Ciphertext => (others => Byte_Type'First));
+            Key_Ciphertext => (others => Byte_Type'First),
+            Generation => Generation_Type'First,
+            Hash => (others => Byte_Type'First));
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -109,13 +190,16 @@ is
    --  Execute_Initialize_Rekeying
    --
    procedure Execute_Initialize_Rekeying (
-      Job      : in out Job_Type;
-      Job_Idx  :        Jobs_Index_Type;
-      SB       : in out Superblock_Type;
-      SB_Idx   :        Superblocks_Index_Type;
-      Progress : in out Boolean)
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Snap_Idx :        Snapshots_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
    is
    begin
+
       case Job.State is
       when Submitted =>
 
@@ -209,7 +293,38 @@ is
             raise Program_Error;
          end if;
 
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
          Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         if SB.Snapshots (Curr_Snap_Idx).Gen = Curr_Gen then
+            Curr_Gen := Curr_Gen + 1;
+         end if;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
          Progress := True;
 
       when others =>
@@ -217,16 +332,19 @@ is
          null;
 
       end case;
+
    end Execute_Initialize_Rekeying;
 
    --
    --  Execute
    --
    procedure Execute (
-      Ctrl     : in out Control_Type;
-      SB       : in out Superblock_Type;
-      SB_Idx   :        Superblocks_Index_Type;
-      Progress : in out Boolean)
+      Ctrl          : in out Control_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Snap_Idx :        Snapshots_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
    is
    begin
 
@@ -237,7 +355,8 @@ is
          when Initialize_Rekeying =>
 
             Execute_Initialize_Rekeying (
-               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Progress);
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Snap_Idx, Curr_Gen,
+               Progress);
 
          when Invalid =>
 
@@ -263,7 +382,10 @@ is
          when Initialize_Rekeying =>
 
             case Ctrl.Jobs (Idx).State is
-            when Create_Key_Pending | Encrypt_Key_Pending =>
+            when Create_Key_Pending |
+                 Encrypt_Key_Pending |
+                 Secure_SB_Pending
+            =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
 
@@ -284,11 +406,43 @@ is
    end Peek_Generated_TA_Primitive;
 
    --
+   --  Peek_Generated_Hash
+   --
+   function Peek_Generated_Hash (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Hash_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Secure_SB_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Hash;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Hash;
+
+   --
    --  Peek_Generated_Key_Plaintext
    --
    function Peek_Generated_Key_Plaintext (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Key_Plaintext_Type
    is
       Idx : constant Jobs_Index_Type :=
@@ -438,6 +592,14 @@ is
             end if;
             raise Program_Error;
 
+         when Secure_SB_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Secure_SB_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -561,6 +723,17 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Sync_Blk_IO_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Secure_SB_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Secure_SB_Completed;
                Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 

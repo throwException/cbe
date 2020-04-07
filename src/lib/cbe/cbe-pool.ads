@@ -40,6 +40,13 @@ is
       Snap_ID :        Snapshot_ID_Type);
 
    --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
    --  Peek_Generated_Discard_Snap_Primitive
    --
    function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
@@ -119,9 +126,14 @@ private
       Invalid,
       Pending,
       In_Progress,
-      Complete,
+      Submitted,
       Rekey_Init_Pending,
-      Rekey_Init_In_Progress);
+      Rekey_Init_In_Progress,
+      Rekey_Init_Complete,
+      Rekey_VBA_Pending,
+      Rekey_VBA_In_Progress,
+      Rekey_VBA_Complete,
+      Complete);
 
    type Item_Type is record
       State                 : Item_State_Type;
@@ -154,5 +166,13 @@ private
    --
    function Item_Nr_Of_Prims (Itm : Item_Type)
    return Number_Of_Primitives_Type;
+
+   --
+   --  Execute_Rekey
+   --
+   procedure Execute_Rekey (
+      Itm      : in out Item_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
 
 end CBE.Pool;
