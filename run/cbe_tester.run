@@ -94,7 +94,7 @@ append config {
 		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
 
 			<crypto>
-				<key slot="0" id="3"  value="This is a creative key value   !"/>
+				<key slot="0" id="13"  value="This is a creative key value   !"/>
 				<key slot="1" id="12" value="All your base are belong to us ?"/>
 			</crypto>
 
@@ -116,83 +116,8 @@ append config {
 
 				<replay verbose="yes" bulk="no">
 					<request type="write" lba="0"  count="3"/>
-					<request type="sync"  lba="0"  count="3"/>
-					<request type="write" lba="2"  count="1"/>
-					<request type="write" lba="5"  count="8"/>
-					<request type="read"  lba="0"  count="20"/>
-					<request type="write" lba="2"  count="22"/>
-					<request type="write" lba="0"  count="18"/>
-					<request type="sync"  lba="0"  count="3"/>
-					<request type="write" lba="8"  count="17"/>
-					<request type="write" lba="10" count="13"/>
-					<request type="write" lba="2"  count="9"/>
-					<request type="write" lba="5"  count="8"/>
-					<request type="read"  lba="0"  count="20"/>
-					<request type="write" lba="2"  count="22"/>
-					<request type="write" lba="0"  count="18"/>
-					<create-snapshot id="1" quarantine="yes"/>
+					<rekey key_id="13"/>
 				</replay>
-
-				<check/>
-
-				<dump unused_nodes="no"
-				      max_superblocks="1"
-				      max_snapshots="1"
-				      vbd="yes"
-				      vbd_pba_filter_enabled="no"
-				      vbd_pba_filter="38"
-				      vbd_vba_filter_enabled="no"
-				      vbd_vba_filter="0x13"
-				      free_tree="no"
-				      hashes="no"/>
-
-				<initialize>
-					<key id="3" />
-
-					<virtual-block-device
-						nr_of_levels="4"
-						nr_of_children="4"
-						nr_of_leafs="40" />
-
-					<free-tree
-						nr_of_levels="4"
-						nr_of_children="4"
-						nr_of_leafs="40" />
-				</initialize>
-
-				<replay verbose="yes" bulk="no">
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="sync"  lba="7"  count="1"/>
-					<request type="write" lba="10" count="2"/>
-					<create-snapshot id="2" quarantine="yes"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<discard-snapshot id="1"/>
-					<request type="read"  lba="10" count="21"/>
-					<request type="write" lba="7"  count="5"/>
-					<request type="write" lba="4"  count="11"/>
-					<request type="read"  lba="12" count="18"/>
-					<request type="read"  lba="10" count="21"/>
-				</replay>
-
-				<check/>
 
 			</tests>
 
