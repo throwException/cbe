@@ -131,6 +131,10 @@ is
 
       when Create_Key_Completed =>
 
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          if SB.State /= Normal then
             raise Program_Error;
          end if;
@@ -153,6 +157,10 @@ is
 
       when Encrypt_Key_Completed =>
 
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Sync,
             Succ   => False,
@@ -164,6 +172,10 @@ is
          Progress := True;
 
       when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Write,
@@ -177,6 +189,10 @@ is
 
       when Write_SB_Completed =>
 
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Sync,
             Succ   => False,
@@ -188,6 +204,10 @@ is
          Progress := True;
 
       when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          Job.State := Secure_SB_Pending;
          Progress := True;
@@ -448,6 +468,7 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Create_Key_Completed;
                Ctrl.Jobs (Idx).Key_Plaintext := Key;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
             end if;
             raise Program_Error;
@@ -483,6 +504,7 @@ is
 
                Ctrl.Jobs (Idx).State := Encrypt_Key_Completed;
                Ctrl.Jobs (Idx).Key_Ciphertext := Key;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 
             end if;
@@ -517,6 +539,7 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Sync_Cache_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 
             end if;
@@ -527,6 +550,7 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Write_SB_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 
             end if;
@@ -537,6 +561,7 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Sync_Blk_IO_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 
             end if;

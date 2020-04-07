@@ -202,6 +202,7 @@ is
          Anchor.Jobs (Idx).Key_Plaintext := (
             others => Anchor.Next_Key_Plaintext_Byte);
 
+         Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
          Anchor.Jobs (Idx).State := Completed;
          Anchor.Next_Key_Plaintext_Byte := Anchor.Next_Key_Plaintext_Byte + 1;
          Progress := True;
@@ -228,6 +229,7 @@ is
          Anchor.Jobs (Idx).Key_Ciphertext := (
             others => Anchor.Next_Key_Ciphertext_Byte);
 
+         Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
          Anchor.Jobs (Idx).State := Completed;
          Anchor.Next_Key_Ciphertext_Byte :=
             Anchor.Next_Key_Ciphertext_Byte + 1;
