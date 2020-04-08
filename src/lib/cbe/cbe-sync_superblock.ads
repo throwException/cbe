@@ -74,16 +74,6 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_Index
-   --
-   function Peek_Generated_Index (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Superblocks_Index_Type
-   with
-      Pre => Primitive.Valid (Prim);
-
-   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (

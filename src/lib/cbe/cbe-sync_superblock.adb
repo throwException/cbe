@@ -159,22 +159,6 @@ is
    end Peek_Generated_Primitive;
 
    --
-   --  Peek_Generated_Index
-   --
-   function Peek_Generated_Index (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Superblocks_Index_Type
-   is
-   begin
-      if Obj.State = Write_SB_Pending
-      then
-         return Obj.Index;
-      end if;
-      raise Program_Error;
-   end Peek_Generated_Index;
-
-   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
