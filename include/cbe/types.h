@@ -637,7 +637,8 @@ namespace Cbe {
 			REKEYING_VIRTUAL_BLOCK_DEVICE = 1,
 			REKEYING_FREE_TREE = 2 };
 
-		State      state;
+		State                 state;
+		Virtual_block_address rekeying_vba;
 
 		// XXX w/o snapshots about 265 bytes,
 		//     snapshots about 68 bytes each, all in all 3529 bytes
@@ -669,7 +670,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[359];
+		char                   padding[351];
 
 		void print(Genode::Output &out) const
 		{

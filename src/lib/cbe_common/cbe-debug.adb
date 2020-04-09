@@ -189,7 +189,9 @@ is
          " LSGEN: " &
          Debug.To_String (Debug.Uint64_Type (SB.Last_Secured_Generation)) &
          " state: " &
-         SB.State'Image);
+         SB.State'Image &
+         " rk_vba: " &
+         Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)));
 
       for I in Snapshots_Index_Type loop
          if SB.Snapshots (I).Valid then

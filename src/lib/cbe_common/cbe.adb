@@ -116,6 +116,8 @@ is
       Debug.To_String (Debug.Uint64_Type (SB.Degree)) &
       """ state=""" &
       SB.State'Image &
+      """ rk_vba=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)) &
       """>");
 
    function Superblock_XML_Tag_Invalid
@@ -232,6 +234,7 @@ is
       Result : Superblock_Type;
    begin
       Result.State                   := Superblock_State_Type'First;
+      Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
       Result.Previous_Key            := Key_Invalid;
       Result.Current_Key             := Key_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
@@ -544,6 +547,10 @@ is
       SB.State := SB_State_From_Block_Data (Data, Off);
       Off := Off + 1;
 
+      SB.Rekeying_VBA :=
+         Virtual_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
       Key_From_Block_Data (SB.Previous_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
 
@@ -779,6 +786,10 @@ is
 
       Block_Data_From_SB_State (Data, Off, SB.State);
       Off := Off + 1;
+
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Rekeying_VBA));
+      Off := Off + 8;
 
       Block_Data_From_Key (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;

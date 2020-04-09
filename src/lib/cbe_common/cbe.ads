@@ -292,6 +292,7 @@ is
       --
 
       State                   : Superblock_State_Type;
+      Rekeying_VBA            : Virtual_Block_Address_Type;
       Previous_Key            : Key_Type;
       Current_Key             : Key_Type;
       Snapshots               : Snapshots_Type;

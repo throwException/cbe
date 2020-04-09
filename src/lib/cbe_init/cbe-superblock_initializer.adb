@@ -48,6 +48,7 @@ is
       end loop For_Snapshots;
 
       SB.State                   := Normal;
+      SB.Rekeying_VBA            := 0;
       SB.Current_Key             := Key_Valid (Obj.Key_ID);
       SB.Previous_Key            := Key_Invalid;
       SB.Curr_Snap               := 0;
