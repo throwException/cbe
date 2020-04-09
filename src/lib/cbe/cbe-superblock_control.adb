@@ -187,6 +187,28 @@ is
    end Drop_Completed_Primitive;
 
    --
+   --  Superblock_Enter_Rekeying_State
+   --
+   procedure Superblock_Enter_Rekeying_State (
+      SB            : in out Superblock_Type;
+      Key_Plaintext :        Key_Plaintext_Type)
+   is
+   begin
+
+      if SB.State /= Normal then
+         raise Program_Error;
+      end if;
+
+      SB.State := Rekeying_Virtual_Block_Device;
+      SB.Rekeying_VBA := 0;
+      SB.Previous_Key := SB.Current_Key;
+      SB.Current_Key := (
+         Value => Key_Plaintext,
+         ID => SB.Previous_Key.ID + 1);
+
+   end Superblock_Enter_Rekeying_State;
+
+   --
    --  Execute_Initialize_Rekeying
    --
    procedure Execute_Initialize_Rekeying (
@@ -219,15 +241,7 @@ is
             raise Program_Error;
          end if;
 
-         if SB.State /= Normal then
-            raise Program_Error;
-         end if;
-
-         SB.State := Rekeying_Virtual_Block_Device;
-         SB.Previous_Key := SB.Current_Key;
-         SB.Current_Key := (
-            Value => Job.Key_Plaintext,
-            ID => SB.Previous_Key.ID + 1);
+         Superblock_Enter_Rekeying_State (SB, Job.Key_Plaintext);
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
