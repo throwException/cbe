@@ -78,10 +78,6 @@ is
       Obj.Superblock := SBs (Curr_SB);
       Obj.Cur_Gen :=
          Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen + 1;
-      Obj.Last_Root_PBA :=
-         Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).PBA;
-      Obj.Last_Root_Hash :=
-         Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Hash;
       Obj.Cur_SB := Curr_SB;
       Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
 
