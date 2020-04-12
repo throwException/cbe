@@ -1751,6 +1751,27 @@ is
          Obj.SB_Ctrl, Obj.Superblock, Obj.Cur_SB, Curr_Snap (Obj), Obj.Cur_Gen,
          Progress);
 
+      Loop_Generated_Rekey_VBA_Prims :
+      loop
+         Declare_Rekey_VBA_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_Rekey_VBA_Primitive (
+                  Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_Rekey_VBA_Prims when
+               not Primitive.Valid (Prim);
+               --  or else
+               --  not Rekey_VBA.Primitive_Acceptable (Obj.Rekey_VBA);
+
+            --  Rekey_VBA.Submit_Primitive (Obj.Rekey_VBA, Prim);
+
+            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+            Progress := True;
+
+         end Declare_Rekey_VBA_Prim;
+      end loop Loop_Generated_Rekey_VBA_Prims;
+
       Loop_Generated_TA_Prims :
       loop
          Declare_TA_Prim :

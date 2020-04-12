@@ -231,6 +231,9 @@ is
    function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Init_Rekey);
 
+   function Has_Tag_Pool_SB_Ctrl_Rekey_VBA (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Rekey_VBA);
+
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_TA_Create_Key);
 
@@ -242,6 +245,9 @@ is
 
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Cache);
+
+   function Has_Tag_SB_Ctrl_Rekey_VBA (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_Rekey_VBA);
 
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Write_SB);

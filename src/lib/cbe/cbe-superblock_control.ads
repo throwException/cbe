@@ -64,6 +64,12 @@ is
       Progress      : in out Boolean);
 
    --
+   --  Peek_Generated_Rekey_VBA_Primitive
+   --
+   function Peek_Generated_Rekey_VBA_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Peek_Generated_TA_Primitive
    --
    function Peek_Generated_TA_Primitive (Ctrl : Control_Type)
@@ -131,10 +137,14 @@ private
 
    type Job_Operation_Type is (
       Invalid,
-      Initialize_Rekeying);
+      Initialize_Rekeying,
+      Rekey_VBA);
 
    type Job_State_Type is (
       Submitted,
+      Rekey_VBA_Pending,
+      Rekey_VBA_In_Progress,
+      Rekey_VBA_Completed,
       Create_Key_Pending,
       Create_Key_In_Progress,
       Create_Key_Completed,
@@ -183,6 +193,15 @@ private
       Curr_Snap_Idx :        Snapshots_Index_Type;
       Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean);
+
+   --
+   --  Execute_Rekey_VBA
+   --
+   procedure Execute_Rekey_VBA (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      SB       :        Superblock_Type;
+      Progress : in out Boolean);
 
    --
    --  Superblock_Enter_Rekeying_State

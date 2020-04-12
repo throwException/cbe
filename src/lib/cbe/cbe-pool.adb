@@ -215,18 +215,31 @@ is
    return Primitive.Object_Type
    is
    begin
+
       if not Index_Queue.Empty (Obj.Indices) then
+
          Declare_Item :
          declare
             Itm : constant Item_Type :=
                Obj.Items (Index_Queue.Head (Obj.Indices));
          begin
-            if Itm.State = Rekey_Init_Pending then
+
+            case Itm.State is
+            when Rekey_Init_Pending | Rekey_VBA_Pending =>
+
                return Itm.Prim;
-            end if;
+
+            when others =>
+
+               return Primitive.Invalid_Object;
+
+            end case;
+
          end Declare_Item;
+
       end if;
       return Primitive.Invalid_Object;
+
    end Peek_Generated_SB_Ctrl_Primitive;
 
    --
@@ -269,6 +282,9 @@ is
          when Rekey_Init_Pending =>
             Obj.Items (Idx).State := Rekey_Init_In_Progress;
             return;
+         when Rekey_VBA_Pending =>
+            Obj.Items (Idx).State := Rekey_VBA_In_Progress;
+            return;
          when others =>
             null;
          end case;
@@ -306,7 +322,16 @@ is
             raise Program_Error;
          end if;
 
+         Itm.Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
          Itm.State := Rekey_VBA_Pending;
+         Progress := True;
 
       when others =>
 
