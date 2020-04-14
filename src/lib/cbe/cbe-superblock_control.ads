@@ -64,9 +64,9 @@ is
       Progress      : in out Boolean);
 
    --
-   --  Peek_Generated_Rekey_VBA_Primitive
+   --  Peek_Generated_VBD_Rkg_Primitive
    --
-   function Peek_Generated_Rekey_VBA_Primitive (Ctrl : Control_Type)
+   function Peek_Generated_VBD_Rkg_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
 
    --
@@ -102,6 +102,51 @@ is
    --
    function Peek_Generated_Blk_IO_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_VBA
+   --
+   function Peek_Generated_VBA (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  Peek_Generated_Snapshots
+   --
+   function Peek_Generated_Snapshots (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshots_Type;
+
+   --
+   --  Peek_Generated_Snapshots_Degree
+   --
+   function Peek_Generated_Snapshots_Degree (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Degree_Type;
+
+   --
+   --  Peek_Generated_Old_Key_ID
+   --
+   function Peek_Generated_Old_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Key_ID_Type;
+
+   --
+   --  Peek_Generated_New_Key_ID
+   --
+   function Peek_Generated_New_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Key_ID_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -142,9 +187,9 @@ private
 
    type Job_State_Type is (
       Submitted,
-      Rekey_VBA_Pending,
-      Rekey_VBA_In_Progress,
-      Rekey_VBA_Completed,
+      Rekey_VBA_In_VBD_Pending,
+      Rekey_VBA_In_VBD_In_Progress,
+      Rekey_VBA_In_VBD_Completed,
       Create_Key_Pending,
       Create_Key_In_Progress,
       Create_Key_Completed,

@@ -21,6 +21,7 @@ with CBE.New_Free_Tree;
 with CBE.Meta_Tree;
 with CBE.Superblock_Control;
 with CBE.Trust_Anchor;
+with CBE.VBD_Rekeying;
 
 package CBE.Library
 with SPARK_Mode
@@ -479,7 +480,8 @@ private
       WB_Prim               : Primitive.Object_Type;
 
       SB_Ctrl : Superblock_Control.Control_Type;
-      TA : Trust_Anchor.Anchor_Type;
+      TA      : Trust_Anchor.Anchor_Type;
+      VBD_Rkg : VBD_Rekeying.Rekeying_Type;
 
    end record;
 
@@ -559,6 +561,13 @@ private
    --  Execute_TA
    --
    procedure Execute_TA (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_VBD_Rkg
+   --
+   procedure Execute_VBD_Rkg (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 

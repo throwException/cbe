@@ -1533,6 +1533,25 @@ is
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
 
+         when Primitive.Tag_VBD_Rkg_Cache =>
+
+            case Primitive.Operation (Prim) is
+            when Read =>
+
+               VBD_Rekeying.Mark_Generated_Prim_Completed_Blk_Data (
+                  Obj.VBD_Rkg, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            when Write | Sync =>
+
+               VBD_Rekeying.Mark_Generated_Prim_Completed (Obj.VBD_Rkg, Prim);
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            end case;
+
          when others => raise Program_Error;
          end case;
 
@@ -1739,6 +1758,96 @@ is
    end Execute_Request_Pool;
 
    --
+   --  Execute_VBD_Rkg
+   --
+   procedure Execute_VBD_Rkg (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      VBD_Rekeying.Execute (Obj.VBD_Rkg, Progress);
+
+      Loop_Generated_Cache_Prims :
+      loop
+         Declare_Cache_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               VBD_Rekeying.Peek_Generated_Cache_Primitive (Obj.VBD_Rkg);
+         begin
+            exit Loop_Generated_Cache_Prims when
+               not Primitive.Valid (Prim) or else
+               not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Rkg_Cache =>
+
+               case Primitive.Operation (Prim) is
+               when Write =>
+
+                  Declare_Cache_Job_Idx :
+                  declare
+                     Idx : Cache.Jobs_Index_Type;
+                  begin
+
+                     Cache.Submit_Primitive (
+                        Obj.Cache_Obj, Obj.WB_Cache_Prim_1, Idx);
+
+                     Obj.Cache_Jobs_Data (Idx) :=
+                        VBD_Rekeying.Peek_Generated_Blk_Data (
+                           Obj.VBD_Rkg, Prim);
+
+                  end Declare_Cache_Job_Idx;
+
+                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+                  Progress := True;
+
+               when Read | Sync =>
+
+                  Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
+                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+                  Progress := True;
+
+               end case;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Cache_Prim;
+      end loop Loop_Generated_Cache_Prims;
+
+      Loop_Completed_Prims :
+      loop
+         Declare_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               VBD_Rekeying.Peek_Completed_Primitive (Obj.VBD_Rkg);
+         begin
+            exit Loop_Completed_Prims when not Primitive.Valid (Prim);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete (
+                  Obj.SB_Ctrl, Prim);
+
+               VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Prim;
+      end loop Loop_Completed_Prims;
+
+   end Execute_VBD_Rkg;
+
+   --
    --  Execute_SB_Ctrl
    --
    procedure Execute_SB_Ctrl (
@@ -1751,26 +1860,36 @@ is
          Obj.SB_Ctrl, Obj.Superblock, Obj.Cur_SB, Curr_Snap (Obj), Obj.Cur_Gen,
          Progress);
 
-      Loop_Generated_Rekey_VBA_Prims :
+      Loop_Generated_VBD_Rkg_Prims :
       loop
-         Declare_Rekey_VBA_Prim :
+         Declare_VBD_Rkg_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Superblock_Control.Peek_Generated_Rekey_VBA_Primitive (
+               Superblock_Control.Peek_Generated_VBD_Rkg_Primitive (
                   Obj.SB_Ctrl);
          begin
-            exit Loop_Generated_Rekey_VBA_Prims when
-               not Primitive.Valid (Prim);
-               --  or else
-               --  not Rekey_VBA.Primitive_Acceptable (Obj.Rekey_VBA);
+            exit Loop_Generated_VBD_Rkg_Prims when
+               not Primitive.Valid (Prim) or else
+               not VBD_Rekeying.Primitive_Acceptable (Obj.VBD_Rkg);
 
-            --  Rekey_VBA.Submit_Primitive (Obj.Rekey_VBA, Prim);
+            VBD_Rekeying.Submit_Primitive (
+               Obj.VBD_Rkg, Prim,
+               Superblock_Control.Peek_Generated_VBA (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock),
+               Superblock_Control.Peek_Generated_Snapshots (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock),
+               Superblock_Control.Peek_Generated_Snapshots_Degree (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock),
+               Superblock_Control.Peek_Generated_Old_Key_ID (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock),
+               Superblock_Control.Peek_Generated_New_Key_ID (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock));
 
             Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
             Progress := True;
 
-         end Declare_Rekey_VBA_Prim;
-      end loop Loop_Generated_Rekey_VBA_Prims;
+         end Declare_VBD_Rkg_Prim;
+      end loop Loop_Generated_VBD_Rkg_Prims;
 
       Loop_Generated_TA_Prims :
       loop
@@ -2631,6 +2750,7 @@ is
       Execute_Request_Pool (Obj, Progress);
       Execute_SB_Ctrl (Obj, IO_Buf, Progress);
       Execute_TA (Obj, Progress);
+      Execute_VBD_Rkg (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);

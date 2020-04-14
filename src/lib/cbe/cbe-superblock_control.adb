@@ -375,11 +375,11 @@ is
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
                Succ   => False,
-               Tg     => Primitive.Tag_SB_Ctrl_Rekey_VBA,
+               Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg,
                Blk_Nr => Block_Number_Type (SB.Rekeying_VBA),
                Idx    => Primitive.Index_Type (Job_Idx));
 
-            Job.State := Rekey_VBA_Pending;
+            Job.State := Rekey_VBA_In_VBD_Pending;
             Progress := True;
 
          else
@@ -472,9 +472,9 @@ is
    end Peek_Generated_TA_Primitive;
 
    --
-   --  Peek_Generated_Rekey_VBA_Primitive
+   --  Peek_Generated_VBD_Rkg_Primitive
    --
-   function Peek_Generated_Rekey_VBA_Primitive (Ctrl : Control_Type)
+   function Peek_Generated_VBD_Rkg_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type
    is
    begin
@@ -485,7 +485,7 @@ is
          when Rekey_VBA =>
 
             case Ctrl.Jobs (Idx).State is
-            when Rekey_VBA_Pending =>
+            when Rekey_VBA_In_VBD_Pending =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
 
@@ -503,7 +503,7 @@ is
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
-   end Peek_Generated_Rekey_VBA_Primitive;
+   end Peek_Generated_VBD_Rkg_Primitive;
 
    --
    --  Peek_Generated_Hash
@@ -536,6 +536,219 @@ is
       raise Program_Error;
 
    end Peek_Generated_Hash;
+
+   --
+   --  Peek_Generated_VBA
+   --
+   function Peek_Generated_VBA (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Virtual_Block_Address_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Ctrl.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+               return SB.Rekeying_VBA;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_VBA;
+
+   --
+   --  Peek_Generated_Snapshots
+   --
+   function Peek_Generated_Snapshots (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshots_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Ctrl.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+               return SB.Snapshots;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Snapshots;
+
+   --
+   --  Peek_Generated_Snapshots_Degree
+   --
+   function Peek_Generated_Snapshots_Degree (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Degree_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Ctrl.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+               return SB.Degree;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Snapshots_Degree;
+
+   --
+   --  Peek_Generated_Old_Key_ID
+   --
+   function Peek_Generated_Old_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Ctrl.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+
+               return SB.Previous_Key.ID;
+
+            else
+
+               raise Program_Error;
+
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Old_Key_ID;
+
+   --
+   --  Peek_Generated_New_Key_ID
+   --
+   function Peek_Generated_New_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Ctrl.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+
+               return SB.Current_Key.ID;
+
+            else
+
+               raise Program_Error;
+
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_New_Key_ID;
 
    --
    --  Peek_Generated_Key_Plaintext
@@ -700,10 +913,10 @@ is
             end if;
             raise Program_Error;
 
-         when Rekey_VBA_Pending =>
+         when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
-               Ctrl.Jobs (Idx).State := Rekey_VBA_In_Progress;
+               Ctrl.Jobs (Idx).State := Rekey_VBA_In_VBD_In_Progress;
                return;
             end if;
             raise Program_Error;
