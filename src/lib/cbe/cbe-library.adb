@@ -1477,6 +1477,7 @@ is
                Obj.WB_Cache_Prim_1_State := Complete;
                Obj.WB_Cache_Prim_1 := Prim;
                Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
 
             elsif Obj.WB_Cache_Prim_2_State = Submitted and then
                   Primitive.Equal (Obj.WB_Cache_Prim_2, Prim)
@@ -1487,6 +1488,7 @@ is
                Obj.WB_Cache_Prim_2_State := Complete;
                Obj.WB_Cache_Prim_2 := Prim;
                Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
 
             elsif Obj.WB_Cache_Prim_3_State = Submitted and then
                   Primitive.Equal (Obj.WB_Cache_Prim_3, Prim)
@@ -1497,6 +1499,8 @@ is
                Obj.WB_Cache_Prim_3_State := Complete;
                Obj.WB_Cache_Prim_3 := Prim;
                Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
             else
                raise Program_Error;
             end if;
@@ -1512,6 +1516,8 @@ is
                Obj.SCD_Cache_Prim_State := Complete;
                Obj.SCD_Cache_Prim := Prim;
                Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
             else
                raise Program_Error;
             end if;
@@ -1522,6 +1528,7 @@ is
                   Obj.VBD, Prim, Obj.Cache_Jobs_Data (Job_Idx));
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            Progress := True;
 
          when Primitive.Tag_FT_Cache =>
 
@@ -1529,6 +1536,7 @@ is
                Obj.New_Free_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            Progress := True;
 
          when Primitive.Tag_MT_Cache =>
 
@@ -1536,6 +1544,7 @@ is
                Obj.Meta_Tree_Obj, Prim, Obj.Cache_Jobs_Data (Job_Idx));
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            Progress := True;
 
          when Primitive.Tag_Sync_SB_Cache_Flush =>
 
@@ -1543,6 +1552,7 @@ is
                Obj.Sync_SB_Obj, Prim);
 
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+            Progress := True;
 
          when others => raise Program_Error;
          end case;
