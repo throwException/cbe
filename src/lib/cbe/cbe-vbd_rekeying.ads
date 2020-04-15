@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
+with Interfaces;
 
 package CBE.VBD_Rekeying
 with SPARK_Mode
@@ -165,7 +166,7 @@ private
       New_Key_ID        : Key_ID_Type;
       T1_Blks           : Type_1_Node_Blocks_Type;
       T1_Blks_Old_PBAs  : Type_1_Node_Blocks_PBAs_Type;
-      T1_Blk_Idx        : Tree_Level_Index_Type;
+      T1_Blk_Idx        : Type_1_Node_Blocks_Index_Type;
       Data_Blk          : Block_Data_Type;
       Data_Blk_Old_PBA  : Physical_Block_Address_Type;
       VBA               : Virtual_Block_Address_Type;
@@ -184,5 +185,29 @@ private
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Progress : in out Boolean);
+
+   --
+   --  Child_Idx_For_VBA
+   --
+   function Child_Idx_For_VBA (
+      VBA  : Virtual_Block_Address_Type;
+      Lvl  : Type_1_Node_Blocks_Index_Type;
+      Degr : Tree_Degree_Type)
+   return Type_1_Node_Block_Index_Type;
+
+   --
+   --  Execute_Rekey_VBA_Read_Node_Completed
+   --
+   procedure Execute_Rekey_VBA_Read_Node_Completed (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Hash     :        Hash_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Log_2
+   --
+   function  Log_2 (Value : Interfaces.Unsigned_32)
+   return Interfaces.Unsigned_32;
 
 end CBE.VBD_Rekeying;

@@ -9,6 +9,10 @@
 pragma Ada_2012;
 
 with SHA256_4K;
+with Interfaces;
+with CBE.Debug;
+
+use Interfaces;
 
 package body CBE.VBD_Rekeying
 with SPARK_Mode
@@ -91,6 +95,28 @@ is
    end Hash_Of_T1_Node_Blk;
 
    --
+   --  Log_2
+   --
+   function  Log_2 (Value : Unsigned_32)
+   return Unsigned_32
+   is
+      type Bit_Index_Type is range 0 .. 31;
+   begin
+      if Value = 0 then
+         raise Program_Error;
+      end if;
+      for Bit_Index in reverse Bit_Index_Type'Range loop
+         if (
+            Value and
+            Shift_Left (Unsigned_32 (1), Natural (Bit_Index))) /= 0
+         then
+            return Unsigned_32 (Bit_Index);
+         end if;
+      end loop;
+      raise Program_Error;
+   end Log_2;
+
+   --
    --  Initialize_Rekeying
    --
    procedure Initialize_Rekeying (Rkg : out Rekeying_Type)
@@ -111,7 +137,7 @@ is
             New_Key_ID => Key_ID_Type'First,
             T1_Blks => (others => (others => Type_1_Node_Invalid)),
             T1_Blks_Old_PBAs => (others => Physical_Block_Address_Type'First),
-            T1_Blk_Idx => Tree_Level_Index_Type'First,
+            T1_Blk_Idx => Type_1_Node_Blocks_Index_Type'First,
             Data_Blk => (others => Byte_Type'First),
             Data_Blk_Old_PBA => Physical_Block_Address_Type'First,
             VBA => Virtual_Block_Address_Type'First);
@@ -210,6 +236,94 @@ is
    end Drop_Completed_Primitive;
 
    --
+   --  Child_Idx_For_VBA
+   --
+   function Child_Idx_For_VBA (
+      VBA  : Virtual_Block_Address_Type;
+      Lvl  : Type_1_Node_Blocks_Index_Type;
+      Degr : Tree_Degree_Type)
+   return Type_1_Node_Block_Index_Type
+   is
+      Degree_Log_2 : constant Tree_Degree_Log_2_Type :=
+         Tree_Degree_Log_2_Type (Log_2 (Unsigned_32 (Degr)));
+
+      Degree_Mask : constant Tree_Degree_Mask_Type :=
+         Tree_Degree_Mask_Type (
+            Shift_Left (Unsigned_32 (1), Natural (Degree_Log_2)) - 1);
+   begin
+      return
+         Type_1_Node_Block_Index_Type (
+            Shift_Right (
+               Unsigned_64 (VBA),
+               Natural (Unsigned_32 (Degree_Log_2) * (Unsigned_32 (Lvl) - 1)))
+            and
+            Unsigned_64 (Degree_Mask));
+   end Child_Idx_For_VBA;
+
+   --
+   --  Execute_Rekey_VBA_Read_Node_Completed
+   --
+   procedure Execute_Rekey_VBA_Read_Node_Completed (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Hash     :        Hash_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.T1_Blk_Idx)) /= Hash then
+         raise Program_Error;
+      end if;
+
+      if Job.T1_Blk_Idx > Type_1_Node_Blocks_Index_Type'First then
+
+         Declare_Child_PBA :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.T1_Blk_Idx;
+
+            Child_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Type_1_Node_Blocks_Index_Type'Pred (Parent_Lvl_Idx);
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+
+            Child_PBA : constant Physical_Block_Address_Type :=
+               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA;
+         begin
+
+            Job.T1_Blk_Idx := Child_Lvl_Idx;
+            Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) := Child_PBA;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Cache,
+               Blk_Nr => Block_Number_Type (Child_PBA),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+         end Declare_Child_PBA;
+
+         Debug.Print_String (
+            "READ LVL " &
+            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+            " PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
+
+         Job.State := Read_Inner_Node_Pending;
+         Progress := True;
+
+      else
+
+         Job.State := Read_Leaf_Node_Pending;
+         Progress := True;
+
+      end if;
+
+   end Execute_Rekey_VBA_Read_Node_Completed;
+
+   --
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
@@ -263,19 +377,35 @@ is
             Blk_Nr => Block_Number_Type (Job.Snapshots (Job.Snapshot_Idx).PBA),
             Idx    => Primitive.Index_Type (Job_Idx));
 
+         Debug.Print_String (
+            "READ LVL " &
+            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+            " PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
+
          Job.State := Read_Root_Node_Pending;
          Progress := True;
 
       when Read_Root_Node_Completed =>
 
-         if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.T1_Blk_Idx)) =
-               Job.Snapshots (Job.Snapshot_Idx).Hash
-         then
-            Job.State := Read_Inner_Node_Pending;
-            Progress := True;
-         else
-            raise Program_Error;
-         end if;
+         Execute_Rekey_VBA_Read_Node_Completed (
+            Job, Job_Idx, Job.Snapshots (Job.Snapshot_Idx).Hash, Progress);
+
+      when Read_Inner_Node_Completed =>
+
+         Declare_Child_Idx :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Job.T1_Blk_Idx + 1, Job.Snapshots_Degree);
+         begin
+
+            Execute_Rekey_VBA_Read_Node_Completed (
+               Job, Job_Idx, Job.T1_Blks (Job.T1_Blk_Idx + 1) (Child_Idx).Hash,
+               Progress);
+
+         end Declare_Child_Idx;
 
       when others =>
 
@@ -327,7 +457,7 @@ is
          when Rekey_VBA =>
 
             case Rkg.Jobs (Idx).State is
-            when Read_Root_Node_Pending =>
+            when Read_Root_Node_Pending | Read_Inner_Node_Pending =>
 
                return Rkg.Jobs (Idx).Generated_Prim;
 
@@ -408,6 +538,15 @@ is
             Rkg.Jobs (Idx).State := Read_Root_Node_In_Progress;
             return;
 
+         when Read_Inner_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Read_Inner_Node_In_Progress;
+            return;
+
          when others =>
 
             raise Program_Error;
@@ -430,6 +569,7 @@ is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
+
       if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
@@ -440,6 +580,19 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Read_Root_Node_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Type_1_Node_Block_From_Block_Data (
+               Rkg.Jobs (Idx).T1_Blks (Rkg.Jobs (Idx).T1_Blk_Idx), Blk_Data);
+
+            return;
+
+         when Read_Inner_Node_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Read_Inner_Node_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             Type_1_Node_Block_From_Block_Data (
                Rkg.Jobs (Idx).T1_Blks (Rkg.Jobs (Idx).T1_Blk_Idx), Blk_Data);

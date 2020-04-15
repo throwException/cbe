@@ -75,6 +75,12 @@ is
    is range 0 .. Tree_Max_Number_Of_Leafs;
 
    type Tree_Degree_Type is range Tree_Min_Degree .. Tree_Max_Degree;
+   type Tree_Degree_Log_2_Type
+   is range Tree_Min_Degree_Log_2 .. Tree_Max_Degree_Log_2;
+
+   type Tree_Degree_Mask_Type
+   is range 2**Tree_Min_Degree_Log_2 - 1 .. 2**Tree_Max_Degree_Log_2 - 1;
+
    type Tree_Child_Index_Type is range 0 .. Tree_Max_Degree - 1;
    type Number_Of_Blocks_Type is range 0 .. 2**32 - 1;
    type Snapshot_ID_Type is range 0 .. 2**32 - 1;
