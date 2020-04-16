@@ -553,9 +553,9 @@ private
    --  Execute_SB_Ctrl
    --
    procedure Execute_SB_Ctrl (
-      Obj      : in out Object_Type;
-      IO_Buf   : in out Block_IO.Data_Type;
-      Progress : in out Boolean);
+      Obj        : in out Object_Type;
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      Progress   : in out Boolean);
 
    --
    --  Execute_TA
@@ -568,8 +568,9 @@ private
    --  Execute_VBD_Rkg
    --
    procedure Execute_VBD_Rkg (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean);
+      Obj        : in out Object_Type;
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      Progress   : in out Boolean);
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;

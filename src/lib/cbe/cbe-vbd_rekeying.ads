@@ -72,6 +72,12 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_Blk_IO_Primitive
+   --
+   function Peek_Generated_Blk_IO_Primitive (Rkg : Rekeying_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (

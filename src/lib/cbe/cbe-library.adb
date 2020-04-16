@@ -1761,8 +1761,9 @@ is
    --  Execute_VBD_Rkg
    --
    procedure Execute_VBD_Rkg (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean)
+      Obj        : in out Object_Type;
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      Progress   : in out Boolean)
    is
    begin
       VBD_Rekeying.Execute (Obj.VBD_Rkg, Progress);
@@ -1778,45 +1779,76 @@ is
                not Primitive.Valid (Prim) or else
                not Cache.Primitive_Acceptable (Obj.Cache_Obj);
 
-            case Primitive.Tag (Prim) is
-            when Primitive.Tag_VBD_Rkg_Cache =>
+            case Primitive.Operation (Prim) is
+            when Write =>
 
-               case Primitive.Operation (Prim) is
-               when Write =>
+               Declare_Cache_Job_Idx :
+               declare
+                  Idx : Cache.Jobs_Index_Type;
+               begin
 
-                  Declare_Cache_Job_Idx :
-                  declare
-                     Idx : Cache.Jobs_Index_Type;
-                  begin
+                  Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Idx);
+                  Obj.Cache_Jobs_Data (Idx) :=
+                     VBD_Rekeying.Peek_Generated_Blk_Data (Obj.VBD_Rkg, Prim);
 
-                     Cache.Submit_Primitive (
-                        Obj.Cache_Obj, Obj.WB_Cache_Prim_1, Idx);
+               end Declare_Cache_Job_Idx;
 
-                     Obj.Cache_Jobs_Data (Idx) :=
-                        VBD_Rekeying.Peek_Generated_Blk_Data (
-                           Obj.VBD_Rkg, Prim);
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
 
-                  end Declare_Cache_Job_Idx;
+            when Read | Sync =>
 
-                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
-                  Progress := True;
-
-               when Read | Sync =>
-
-                  Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
-                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
-                  Progress := True;
-
-               end case;
-
-            when others =>
-
-               raise Program_Error;
+               Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
 
             end case;
 
          end Declare_Cache_Prim;
       end loop Loop_Generated_Cache_Prims;
+
+      Loop_Generated_Blk_IO_Prims :
+      loop
+         Declare_Blk_IO_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               VBD_Rekeying.Peek_Generated_Blk_IO_Primitive (Obj.VBD_Rkg);
+         begin
+            exit Loop_Generated_Blk_IO_Prims when
+               not Primitive.Valid (Prim) or else
+               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
+
+            case Primitive.Operation (Prim) is
+            when Write =>
+
+               Declare_Blk_IO_Buf_Idx :
+               declare
+                  Idx : Block_IO.Data_Index_Type;
+               begin
+
+                  Block_IO.Submit_Primitive (
+                     Obj.IO_Obj, Primitive.Tag_VBD_Rkg_Blk_IO, Prim, Idx);
+
+                  Blk_IO_Buf (Idx) :=
+                     VBD_Rekeying.Peek_Generated_Blk_Data (Obj.VBD_Rkg, Prim);
+
+               end Declare_Blk_IO_Buf_Idx;
+
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
+            when Read | Sync =>
+
+               Block_IO.Submit_Primitive (
+                  Obj.IO_Obj, Primitive.Tag_VBD_Rkg_Blk_IO, Prim);
+
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
+            end case;
+
+         end Declare_Blk_IO_Prim;
+      end loop Loop_Generated_Blk_IO_Prims;
 
       Loop_Completed_Prims :
       loop
@@ -1851,9 +1883,9 @@ is
    --  Execute_SB_Ctrl
    --
    procedure Execute_SB_Ctrl (
-      Obj      : in out Object_Type;
-      IO_Buf   : in out Block_IO.Data_Type;
-      Progress : in out Boolean)
+      Obj        : in out Object_Type;
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      Progress   : in out Boolean)
    is
    begin
       Superblock_Control.Execute (
@@ -1987,7 +2019,7 @@ is
                      Data_Idx);
 
                   Block_Data_From_Superblock (Data, Obj.Superblock);
-                  IO_Buf (Data_Idx) := Data;
+                  Blk_IO_Buf (Data_Idx) := Data;
 
                end Declare_Data;
 
@@ -2719,6 +2751,21 @@ is
                   Superblock_Control.Mark_Generated_Prim_Complete (
                      Obj.SB_Ctrl, Prim);
 
+               elsif Primitive.Has_Tag_VBD_Rkg_Blk_IO (Prim) then
+
+                  case Primitive.Operation (Prim) is
+                  when Read =>
+
+                     VBD_Rekeying.Mark_Generated_Prim_Completed_Blk_Data (
+                        Obj.VBD_Rkg, Prim, IO_Buf (Index));
+
+                  when Write | Sync =>
+
+                     VBD_Rekeying.Mark_Generated_Prim_Completed (
+                        Obj.VBD_Rkg, Prim);
+
+                  end case;
+
                else
                   raise Program_Error;
                end if;
@@ -2750,7 +2797,7 @@ is
       Execute_Request_Pool (Obj, Progress);
       Execute_SB_Ctrl (Obj, IO_Buf, Progress);
       Execute_TA (Obj, Progress);
-      Execute_VBD_Rkg (Obj, Progress);
+      Execute_VBD_Rkg (Obj, IO_Buf, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
