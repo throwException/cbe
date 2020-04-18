@@ -481,7 +481,29 @@ is
 
          end Declare_Child_Idx_2;
 
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Crypto_Decrypt,
+            Blk_Nr => Block_Number_Type (Job.Data_Blk_Old_PBA),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
          Job.State := Decrypt_Leaf_Node_Pending;
+         Progress := True;
+
+      when Decrypt_Leaf_Node_Completed =>
+
+         Debug.Print_String ("PLAIN LEAF DATA " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (0))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (1))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (2))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (3))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (4))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (5))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (6))) & " " &
+            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (7))) & " ");
+
+         Job.State := Alloc_New_Leaf_Node_PBA_Pending;
          Progress := True;
 
       when others =>
@@ -592,6 +614,42 @@ is
    end Peek_Generated_Cache_Primitive;
 
    --
+   --  Peek_Generated_Crypto_Primitive
+   --
+   function Peek_Generated_Crypto_Primitive (Rkg : Rekeying_Type)
+   return Primitive.Object_Type
+   is
+   begin
+
+      Inspect_Each_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when Rekey_VBA =>
+
+            case Rkg.Jobs (Idx).State is
+            when Encrypt_Leaf_Node_Pending | Decrypt_Leaf_Node_Pending =>
+
+               return Rkg.Jobs (Idx).Generated_Prim;
+
+            when others =>
+
+               null;
+
+            end case;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Inspect_Each_Job;
+      return Primitive.Invalid_Object;
+
+   end Peek_Generated_Crypto_Primitive;
+
+   --
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (
@@ -628,6 +686,128 @@ is
       raise Program_Error;
 
    end Peek_Generated_Blk_Data;
+
+   --
+   --  Peek_Generated_Cipher_Data
+   --
+   function Peek_Generated_Cipher_Data (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Block_Data_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Decrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Data_Blk;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Cipher_Data;
+
+   --
+   --  Peek_Generated_Plain_Data
+   --
+   function Peek_Generated_Plain_Data (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Block_Data_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Encrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Data_Blk;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Plain_Data;
+
+   --
+   --  Peek_Generated_Crypto_Key_ID
+   --
+   function Peek_Generated_Crypto_Key_ID (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Encrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).New_Key_ID;
+
+         when Decrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Old_Key_ID;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Crypto_Key_ID;
 
    --
    --  Drop_Generated_Primitive
@@ -669,6 +849,15 @@ is
             Rkg.Jobs (Idx).State := Read_Leaf_Node_In_Progress;
             return;
 
+         when Decrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Decrypt_Leaf_Node_In_Progress;
+            return;
+
          when others =>
 
             raise Program_Error;
@@ -679,6 +868,80 @@ is
       raise Program_Error;
 
    end Drop_Generated_Primitive;
+
+   --
+   --  Mark_Generated_Prim_Completed_Plain_Data
+   --
+   procedure Mark_Generated_Prim_Completed_Plain_Data (
+      Rkg        : in out Rekeying_Type;
+      Prim       :        Primitive.Object_Type;
+      Plain_Data :        Block_Data_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Rkg.Jobs (Idx).Operation /= Invalid then
+
+         case Rkg.Jobs (Idx).State is
+         when Decrypt_Leaf_Node_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Decrypt_Leaf_Node_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Rkg.Jobs (Idx).Data_Blk := Plain_Data;
+            return;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Completed_Plain_Data;
+
+   --
+   --  Mark_Generated_Prim_Completed_Cipher_Data
+   --
+   procedure Mark_Generated_Prim_Completed_Cipher_Data (
+      Rkg         : in out Rekeying_Type;
+      Prim        :        Primitive.Object_Type;
+      Cipher_Data :        Block_Data_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Rkg.Jobs (Idx).Operation /= Invalid then
+
+         case Rkg.Jobs (Idx).State is
+         when Encrypt_Leaf_Node_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Encrypt_Leaf_Node_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Rkg.Jobs (Idx).Data_Blk := Cipher_Data;
+            return;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Completed_Cipher_Data;
 
    --
    --  Mark_Generated_Prim_Completed_Blk_Data

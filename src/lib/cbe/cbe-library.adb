@@ -399,14 +399,39 @@ is
          Prim : constant Primitive.Object_Type :=
             Crypto.Peek_Completed_Primitive (Obj.Crypto_Obj);
       begin
-         if
-            Primitive.Valid (Prim) and then
-            Primitive.Operation (Prim) = Read
-         then
-            Start_Waiting_For_Front_End (Obj, Prim, Event_Obtain_Client_Data);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
-         end if;
+
+         --
+         --  FIXME
+         --  By default, primitives of the crypto module are treated in a
+         --  special way as the initial integration of the module was done
+         --  breaking several principles of the modular design of the CBE.
+         --  However, newer modules (like VBD Rekeying) use the crypto
+         --  module in a simple server-client fashion for
+         --  encryption/decryption requests, as originally intended. We
+         --  filter those out through their tags.
+         --
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_VBD_Rkg_Crypto_Decrypt |
+              Primitive.Tag_VBD_Rkg_Crypto_Encrypt
+         =>
+
+            raise Program_Error;
+
+         when others =>
+
+            if
+               Primitive.Valid (Prim) and then
+               Primitive.Operation (Prim) = Read
+            then
+               Start_Waiting_For_Front_End (
+                  Obj, Prim, Event_Obtain_Client_Data);
+
+               Req := Obj.Wait_For_Front_End.Req;
+               return;
+            end if;
+
+         end case;
+
       end;
    end Client_Data_Ready;
 
@@ -1761,12 +1786,81 @@ is
    --  Execute_VBD_Rkg
    --
    procedure Execute_VBD_Rkg (
-      Obj        : in out Object_Type;
-      Blk_IO_Buf : in out Block_IO.Data_Type;
-      Progress   : in out Boolean)
+      Obj               : in out Object_Type;
+      Blk_IO_Buf        : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean)
    is
    begin
       VBD_Rekeying.Execute (Obj.VBD_Rkg, Progress);
+
+      Loop_Generated_Crypto_Prims :
+      loop
+         Declare_Crypto_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               VBD_Rekeying.Peek_Generated_Crypto_Primitive (Obj.VBD_Rkg);
+         begin
+            exit Loop_Generated_Crypto_Prims when
+               not Primitive.Valid (Prim) or else
+               not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Rkg_Crypto_Decrypt =>
+
+               Declare_Cipher_Buf_Idx :
+               declare
+                  Idx : Crypto.Item_Index_Type;
+               begin
+
+                  Crypto.Submit_Primitive (
+                     Obj.Crypto_Obj,
+                     Prim,
+                     VBD_Rekeying.Peek_Generated_Crypto_Key_ID (
+                        Obj.VBD_Rkg, Prim),
+                     Idx);
+
+                  Crypto_Cipher_Buf (Idx) :=
+                     VBD_Rekeying.Peek_Generated_Cipher_Data (
+                        Obj.VBD_Rkg, Prim);
+
+               end Declare_Cipher_Buf_Idx;
+
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
+            when Primitive.Tag_VBD_Rkg_Crypto_Encrypt =>
+
+               Declare_Plain_Buf_Idx :
+               declare
+                  Idx : Crypto.Item_Index_Type;
+               begin
+
+                  Crypto.Submit_Primitive (
+                     Obj.Crypto_Obj,
+                     Prim,
+                     VBD_Rekeying.Peek_Generated_Crypto_Key_ID (
+                        Obj.VBD_Rkg, Prim),
+                     Idx);
+
+                  Crypto_Plain_Buf (Idx) :=
+                     VBD_Rekeying.Peek_Generated_Plain_Data (
+                        Obj.VBD_Rkg, Prim);
+
+               end Declare_Plain_Buf_Idx;
+
+               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Crypto_Prim;
+      end loop Loop_Generated_Crypto_Prims;
 
       Loop_Generated_Cache_Prims :
       loop
@@ -2586,7 +2680,8 @@ is
 
    procedure Execute_Crypto (
       Obj               : in out Object_Type;
-      Crypto_Cipher_Buf : in     Crypto.Cipher_Buffer_Type;
+      Crypto_Plain_Buf  :        Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf :        Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean)
    is
    begin
@@ -2596,42 +2691,80 @@ is
       --
       Loop_Crypto_Completed_Prims :
       loop
-         Declare_Prim_12 :
+         Declare_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
                Crypto.Peek_Completed_Primitive (Obj.Crypto_Obj);
          begin
-            exit Loop_Crypto_Completed_Prims when
-               not Primitive.Valid (Prim) or else
-               Primitive.Operation (Prim) = Read;
 
-            if not Primitive.Success (Prim) then
-               raise Program_Error;
-            end if;
+            --
+            --  FIXME
+            --  By default, primitives of the crypto module are treated in a
+            --  special way as the initial integration of the module was done
+            --  breaking several principles of the modular design of the CBE.
+            --  However, newer modules (like VBD Rekeying) use the crypto
+            --  module in a simple server-client fashion for
+            --  encryption/decryption requests, as originally intended. We
+            --  filter those out through their tags.
+            --
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Rkg_Crypto_Decrypt =>
 
-            Declare_Index_2 :
-            declare
-               Index : constant Write_Back.Data_Index_Type :=
-                  Write_Back.Peek_Generated_Crypto_Data (
-                     Obj.Write_Back_Obj, Prim);
-            begin
-               --
-               --  FIXME instead of copying the Data just ask the crypto
-               --        module for the resulting Hash and omit further
-               --        processing in case the operation failed
-               --
-               Obj.Write_Back_Data (Index) := Crypto_Cipher_Buf (
-                  Crypto.Data_Index (Obj.Crypto_Obj, Prim));
+               VBD_Rekeying.Mark_Generated_Prim_Completed_Plain_Data (
+                  Obj.VBD_Rkg, Prim,
+                  Crypto_Plain_Buf (Crypto.Data_Index (Obj.Crypto_Obj, Prim)));
 
-               Write_Back.Mark_Completed_Crypto_Primitive (
-                  Obj.Write_Back_Obj, Prim, Obj.Write_Back_Data (Index));
+               Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+               Progress := True;
 
-            end Declare_Index_2;
-            Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+            when Primitive.Tag_VBD_Rkg_Crypto_Encrypt =>
 
-         end Declare_Prim_12;
+               VBD_Rekeying.Mark_Generated_Prim_Completed_Cipher_Data (
+                  Obj.VBD_Rkg, Prim,
+                  Crypto_Cipher_Buf (
+                     Crypto.Data_Index (Obj.Crypto_Obj, Prim)));
+
+               Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+               Progress := True;
+
+            when others =>
+
+               exit Loop_Crypto_Completed_Prims when
+                  not Primitive.Valid (Prim) or else
+                  Primitive.Operation (Prim) = Read;
+
+               if not Primitive.Success (Prim) then
+                  raise Program_Error;
+               end if;
+
+               Declare_Index_2 :
+               declare
+                  Index : constant Write_Back.Data_Index_Type :=
+                     Write_Back.Peek_Generated_Crypto_Data (
+                        Obj.Write_Back_Obj, Prim);
+               begin
+                  --
+                  --  FIXME instead of copying the Data just ask the crypto
+                  --        module for the resulting Hash and omit further
+                  --        processing in case the operation failed
+                  --
+                  Obj.Write_Back_Data (Index) := Crypto_Cipher_Buf (
+                     Crypto.Data_Index (Obj.Crypto_Obj, Prim));
+
+                  Write_Back.Mark_Completed_Crypto_Primitive (
+                     Obj.Write_Back_Obj, Prim, Obj.Write_Back_Data (Index));
+
+               end Declare_Index_2;
+               Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+                  null;
+
+            end case;
+
+         end Declare_Prim;
          Progress := True;
+
       end loop Loop_Crypto_Completed_Prims;
+
    end Execute_Crypto;
 
    procedure Execute_IO (
@@ -2797,11 +2930,12 @@ is
       Execute_Request_Pool (Obj, Progress);
       Execute_SB_Ctrl (Obj, IO_Buf, Progress);
       Execute_TA (Obj, Progress);
-      Execute_VBD_Rkg (Obj, IO_Buf, Progress);
+      Execute_VBD_Rkg (
+         Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
-      Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
+      Execute_Crypto (Obj, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);
       Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
       Execute_Sync_Superblock (Obj, IO_Buf, Progress);

@@ -72,6 +72,12 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_Crypto_Primitive
+   --
+   function Peek_Generated_Crypto_Primitive (Rkg : Rekeying_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Peek_Generated_Blk_IO_Primitive
    --
    function Peek_Generated_Blk_IO_Primitive (Rkg : Rekeying_Type)
@@ -84,6 +90,30 @@ is
       Rkg  : in out Rekeying_Type;
       Prim :        Primitive.Object_Type)
    return Block_Data_Type;
+
+   --
+   --  Peek_Generated_Cipher_Data
+   --
+   function Peek_Generated_Cipher_Data (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Block_Data_Type;
+
+   --
+   --  Peek_Generated_Plain_Data
+   --
+   function Peek_Generated_Plain_Data (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Block_Data_Type;
+
+   --
+   --  Peek_Generated_Crypto_Key_ID
+   --
+   function Peek_Generated_Crypto_Key_ID (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Key_ID_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -106,6 +136,22 @@ is
       Rkg      : in out Rekeying_Type;
       Prim     :        Primitive.Object_Type;
       Blk_Data :        Block_Data_Type);
+
+   --
+   --  Mark_Generated_Prim_Completed_Plain_Data
+   --
+   procedure Mark_Generated_Prim_Completed_Plain_Data (
+      Rkg        : in out Rekeying_Type;
+      Prim       :        Primitive.Object_Type;
+      Plain_Data :        Block_Data_Type);
+
+   --
+   --  Mark_Generated_Prim_Completed_Cipher_Data
+   --
+   procedure Mark_Generated_Prim_Completed_Cipher_Data (
+      Rkg         : in out Rekeying_Type;
+      Prim        :        Primitive.Object_Type;
+      Cipher_Data :        Block_Data_Type);
 
 private
 

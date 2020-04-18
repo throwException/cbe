@@ -568,9 +568,11 @@ private
    --  Execute_VBD_Rkg
    --
    procedure Execute_VBD_Rkg (
-      Obj        : in out Object_Type;
-      Blk_IO_Buf : in out Block_IO.Data_Type;
-      Progress   : in out Boolean);
+      Obj               : in out Object_Type;
+      Blk_IO_Buf        : in out Block_IO.Data_Type;
+      Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
+      Progress          : in out Boolean);
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;
@@ -585,7 +587,8 @@ private
 
    procedure Execute_Crypto (
       Obj               : in out Object_Type;
-      Crypto_Cipher_Buf : in     Crypto.Cipher_Buffer_Type;
+      Crypto_Plain_Buf  :        Crypto.Plain_Buffer_Type;
+      Crypto_Cipher_Buf :        Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean);
 
    procedure Execute_IO (

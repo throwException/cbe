@@ -59,6 +59,8 @@ is
       Tag_SB_Ctrl_Blk_IO_Sync,
       Tag_VBD_Rkg_Cache,
       Tag_VBD_Rkg_Blk_IO,
+      Tag_VBD_Rkg_Crypto_Encrypt,
+      Tag_VBD_Rkg_Crypto_Decrypt,
       Tag_IO,
       Tag_Translation,
       Tag_Write_Back,
@@ -127,6 +129,8 @@ is
       when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
       when Tag_VBD_Rkg_Cache => "VBD_Rkg_Cache",
       when Tag_VBD_Rkg_Blk_IO => "VBD_Rkg_Blk_IO",
+      when Tag_VBD_Rkg_Crypto_Encrypt => "VBD_Rkg_Crypto_Encrypt",
+      when Tag_VBD_Rkg_Crypto_Decrypt => "VBD_Rkg_Crypto_Decrypt",
       when Tag_SB_Ctrl_Blk_IO_Write_SB => "SB_Ctrl_Blk_IO_Write_SB",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
@@ -317,6 +321,8 @@ is
    function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean;
+   function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean;
+   function Has_Tag_VBD_Rkg_Crypto_Decrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Translation (Obj : Object_Type) return Boolean;
    function Has_Tag_Write_Back (Obj : Object_Type) return Boolean;
