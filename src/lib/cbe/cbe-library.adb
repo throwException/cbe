@@ -33,7 +33,7 @@ is
          SBs (Curr_SB).Snapshots (Curr_Snap).Nr_Of_Leafs;
    begin
 
-      Obj.State       := Invalid;
+      Obj.Handle_Failed_FT_Prims := False;
       Obj.Read_State  := Invalid;
       Obj.Write_State := Invalid;
       Obj.Sync_State  := Invalid;
@@ -327,7 +327,7 @@ is
       Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
       pragma Debug (Debug.Print_String ("Completed Request: "
          & Request.To_String (Req)));
-      Obj.State := Invalid;
+      Obj.Handle_Failed_FT_Prims := False;
    end Drop_Completed_Client_Request;
 
    procedure Has_IO_Request (
@@ -940,7 +940,8 @@ is
          begin
             exit Loop_Free_Tree_Completed_Prims when
                not Primitive.Valid (Prim) or else
-               Primitive.Success (Prim);
+               Primitive.Success (Prim) or else
+               not Obj.Handle_Failed_FT_Prims;
 
             if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
                Obj.Free_Tree_Retry_Count := Obj.Free_Tree_Retry_Count + 1;
@@ -955,7 +956,7 @@ is
                   pragma Debug (Debug.Print_String (
                      "Write_Stalled Sync_Request"));
                   Obj.Write_Stalled := True;
-                  Obj.State := Sync_Request;
+                  Obj.Handle_Failed_FT_Prims := False;
                else
                   Obj.Write_Stalled := False;
                   pragma Debug (Debug.Print_String ("Retry FT allocation"));
@@ -1590,7 +1591,7 @@ is
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
-            Obj.State := Sync_Request;
+            Obj.Handle_Failed_FT_Prims := False;
             Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
@@ -1624,7 +1625,7 @@ is
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
-            Obj.State := Sync_Request;
+            Obj.Handle_Failed_FT_Prims := False;
             Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
@@ -1656,7 +1657,7 @@ is
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
-            Obj.State := Sync_Request;
+            Obj.Handle_Failed_FT_Prims := False;
             Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
@@ -1693,9 +1694,9 @@ is
 
                case Primitive.Operation (Prim) is
                when Read =>
-                  Obj.State := Read_Request;
+                  Obj.Handle_Failed_FT_Prims := False;
                when Write =>
-                  Obj.State := Write_Request;
+                  Obj.Handle_Failed_FT_Prims := True;
                when others =>
                   raise Program_Error;
                end case;
@@ -2014,10 +2015,6 @@ is
       Progress         : in out Boolean)
    is
    begin
-      if Obj.State /= Sync_Request then
-         return;
-      end if;
-
       Sync_Superblock.Execute (Obj.Sync_SB_Obj, Progress);
 
       Loop_Sync_SB_Completed_Prims :
@@ -2111,9 +2108,9 @@ is
                   end if;
                end Declare_Pool_Index;
 
-               Obj.State := Invalid;
+               Obj.Handle_Failed_FT_Prims := False;
             else
-               Obj.State := Write_Request;
+               Obj.Handle_Failed_FT_Prims := True;
             end if;
 
             Obj.Secure_Superblock := False;
@@ -2364,33 +2361,15 @@ is
    begin
 
       Execute_SCD (Obj, Progress);
-
-      if Obj.State = Invalid or else
-         Obj.State = Read_Request or else
-         Obj.State = Write_Request
-      then
-         Execute_Request_Pool (Obj, Progress);
-      end if;
-
-      if Obj.State = Read_Request
-         or else Obj.State = Write_Request
-      then
-         Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
-      end if;
-
+      Execute_Request_Pool (Obj, Progress);
+      Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Crypto (Obj, Crypto_Cipher_Buf, Progress);
-
-      if Obj.State = Write_Request then
-         Execute_Free_Tree (Obj, Progress);
-         Execute_Meta_Tree (Obj, Progress);
-         Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
-      end if;
-
-      if Obj.State = Sync_Request then
-         Execute_Sync_Superblock (Obj, IO_Buf, Progress);
-      end if;
+      Execute_Meta_Tree (Obj, Progress);
+      Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
+      Execute_Sync_Superblock (Obj, IO_Buf, Progress);
+      Execute_Free_Tree (Obj, Progress);
 
       Obj.Execute_Progress := Progress;
    end Execute;

@@ -392,7 +392,8 @@ private
       (Invalid, Cache_Writeback, Superblock_Update, Superblock_Writeback);
 
    type Object_Type is record
-      State       : Arbiter_State_Type;
+
+      Handle_Failed_FT_Prims : Boolean;
       Read_State  : Read_Request_State_Type;
       Write_State : Write_Request_State_Type;
       Sync_State  : Sync_Request_State_Type;
