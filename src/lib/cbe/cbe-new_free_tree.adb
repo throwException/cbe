@@ -209,7 +209,7 @@ is
             Primitive.Success (Obj.WB_Data.Prim, True);
             Obj.State := Complete;
          when Complete =>
-            Progress := True;
+            null;
          when Not_Enough_Free_Blocks =>
             Primitive.Success (Obj.WB_Data.Prim, False);
             Obj.State := Complete;
