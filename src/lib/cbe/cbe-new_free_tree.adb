@@ -105,6 +105,28 @@ is
       Obj.Level_0_Node := (others => Type_2_Node_Invalid);
    end Reset_Block_State;
 
+   --
+   --  Log_2
+   --
+   function  Log_2 (Value : Unsigned_32)
+   return Unsigned_32
+   is
+      type Bit_Index_Type is range 0 .. 31;
+   begin
+      if Value = 0 then
+         raise Program_Error;
+      end if;
+      for Bit_Index in reverse Bit_Index_Type'Range loop
+         if (
+            Value and
+            Shift_Left (Unsigned_32 (1), Natural (Bit_Index))) /= 0
+         then
+            return Unsigned_32 (Bit_Index);
+         end if;
+      end loop;
+      raise Program_Error;
+   end Log_2;
+
    ------------------------
    --  Module interface  --
    ------------------------
@@ -122,7 +144,8 @@ is
       Old_Blocks       :        Type_1_Node_Walk_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Req_Prim         :        Primitive.Object_Type;
-      VBA              :        Virtual_Block_Address_Type)
+      VBA              :        Virtual_Block_Address_Type;
+      VBD_Degree       :        Tree_Degree_Type)
    is
    begin
       if Obj.State /= Invalid then
@@ -146,6 +169,8 @@ is
          ));
 
       Obj.State := Scan;
+      Obj.VBD_Degree_Log_2 :=
+         Tree_Degree_Log_2_Type (Log_2 (Unsigned_32 (VBD_Degree)));
 
       Obj.WB_Data := (
          Prim           => Req_Prim,
@@ -826,15 +851,34 @@ is
       end if;
    end Execute_Scan;
 
+   --
+   --  VBD_Inner_Node_VBA
+   --
+   function VBD_Inner_Node_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type
+   is (
+      Virtual_Block_Address_Type (
+         Unsigned_64 (VBD_Leaf_VBA) and
+         Shift_Left (
+            Unsigned_64'Last,
+            Natural (
+               Unsigned_32 (VBD_Degree_Log_2) *
+               Unsigned_32 (VBD_Level)))));
+
    procedure Exchange_Type_2_Leafs (
-      Current_Gen :        Generation_Type;
-      Max_Level   :        Tree_Level_Index_Type;
-      Old_Blocks  : in     Type_1_Node_Walk_Type;
-      New_Blocks  : in out Write_Back.New_PBAs_Type;
-      Stack       : in out Type_2_Info_Stack.Object_Type;
-      Entries     : in out Type_2_Node_Block_Type;
-      Exchanged   :    out Number_Of_Blocks_Type;
-      Handled     :    out Boolean)
+      Current_Gen      :        Generation_Type;
+      Max_Level        :        Tree_Level_Index_Type;
+      Old_Blocks       : in     Type_1_Node_Walk_Type;
+      New_Blocks       : in out Write_Back.New_PBAs_Type;
+      VBA              :        Virtual_Block_Address_Type;
+      VBD_Degree_Log_2 :        Tree_Degree_Log_2_Type;
+      Stack            : in out Type_2_Info_Stack.Object_Type;
+      Entries          : in out Type_2_Node_Block_Type;
+      Exchanged        :    out Number_Of_Blocks_Type;
+      Handled          :    out Boolean)
    is
       Local_Exchanged : Number_Of_Blocks_Type := 0;
    begin
@@ -863,7 +907,9 @@ is
                   Entries (Natural (Info.Index)).Free_Gen :=
                      Current_Gen;
 
-                  Entries (Natural (Info.Index)).Last_VBA    := 0;
+                  Entries (Natural (Info.Index)).Last_VBA    :=
+                     VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+
                   Entries (Natural (Info.Index)).Last_Key_ID := 0;
                   Entries (Natural (Info.Index)).Reserved    := True;
                end;
@@ -894,10 +940,18 @@ is
       declare
          Handled : Boolean;
       begin
-         Exchange_Type_2_Leafs (Obj.Current_Gen, Obj.WB_Data.Tree_Max_Level,
-         Obj.WB_Data.Old_PBAs, Obj.WB_Data.New_PBAs,
-         Obj.Level_0_Stack, Obj.Level_0_Node,
-         Exchanged, Handled);
+         Exchange_Type_2_Leafs (
+            Obj.Current_Gen,
+            Obj.WB_Data.Tree_Max_Level,
+            Obj.WB_Data.Old_PBAs,
+            Obj.WB_Data.New_PBAs,
+            Obj.WB_Data.VBA,
+            Obj.VBD_Degree_Log_2,
+            Obj.Level_0_Stack,
+            Obj.Level_0_Node,
+            Exchanged,
+            Handled);
+
          if Handled then
             if Exchanged > 0 then
                Obj.Exchanged_Blocks := Obj.Exchanged_Blocks + Exchanged;

@@ -1344,7 +1344,8 @@ is
                   Old_Blocks       => Old_PBAs,
                   Max_Level        => Trans_Max_Level,
                   Req_Prim         => Prim,
-                  VBA              => VBA);
+                  VBA              => VBA,
+                  VBD_Degree       => Obj.Superblock.Degree);
             else
                --
                --  The complete branch is still part of theCurr generation,

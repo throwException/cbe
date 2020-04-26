@@ -11,6 +11,9 @@ pragma Ada_2012;
 with CBE.Request;
 with CBE.Primitive;
 with CBE.Write_Back;
+with Interfaces;
+
+use  Interfaces;
 
 --
 --  The Free_tree meta-module handles the allocation and freeing, i.e.,
@@ -51,7 +54,8 @@ is
       Old_Blocks       :        Type_1_Node_Walk_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Req_Prim         :        Primitive.Object_Type;
-      VBA              :        Virtual_Block_Address_Type);
+      VBA              :        Virtual_Block_Address_Type;
+      VBD_Degree       :        Tree_Degree_Type);
 
    procedure Retry_Allocation (Obj : in out Object_Type);
 
@@ -150,6 +154,9 @@ is
    function To_String (Obj : Object_Type) return String;
 
 private
+
+   type Tree_Degree_Log_2_Type
+   is range Tree_Min_Degree_Log_2 .. Tree_Max_Degree_Log_2;
 
    function Node_Volatile (
       T   : Type_1_Node_Type;
@@ -413,6 +420,8 @@ private
       --
       WB_Data : Write_Back_Data_Type;
 
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+
    end record;
 
    function Write_Back_Data_Invalid return Write_Back_Data_Type
@@ -477,19 +486,36 @@ private
       Progress         : in out Boolean);
 
    procedure Exchange_Type_2_Leafs (
-      Current_Gen :        Generation_Type;
-      Max_Level   :        Tree_Level_Index_Type;
-      Old_Blocks  : in     Type_1_Node_Walk_Type;
-      New_Blocks  : in out Write_Back.New_PBAs_Type;
-      Stack       : in out Type_2_Info_Stack.Object_Type;
-      Entries     : in out Type_2_Node_Block_Type;
-      Exchanged   :    out Number_Of_Blocks_Type;
-      Handled     :    out Boolean);
+      Current_Gen      :        Generation_Type;
+      Max_Level        :        Tree_Level_Index_Type;
+      Old_Blocks       : in     Type_1_Node_Walk_Type;
+      New_Blocks       : in out Write_Back.New_PBAs_Type;
+      VBA              :        Virtual_Block_Address_Type;
+      VBD_Degree_Log_2 :        Tree_Degree_Log_2_Type;
+      Stack            : in out Type_2_Info_Stack.Object_Type;
+      Entries          : in out Type_2_Node_Block_Type;
+      Exchanged        :    out Number_Of_Blocks_Type;
+      Handled          :    out Boolean);
 
    procedure Execute_Update (
       Obj              : in out Object_Type;
       Active_Snaps     :        Snapshots_Type;
       Last_Secured_Gen :        Generation_Type;
       Progress         : in out Boolean);
+
+   --
+   --  Log_2
+   --
+   function  Log_2 (Value : Unsigned_32)
+   return Unsigned_32;
+
+   --
+   --  VBD_Inner_Node_VBA
+   --
+   function VBD_Inner_Node_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type;
 
 end CBE.New_Free_Tree;
