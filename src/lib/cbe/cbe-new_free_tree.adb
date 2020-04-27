@@ -145,7 +145,8 @@ is
       Max_Level        :        Tree_Level_Index_Type;
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
-      VBD_Degree       :        Tree_Degree_Type)
+      VBD_Degree       :        Tree_Degree_Type;
+      Key_ID           :        Key_ID_Type)
    is
    begin
       if Obj.State /= Invalid then
@@ -168,6 +169,7 @@ is
             Volatile => Node_Volatile (Obj.Root_Node, Obj.Current_Gen)
          ));
 
+      Obj.Key_ID := Key_ID;
       Obj.State := Scan;
       Obj.VBD_Degree_Log_2 :=
          Tree_Degree_Log_2_Type (Log_2 (Unsigned_32 (VBD_Degree)));
@@ -878,7 +880,8 @@ is
       Stack            : in out Type_2_Info_Stack.Object_Type;
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
-      Handled          :    out Boolean)
+      Handled          :    out Boolean;
+      Key_ID           :        Key_ID_Type)
    is
       Local_Exchanged : Number_Of_Blocks_Type := 0;
    begin
@@ -910,7 +913,7 @@ is
                   Entries (Natural (Info.Index)).Last_VBA    :=
                      VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
 
-                  Entries (Natural (Info.Index)).Last_Key_ID := 0;
+                  Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
                   Entries (Natural (Info.Index)).Reserved    := True;
                end;
                Local_Exchanged := Local_Exchanged + 1;
@@ -950,7 +953,8 @@ is
             Obj.Level_0_Stack,
             Obj.Level_0_Node,
             Exchanged,
-            Handled);
+            Handled,
+            Obj.Key_ID);
 
          if Handled then
             if Exchanged > 0 then

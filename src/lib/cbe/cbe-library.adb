@@ -1156,6 +1156,8 @@ is
          --
          Declare_Old_PBAs : declare
 
+            Key_ID : Key_ID_Type := 0;
+
             Old_PBAs : Type_1_Node_Walk_Type := (
                others => Type_1_Node_Invalid);
 
@@ -1321,6 +1323,13 @@ is
                Obj.SCD_New_Blocks := Obj.SCD_New_Blocks  + 1;
             end if;
 
+            For_Each_Key :
+            for Key_Idx in Obj.Superblock.Keys'Range loop
+               if Key_ID < Obj.Superblock.Keys (Key_Idx).ID then
+                  Key_ID := Obj.Superblock.Keys (Key_Idx).ID;
+               end if;
+            end loop For_Each_Key;
+
             --
             --  Since there are blocks we cannot change in place, use the
             --  FT module to allocate the blocks. As we have to reserve
@@ -1345,7 +1354,8 @@ is
                   Max_Level        => Trans_Max_Level,
                   Req_Prim         => Prim,
                   VBA              => VBA,
-                  VBD_Degree       => Obj.Superblock.Degree);
+                  VBD_Degree       => Obj.Superblock.Degree,
+                  Key_ID           => Key_ID);
             else
                --
                --  The complete branch is still part of theCurr generation,

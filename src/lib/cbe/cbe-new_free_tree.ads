@@ -55,7 +55,8 @@ is
       Max_Level        :        Tree_Level_Index_Type;
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
-      VBD_Degree       :        Tree_Degree_Type);
+      VBD_Degree       :        Tree_Degree_Type;
+      Key_ID           :        Key_ID_Type);
 
    procedure Retry_Allocation (Obj : in out Object_Type);
 
@@ -421,6 +422,7 @@ private
       WB_Data : Write_Back_Data_Type;
 
       VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      Key_ID           : Key_ID_Type;
 
    end record;
 
@@ -495,7 +497,8 @@ private
       Stack            : in out Type_2_Info_Stack.Object_Type;
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
-      Handled          :    out Boolean);
+      Handled          :    out Boolean;
+      Key_ID           :        Key_ID_Type);
 
    procedure Execute_Update (
       Obj              : in out Object_Type;
