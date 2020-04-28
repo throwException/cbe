@@ -296,6 +296,10 @@ is
    is
    begin
 
+      if not Primitive.Success (Job.Generated_Prim) then
+         raise Program_Error;
+      end if;
+
       if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.T1_Blk_Idx)) /= Hash then
          raise Program_Error;
       end if;
@@ -453,6 +457,10 @@ is
 
       when Read_Inner_Node_Completed =>
 
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          Declare_Child_Idx_1 :
          declare
             Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
@@ -470,6 +478,10 @@ is
          end Declare_Child_Idx_1;
 
       when Read_Leaf_Node_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          Declare_Child_Idx_2 :
          declare
@@ -500,6 +512,10 @@ is
          Progress := True;
 
       when Decrypt_Leaf_Node_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          for Idx in reverse Job.T1_Node_Walk'Range loop
 
@@ -566,6 +582,10 @@ is
          Progress := True;
 
       when Alloc_New_Leaf_Node_PBA_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          raise Program_Error;
 
