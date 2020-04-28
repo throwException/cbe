@@ -864,6 +864,7 @@ is
       New_Blocks       : in out Write_Back.New_PBAs_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree_Log_2 :        Tree_Degree_Log_2_Type;
+      Tag              :        Primitive.Tag_Type;
       Stack            : in out Type_2_Info_Stack.Object_Type;
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
@@ -888,20 +889,64 @@ is
                      raise Program_Error;
                   end if;
 
-                  New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+                  case Tag is
+                  when Primitive.Tag_Pool_VBD =>
 
-                  Entries (Natural (Info.Index)).PBA :=
-                     Old_Blocks (I).PBA;
-                  Entries (Natural (Info.Index)).Alloc_Gen :=
-                     Old_Blocks (I).Gen;
-                  Entries (Natural (Info.Index)).Free_Gen :=
-                     Free_Gen;
+                     New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
 
-                  Entries (Natural (Info.Index)).Last_VBA    :=
-                     VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+                     Entries (Natural (Info.Index)).PBA :=
+                        Old_Blocks (I).PBA;
 
-                  Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
-                  Entries (Natural (Info.Index)).Reserved    := True;
+                     Entries (Natural (Info.Index)).Alloc_Gen :=
+                        Old_Blocks (I).Gen;
+                     Entries (Natural (Info.Index)).Free_Gen :=
+                        Free_Gen;
+
+                     Entries (Natural (Info.Index)).Last_VBA    :=
+                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+
+                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
+                     Entries (Natural (Info.Index)).Reserved    := True;
+
+                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk =>
+
+                     New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+
+                     Entries (Natural (Info.Index)).PBA :=
+                        Old_Blocks (I).PBA;
+
+                     Entries (Natural (Info.Index)).Alloc_Gen :=
+                        Old_Blocks (I).Gen;
+                     Entries (Natural (Info.Index)).Free_Gen :=
+                        Free_Gen;
+
+                     Entries (Natural (Info.Index)).Last_VBA    :=
+                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+
+                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
+                     Entries (Natural (Info.Index)).Reserved    := False;
+
+                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk =>
+
+                     New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+
+                     Entries (Natural (Info.Index)).Alloc_Gen :=
+                        Old_Blocks (I).Gen;
+                     Entries (Natural (Info.Index)).Free_Gen :=
+                        Free_Gen;
+
+                     Entries (Natural (Info.Index)).Last_VBA    :=
+                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+
+                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
+                     Entries (Natural (Info.Index)).Reserved    := True;
+
+                  when others =>
+
+                     raise Program_Error;
+
+                  end case;
+
                end;
                Local_Exchanged := Local_Exchanged + 1;
                Type_2_Info_Stack.Pop (Stack);
@@ -937,6 +982,7 @@ is
             Obj.WB_Data.New_PBAs,
             Obj.WB_Data.VBA,
             Obj.VBD_Degree_Log_2,
+            Primitive.Tag (Obj.WB_Data.Prim),
             Obj.Level_0_Stack,
             Obj.Level_0_Node,
             Exchanged,

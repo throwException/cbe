@@ -522,13 +522,27 @@ is
          Prim : constant Primitive.Object_Type :=
             New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
       begin
-         if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
-            Start_Waiting_For_Front_End (
-               Obj, Prim, Event_Supply_Client_Data_After_FT);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
-         end if;
+
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk |
+              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk
+         =>
+
+            null;
+
+         when others =>
+
+            if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
+               Start_Waiting_For_Front_End (
+                  Obj, Prim, Event_Supply_Client_Data_After_FT);
+               Req := Obj.Wait_For_Front_End.Req;
+               return;
+            end if;
+
+         end case;
+
       end;
+
    end Client_Data_Required;
 
    procedure Supply_Client_Data (
@@ -933,49 +947,73 @@ is
                New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
          begin
             exit Loop_Free_Tree_Completed_Prims when
-               not Primitive.Valid (Prim) or else
-               Primitive.Success (Prim) or else
-               not Obj.Handle_Failed_FT_Prims;
+               not Primitive.Valid (Prim);
 
-            if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
-               Obj.Free_Tree_Retry_Count := Obj.Free_Tree_Retry_Count + 1;
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk |
+                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk
+            =>
 
-               if not Obj.Write_Stalled then
+               VBD_Rekeying.Mark_Generated_Prim_Completed_New_PBAs (
+                  Obj.VBD_Rkg,
+                  Prim,
+                  New_Free_Tree.Peek_Completed_WB_Data (
+                     Obj.New_Free_Tree_Obj,
+                     Prim).New_PBAs);
 
-                  Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+               New_Free_Tree.Drop_Completed_Primitive (
+                  Obj.New_Free_Tree_Obj, Prim);
 
-                  Sync_Superblock.Submit_Request (
-                     Obj.Sync_SB_Obj, 1, Obj.Cur_SB, Obj.Cur_Gen);
+               Progress := True;
 
-                  pragma Debug (Debug.Print_String (
-                     "Write_Stalled Sync_Request"));
-                  Obj.Write_Stalled := True;
-                  Obj.Handle_Failed_FT_Prims := False;
+            when others =>
+
+               exit Loop_Free_Tree_Completed_Prims when
+                  Primitive.Success (Prim) or else
+                  not Obj.Handle_Failed_FT_Prims;
+
+               if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
+                  Obj.Free_Tree_Retry_Count := Obj.Free_Tree_Retry_Count + 1;
+
+                  if not Obj.Write_Stalled then
+
+                     Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+
+                     Sync_Superblock.Submit_Request (
+                        Obj.Sync_SB_Obj, 1, Obj.Cur_SB, Obj.Cur_Gen);
+
+                     pragma Debug (Debug.Print_String (
+                        "Write_Stalled Sync_Request"));
+                     Obj.Write_Stalled := True;
+                     Obj.Handle_Failed_FT_Prims := False;
+                  else
+                     Obj.Write_Stalled := False;
+                     pragma Debug (Debug.Print_String ("Retry FT allocation"));
+                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
+                  end if;
+
+                  exit Loop_Free_Tree_Completed_Prims;
                else
-                  Obj.Write_Stalled := False;
-                  pragma Debug (Debug.Print_String ("Retry FT allocation"));
-                  New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
+                  pragma Debug (Debug.Print_String (
+                     "Retry FT allocation failed"));
+                  --  raise Program_Error;
                end if;
 
-               exit Loop_Free_Tree_Completed_Prims;
-            else
-               pragma Debug (Debug.Print_String (
-                  "Retry FT allocation failed"));
-               --  raise Program_Error;
-            end if;
+               Pool.Mark_Generated_Primitive_Complete (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+                  Primitive.Success (Prim));
 
-            Pool.Mark_Generated_Primitive_Complete (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-               Primitive.Success (Prim));
+               --  FIXME
+               Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
+               New_Free_Tree.Drop_Completed_Primitive (
+                  Obj.New_Free_Tree_Obj, Prim);
 
-            --  FIXME
-            Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-            New_Free_Tree.Drop_Completed_Primitive (Obj.New_Free_Tree_Obj,
-            Prim);
+               Progress := True;
+
+            end case;
 
          end Declare_Prim_1;
-         Progress := True;
 
       end loop Loop_Free_Tree_Completed_Prims;
    end Execute_Free_Tree;
@@ -1794,6 +1832,44 @@ is
    is
    begin
       VBD_Rekeying.Execute (Obj.VBD_Rkg, Progress);
+
+      Loop_Generated_FT_Prims :
+      loop
+
+         Declare_FT_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               VBD_Rekeying.Peek_Generated_FT_Primitive (Obj.VBD_Rkg);
+         begin
+            exit Loop_Generated_FT_Prims when
+               not Primitive.Valid (Prim) or else
+               not New_Free_Tree.Request_Acceptable (Obj.New_Free_Tree_Obj);
+
+            New_Free_Tree.Submit_Request (
+               Obj.New_Free_Tree_Obj,
+               (Obj.Superblock.Free_Number,
+                Obj.Superblock.Free_Gen,
+                Obj.Superblock.Free_Hash),
+               (Obj.Superblock.Free_Max_Level,
+                Obj.Superblock.Free_Degree,
+                Obj.Superblock.Free_Leafs),
+               Obj.Cur_Gen,
+               Obj.Cur_Gen,
+               VBD_Rekeying.Peek_Generated_Nr_Of_Blks (Obj.VBD_Rkg, Prim),
+               VBD_Rekeying.Peek_Generated_New_PBAs (Obj.VBD_Rkg, Prim),
+               VBD_Rekeying.Peek_Generated_T1_Node_Walk (Obj.VBD_Rkg, Prim),
+               VBD_Rekeying.Peek_Generated_Max_Level (Obj.VBD_Rkg, Prim),
+               Prim,
+               VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
+               Obj.Superblock.Degree,
+               VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim));
+
+            VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+            Progress := True;
+
+         end Declare_FT_Prim;
+
+      end loop Loop_Generated_FT_Prims;
 
       Loop_Generated_Crypto_Prims :
       loop

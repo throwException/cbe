@@ -162,7 +162,10 @@ is
             T1_Blk_Idx => Type_1_Node_Blocks_Index_Type'First,
             Data_Blk => (others => Byte_Type'First),
             Data_Blk_Old_PBA => Physical_Block_Address_Type'First,
-            VBA => Virtual_Block_Address_Type'First);
+            VBA => Virtual_Block_Address_Type'First,
+            T1_Node_Walk => (others => Type_1_Node_Invalid),
+            New_PBAs => (others => Physical_Block_Address_Type'First),
+            Nr_Of_Blks => Number_Of_Blocks_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Rekeying;
 
@@ -375,6 +378,36 @@ is
    end Execute_Rekey_VBA_Read_Node_Completed;
 
    --
+   --  Newest_Snapshot_Idx
+   --
+   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
+   return Snapshots_Index_Type
+   is
+      Newest_Snap_Idx : Snapshots_Index_Type := Snapshots_Index_Type'First;
+      Newest_Snap_Idx_Valid : Boolean := False;
+   begin
+
+      For_Each_Snap_Idx :
+      for Snap_Idx in Snapshots'Range loop
+
+         if Snapshots (Snap_Idx).Valid and then
+            (not Newest_Snap_Idx_Valid or else
+             Snapshots (Snap_Idx).Gen > Snapshots (Newest_Snap_Idx).Gen)
+         then
+            Newest_Snap_Idx := Snap_Idx;
+            Newest_Snap_Idx_Valid := True;
+         end if;
+
+      end loop For_Each_Snap_Idx;
+
+      if Newest_Snap_Idx_Valid then
+         return Newest_Snap_Idx;
+      end if;
+      raise Program_Error;
+
+   end Newest_Snapshot_Idx;
+
+   --
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
@@ -387,32 +420,7 @@ is
       case Job.State is
       when Submitted =>
 
-         Declare_Newest_Snap_Idx :
-         declare
-            Newest_Snap_Idx : Snapshots_Index_Type :=
-               Snapshots_Index_Type'First;
-
-            Newest_Snap_Idx_Valid : Boolean := False;
-         begin
-            For_Each_Snap_Idx :
-            for Snap_Idx in Job.Snapshots'Range loop
-               if Job.Snapshots (Snap_Idx).Valid and then
-                  (not Newest_Snap_Idx_Valid or else
-                   Job.Snapshots (Snap_Idx).Gen >
-                   Job.Snapshots (Newest_Snap_Idx).Gen)
-               then
-                  Newest_Snap_Idx := Snap_Idx;
-                  Newest_Snap_Idx_Valid := True;
-               end if;
-            end loop For_Each_Snap_Idx;
-
-            if Newest_Snap_Idx_Valid then
-               Job.Snapshot_Idx := Newest_Snap_Idx;
-            else
-               raise Program_Error;
-            end if;
-         end Declare_Newest_Snap_Idx;
-
+         Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
          Job.First_Snapshot := True;
          Job.T1_Blk_Idx :=
             Type_1_Node_Blocks_Index_Type (
@@ -493,6 +501,57 @@ is
 
       when Decrypt_Leaf_Node_Completed =>
 
+         for Idx in reverse Job.T1_Node_Walk'Range loop
+
+            if Idx > Job.Snapshots (Job.Snapshot_Idx).Max_Level then
+
+               Job.T1_Node_Walk (Idx) := Type_1_Node_Invalid;
+               Job.New_PBAs (Idx) := Physical_Block_Address_Type'First;
+
+            elsif Idx = Job.Snapshots (Job.Snapshot_Idx).Max_Level then
+
+               Job.T1_Node_Walk (Idx) := (
+                  PBA => Job.Snapshots (Job.Snapshot_Idx).PBA,
+                  Gen => Job.Snapshots (Job.Snapshot_Idx).Gen,
+                  Hash => Job.Snapshots (Job.Snapshot_Idx).Hash);
+
+               if Idx /= Tree_Level_Index_Type'First then
+                  Job.New_PBAs (Idx) := Job.T1_Node_Walk (Idx).PBA;
+               else
+                  Job.New_PBAs (Idx) := Physical_Block_Address_Type'First;
+               end if;
+
+            else
+
+               Declare_Child_Idx :
+               declare
+                  Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                     Child_Idx_For_VBA (
+                        Job.VBA, Idx + 1, Job.Snapshots_Degree);
+               begin
+                  Job.T1_Node_Walk (Idx) :=
+                     Job.T1_Blks (Idx + 1) (Child_Idx);
+
+               end Declare_Child_Idx;
+
+               if Idx /= Tree_Level_Index_Type'First then
+                  Job.New_PBAs (Idx) := Job.T1_Node_Walk (Idx).PBA;
+               else
+                  Job.New_PBAs (Idx) := Physical_Block_Address_Type'First;
+               end if;
+
+            end if;
+
+         end loop;
+
+         Job.Nr_Of_Blks := 1;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
          Debug.Print_String ("PLAIN LEAF DATA " &
             Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (0))) & " " &
             Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (1))) & " " &
@@ -505,6 +564,10 @@ is
 
          Job.State := Alloc_New_Leaf_Node_PBA_Pending;
          Progress := True;
+
+      when Alloc_New_Leaf_Node_PBA_Completed =>
+
+         raise Program_Error;
 
       when others =>
 
@@ -614,6 +677,42 @@ is
    end Peek_Generated_Cache_Primitive;
 
    --
+   --  Peek_Generated_FT_Primitive
+   --
+   function Peek_Generated_FT_Primitive (Rkg : Rekeying_Type)
+   return Primitive.Object_Type
+   is
+   begin
+
+      Inspect_Each_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when Rekey_VBA =>
+
+            case Rkg.Jobs (Idx).State is
+            when Alloc_New_Leaf_Node_PBA_Pending =>
+
+               return Rkg.Jobs (Idx).Generated_Prim;
+
+            when others =>
+
+               null;
+
+            end case;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Inspect_Each_Job;
+      return Primitive.Invalid_Object;
+
+   end Peek_Generated_FT_Primitive;
+
+   --
    --  Peek_Generated_Crypto_Primitive
    --
    function Peek_Generated_Crypto_Primitive (Rkg : Rekeying_Type)
@@ -650,11 +749,247 @@ is
    end Peek_Generated_Crypto_Primitive;
 
    --
+   --  Peek_Generated_New_PBAs
+   --
+   function Peek_Generated_New_PBAs (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Write_Back.New_PBAs_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).New_PBAs;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_New_PBAs;
+
+   --
+   --  Peek_Generated_Old_Key_ID
+   --
+   function Peek_Generated_Old_Key_ID (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Old_Key_ID;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Old_Key_ID;
+
+   --
+   --  Peek_Generated_VBA
+   --
+   function Peek_Generated_VBA (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Virtual_Block_Address_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).VBA;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_VBA;
+
+   --
+   --  Peek_Generated_Max_Level
+   --
+   function Peek_Generated_Max_Level (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Tree_Level_Index_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return
+               Rkg.Jobs (Idx)
+                  .Snapshots (Rkg.Jobs (Idx).Snapshot_Idx).Max_Level;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Max_Level;
+
+   --
+   --  Peek_Generated_T1_Node_Walk
+   --
+   function Peek_Generated_T1_Node_Walk (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Type_1_Node_Walk_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).T1_Node_Walk;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_T1_Node_Walk;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Number_Of_Blocks_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Nr_Of_Blks;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Nr_Of_Blks;
+
+   --
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type
    is
       Idx : constant Jobs_Index_Type :=
@@ -691,8 +1026,8 @@ is
    --  Peek_Generated_Cipher_Data
    --
    function Peek_Generated_Cipher_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type
    is
       Idx : constant Jobs_Index_Type :=
@@ -729,8 +1064,8 @@ is
    --  Peek_Generated_Plain_Data
    --
    function Peek_Generated_Plain_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type
    is
       Idx : constant Jobs_Index_Type :=
@@ -856,6 +1191,15 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Decrypt_Leaf_Node_In_Progress;
+            return;
+
+         when Alloc_New_Leaf_Node_PBA_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Alloc_New_Leaf_Node_PBA_In_Progress;
             return;
 
          when others =>
@@ -1039,5 +1383,41 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Completed;
+
+   --
+   --  Mark_Generated_Prim_Completed
+   --
+   procedure Mark_Generated_Prim_Completed_New_PBAs (
+      Rkg      : in out Rekeying_Type;
+      Prim     :        Primitive.Object_Type;
+      New_PBAs :        Write_Back.New_PBAs_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Rkg.Jobs (Idx).Operation /= Invalid then
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_Leaf_Node_PBA_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Alloc_New_Leaf_Node_PBA_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Rkg.Jobs (Idx).New_PBAs := New_PBAs;
+            return;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Completed_New_PBAs;
 
 end CBE.VBD_Rekeying;

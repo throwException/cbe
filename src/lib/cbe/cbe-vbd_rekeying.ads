@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
+with CBE.Write_Back;
 with Interfaces;
 
 package CBE.VBD_Rekeying
@@ -84,27 +85,80 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_FT_Primitive
+   --
+   function Peek_Generated_FT_Primitive (Rkg : Rekeying_Type)
+   return Primitive.Object_Type;
+   --
+   --  Peek_Generated_New_PBAs
+   --
+   function Peek_Generated_New_PBAs (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Write_Back.New_PBAs_Type;
+
+   --
+   --  Peek_Generated_Old_Key_ID
+   --
+   function Peek_Generated_Old_Key_ID (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type;
+
+   --
+   --  Peek_Generated_VBA
+   --
+   function Peek_Generated_VBA (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  Peek_Generated_Max_Level
+   --
+   function Peek_Generated_Max_Level (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Tree_Level_Index_Type;
+
+   --
+   --  Peek_Generated_T1_Node_Walk
+   --
+   function Peek_Generated_T1_Node_Walk (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Type_1_Node_Walk_Type;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Number_Of_Blocks_Type;
+
+   --
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type;
 
    --
    --  Peek_Generated_Cipher_Data
    --
    function Peek_Generated_Cipher_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type;
 
    --
    --  Peek_Generated_Plain_Data
    --
    function Peek_Generated_Plain_Data (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type;
 
    --
@@ -152,6 +206,14 @@ is
       Rkg         : in out Rekeying_Type;
       Prim        :        Primitive.Object_Type;
       Cipher_Data :        Block_Data_Type);
+
+   --
+   --  Mark_Generated_Prim_Completed
+   --
+   procedure Mark_Generated_Prim_Completed_New_PBAs (
+      Rkg      : in out Rekeying_Type;
+      Prim     :        Primitive.Object_Type;
+      New_PBAs :        Write_Back.New_PBAs_Type);
 
 private
 
@@ -222,6 +284,9 @@ private
       Data_Blk          : Block_Data_Type;
       Data_Blk_Old_PBA  : Physical_Block_Address_Type;
       VBA               : Virtual_Block_Address_Type;
+      T1_Node_Walk      : Type_1_Node_Walk_Type;
+      New_PBAs          : Write_Back.New_PBAs_Type;
+      Nr_Of_Blks        : Number_Of_Blocks_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -261,5 +326,11 @@ private
    --
    function  Log_2 (Value : Interfaces.Unsigned_32)
    return Interfaces.Unsigned_32;
+
+   --
+   --  Newest_Snapshot_Idx
+   --
+   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
+   return Snapshots_Index_Type;
 
 end CBE.VBD_Rekeying;

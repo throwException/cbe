@@ -499,6 +499,7 @@ private
       New_Blocks       : in out Write_Back.New_PBAs_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree_Log_2 :        Tree_Degree_Log_2_Type;
+      Tag              :        Primitive.Tag_Type;
       Stack            : in out Type_2_Info_Stack.Object_Type;
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
