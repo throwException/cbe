@@ -587,6 +587,72 @@ is
             raise Program_Error;
          end if;
 
+         Debug.Print_String ("NEW PBAs");
+         for PBA_Idx in
+            reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
+         loop
+            Debug.Print_String ("   " &
+               Debug.To_String (Debug.Uint64_Type (PBA_Idx)) & " " &
+               Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx))));
+         end loop;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Crypto_Encrypt,
+            Blk_Nr => Block_Number_Type (Job.New_PBAs (0)),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Leaf_Node_Pending;
+         Progress := True;
+
+      when Encrypt_Leaf_Node_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Declare_Child_Idx_3 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type := 1;
+            Child_Lvl_Idx : constant Tree_Level_Index_Type := 0;
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+
+            Child_PBA : constant Physical_Block_Address_Type :=
+               Job.New_PBAs (Child_Lvl_Idx);
+         begin
+
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
+               Hash_Of_Data_Blk (Job.Data_Blk);
+
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Write,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Blk_IO,
+               Blk_Nr => Block_Number_Type (Child_PBA),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Debug.Print_String (
+               "WRITE LVL " &
+               Debug.To_String (Debug.Uint64_Type (0)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
+
+         end Declare_Child_Idx_3;
+
+         Job.State := Write_Leaf_Node_Pending;
+         Progress := True;
+
+      when Write_Leaf_Node_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          raise Program_Error;
 
       when others =>
@@ -639,7 +705,7 @@ is
          when Rekey_VBA =>
 
             case Rkg.Jobs (Idx).State is
-            when Read_Leaf_Node_Pending =>
+            when Read_Leaf_Node_Pending | Write_Leaf_Node_Pending =>
 
                return Rkg.Jobs (Idx).Generated_Prim;
 
@@ -1014,8 +1080,6 @@ is
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
-
-      Blk_Data : Block_Data_Type;
    begin
       if Rkg.Jobs (Idx).Operation /= Invalid then
 
@@ -1026,10 +1090,26 @@ is
                raise Program_Error;
             end if;
 
-            Block_Data_From_Type_1_Node_Block (
-               Blk_Data, Rkg.Jobs (Idx).T1_Blks (Rkg.Jobs (Idx).T1_Blk_Idx));
+            Declare_Blk_Data :
+            declare
+               Blk_Data : Block_Data_Type;
+            begin
 
-            return Blk_Data;
+               Block_Data_From_Type_1_Node_Block (
+                  Blk_Data,
+                  Rkg.Jobs (Idx).T1_Blks (Rkg.Jobs (Idx).T1_Blk_Idx));
+
+               return Blk_Data;
+
+            end Declare_Blk_Data;
+
+         when Write_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Data_Blk;
 
          when others =>
 
@@ -1204,6 +1284,15 @@ is
             Rkg.Jobs (Idx).State := Read_Leaf_Node_In_Progress;
             return;
 
+         when Write_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Write_Leaf_Node_In_Progress;
+            return;
+
          when Decrypt_Leaf_Node_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
@@ -1220,6 +1309,15 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Alloc_New_Leaf_Node_PBA_In_Progress;
+            return;
+
+         when Encrypt_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Encrypt_Leaf_Node_In_Progress;
             return;
 
          when others =>
@@ -1390,6 +1488,16 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Write_Root_Node_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            return;
+
+         when Write_Leaf_Node_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Write_Leaf_Node_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             return;
 
