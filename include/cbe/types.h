@@ -603,7 +603,7 @@ namespace Cbe {
 		 */
 		Snapshot               snapshots[NUM_SNAPSHOTS];
 		Generation             last_secured_generation;
-		Snapshot_index         snapshot_id;
+		Snapshot_index         curr_snap;
 		Degree                 degree;
 		Generation             free_gen;
 		Physical_block_address free_number;
@@ -623,7 +623,7 @@ namespace Cbe {
 		{
 			Genode::print(out, "Superblock: ",
 			              "last_secured_generation: ", last_secured_generation, " "
-			              "snapshot_id: ", snapshot_id, " "
+			              "curr_snap: ", curr_snap, " "
 			              "dregree: ", degree, " "
 			              "free_gen: ", free_gen, " "
 			              "free_number: ", free_number, " "
@@ -649,7 +649,7 @@ namespace Cbe {
 				Snapshot const &snap = snapshots[i];
 				if (!snap.valid()) { continue; }
 
-				if (snap.id == snapshot_id) {
+				if (snap.id == curr_snap) {
 					snap_slot = i;
 					break;
 				}
