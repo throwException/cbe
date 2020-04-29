@@ -267,13 +267,13 @@ is
    function Has_Tag_VBD_Rkg_Crypto_Decrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Crypto_Decrypt);
 
-   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk (Obj : Object_Type)
+   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks (Obj : Object_Type)
    return Boolean
-   is (Obj.Tag = Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk);
+   is (Obj.Tag = Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks);
 
-   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk (Obj : Object_Type)
+   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks (Obj : Object_Type)
    return Boolean
-   is (Obj.Tag = Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk);
+   is (Obj.Tag = Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks);
 
    function Has_Tag_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_IO);

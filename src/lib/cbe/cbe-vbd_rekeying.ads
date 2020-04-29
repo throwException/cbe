@@ -236,18 +236,15 @@ private
       Decrypt_Leaf_Node_Pending,
       Decrypt_Leaf_Node_In_Progress,
       Decrypt_Leaf_Node_Completed,
-      Alloc_New_Leaf_Node_PBA_Pending,
-      Alloc_New_Leaf_Node_PBA_In_Progress,
-      Alloc_New_Leaf_Node_PBA_Completed,
+      Alloc_New_PBAs_Pending,
+      Alloc_New_PBAs_In_Progress,
+      Alloc_New_PBAs_Completed,
       Encrypt_Leaf_Node_Pending,
       Encrypt_Leaf_Node_In_Progress,
       Encrypt_Leaf_Node_Completed,
       Write_Leaf_Node_Pending,
       Write_Leaf_Node_In_Progress,
       Write_Leaf_Node_Completed,
-      Alloc_New_Inner_Node_PBA_Pending,
-      Alloc_New_Inner_Node_PBA_In_Progress,
-      Alloc_New_Inner_Node_PBA_Completed,
       Write_Inner_Node_Pending,
       Write_Inner_Node_In_Progress,
       Write_Inner_Node_Completed,
@@ -332,5 +329,19 @@ private
    --
    function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
+
+   --
+   --  Set_Args_For_Alloc_Of_New_PBAs
+   --
+   procedure Set_Args_For_Alloc_Of_New_PBAs (
+      Snapshot        :     Snapshot_Type;
+      Snapshot_Degree :     Tree_Degree_Type;
+      VBA             :     Virtual_Block_Address_Type;
+      Prim_Idx        :     Primitive.Index_Type;
+      T1_Blks         :     Type_1_Node_Blocks_Type;
+      T1_Walk         : out Type_1_Node_Walk_Type;
+      New_PBAs        : out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks      : out Number_Of_Blocks_Type;
+      Prim            : out Primitive.Object_Type);
 
 end CBE.VBD_Rekeying;

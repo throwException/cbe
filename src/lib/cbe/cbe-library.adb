@@ -524,8 +524,8 @@ is
       begin
 
          case Primitive.Tag (Prim) is
-         when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk |
-              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk
+         when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks |
+              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks
          =>
 
             null;
@@ -950,8 +950,8 @@ is
                not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk |
-                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk
+            when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks |
+                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks
             =>
 
                VBD_Rekeying.Mark_Generated_Prim_Completed_New_PBAs (
@@ -960,6 +960,31 @@ is
                   New_Free_Tree.Peek_Completed_WB_Data (
                      Obj.New_Free_Tree_Obj,
                      Prim).New_PBAs);
+
+               --
+               --  FIXME
+               --
+               --  The manual update of the Free Tree root is done because
+               --  the Free Tree module was designed this way before the
+               --  VBD Rekeying was implemented. Normally, the Free
+               --  Tree root should either be handed out by the Superblock
+               --  Control to the VBD Rekeying and then by the VBD Rekeying to
+               --  the Free Tree module and the resulting root would be
+               --  propagated backwards as result of the Primitives. Or the
+               --  Free Tree root is updated by the Free Tree module itself
+               --  while processing the Rekey VBA primitive through a
+               --  primitive generated for the Superblock Control.
+               --
+               declare
+                  FT_Root_Node : constant Type_1_Node_Type :=
+                     New_Free_Tree.Peek_Completed_Root_Node (
+                        Obj.New_Free_Tree_Obj,
+                        Prim);
+               begin
+                  Obj.Superblock.Free_Hash   := FT_Root_Node.Hash;
+                  Obj.Superblock.Free_Number := FT_Root_Node.PBA;
+                  Obj.Superblock.Free_Gen    := FT_Root_Node.Gen;
+               end;
 
                New_Free_Tree.Drop_Completed_Primitive (
                   Obj.New_Free_Tree_Obj, Prim);

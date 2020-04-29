@@ -61,8 +61,8 @@ is
       Tag_VBD_Rkg_Blk_IO,
       Tag_VBD_Rkg_Crypto_Encrypt,
       Tag_VBD_Rkg_Crypto_Decrypt,
-      Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk,
-      Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk,
+      Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks,
+      Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks,
       Tag_IO,
       Tag_Translation,
       Tag_Write_Back,
@@ -133,9 +133,9 @@ is
       when Tag_VBD_Rkg_Blk_IO => "VBD_Rkg_Blk_IO",
       when Tag_VBD_Rkg_Crypto_Encrypt => "VBD_Rkg_Crypto_Encrypt",
       when Tag_VBD_Rkg_Crypto_Decrypt => "VBD_Rkg_Crypto_Decrypt",
-      when Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk =>
+      when Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks =>
          "VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk",
-      when Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk =>
+      when Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
          "VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk",
       when Tag_SB_Ctrl_Blk_IO_Write_SB => "SB_Ctrl_Blk_IO_Write_SB",
       when Tag_IO => "IO",
@@ -330,10 +330,10 @@ is
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Crypto_Decrypt (Obj : Object_Type) return Boolean;
 
-   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk (Obj : Object_Type)
+   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks (Obj : Object_Type)
    return Boolean;
 
-   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk (Obj : Object_Type)
+   function Has_Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_IO (Obj : Object_Type) return Boolean;

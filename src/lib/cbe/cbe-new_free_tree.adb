@@ -908,7 +908,7 @@ is
                      Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
                      Entries (Natural (Info.Index)).Reserved    := True;
 
-                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blk =>
+                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks =>
 
                      New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
 
@@ -926,7 +926,7 @@ is
                      Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
                      Entries (Natural (Info.Index)).Reserved    := False;
 
-                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk =>
+                  when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
 
                      New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
 
