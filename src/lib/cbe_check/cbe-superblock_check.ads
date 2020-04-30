@@ -102,7 +102,6 @@ private
    type Object_Type is record
       Execute_Progress : Boolean;
       State            : State_Type;
-      Highest_SB_ID    : Generation_Type;
       Highest_Gen      : Generation_Type;
       Last_SB_Slot_Idx : Superblocks_Index_Type;
       SB_Slot_State    : SB_Slot_State_Type;

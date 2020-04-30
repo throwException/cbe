@@ -21,7 +21,6 @@ is
       Obj.Submitted_Prim := Primitive.Invalid_Object;
       Obj.Execute_Progress := False;
       Obj.State := Inspect_SBs;
-      Obj.Highest_SB_ID := Generation_Type'First;
       Obj.Highest_Gen := Generation_Type'First;
       Obj.SB_Slot_State := Init;
       Obj.SB_Slot_Idx := Superblocks_Index_Type'First;
@@ -107,8 +106,10 @@ is
 
          when Read_Done =>
 
-            if Obj.SB_Slot.Superblock_ID > Obj.Highest_SB_ID then
-               Obj.Highest_SB_ID := Obj.SB_Slot.Superblock_ID;
+            if Superblock_Valid (Obj.SB_Slot) and then
+               Obj.SB_Slot.Snapshots (Obj.SB_Slot.Curr_Snap).Gen >
+                  Obj.Highest_Gen
+            then
                Obj.Highest_Gen :=
                   Obj.SB_Slot.Snapshots (Obj.SB_Slot.Curr_Snap).Gen;
                Obj.Last_SB_Slot_Idx := Obj.SB_Slot_Idx;

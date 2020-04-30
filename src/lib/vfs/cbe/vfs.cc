@@ -148,7 +148,7 @@ class Vfs_cbe::Wrapper
 		Cbe::Superblocks_index _read_superblocks(Cbe::Superblocks &sbs)
 		{
 			_cur_sb_valid = false;
-			Cbe::Generation        last_sb_id = 0;
+			Cbe::Generation        highest_gen = 0;
 			Cbe::Superblocks_index most_recent_sb { 0 };
 			bool                   most_recent_sb_valid { false };
 
@@ -209,16 +209,22 @@ class Vfs_cbe::Wrapper
 					return Cbe::Superblocks_index(0);
 				}
 
-				if (dst.valid() && dst.superblock_id >= last_sb_id) {
-					if (dst.superblock_id == last_sb_id && last_sb_id) {
-						Genode::error("superblock id: ", last_sb_id,
+				Genode::error("bytes: ", bytes, " SB[", i, "]: ", dst);
+
+				if (dst.valid() &&
+				    dst.snapshots[dst.snapshot_id].gen >= highest_gen)
+				{
+					if (dst.snapshots[dst.snapshot_id].gen == highest_gen &&
+					    highest_gen > 0)
+					{
+						Genode::error("generation: ", highest_gen,
 						              " not unique - cannot select proper superblock");
 						most_recent_sb_valid = false;
 						break;
 					}
 					most_recent_sb.value = i;
 					most_recent_sb_valid = true;
-					last_sb_id = dst.superblock_id;
+					highest_gen = dst.snapshots[dst.snapshot_id].gen;
 				}
 			}
 

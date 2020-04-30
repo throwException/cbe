@@ -76,7 +76,6 @@ is
       Obj.Creating_Quarantine_Snapshot := False;
 
       Obj.Superblock := SBs (Curr_SB);
-      Obj.Superblock.Superblock_ID := Obj.Superblock.Superblock_ID + 1;
       Obj.Cur_Gen :=
          Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen + 1;
       Obj.Last_Root_PBA :=
@@ -2050,7 +2049,6 @@ is
             Obj.Cur_Gen := Obj.Cur_Gen + 1;
             pragma Debug (Debug.Print_String ("New Cur_Gen: "
                & Debug.To_String (Obj.Cur_Gen)));
-            Obj.Superblock.Superblock_ID := Obj.Superblock.Superblock_ID + 1;
 
             pragma Debug (Debug.Print_String (" Cur_Gen: "
                & Debug.To_String (Obj.Cur_Gen)

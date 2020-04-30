@@ -108,9 +108,7 @@ is
    function Superblock_XML_Tag_Open (SB : Superblock_Type)
    return String
    is (
-      "<sb id=""" &
-      Debug.To_String (Debug.Uint64_Type (SB.Superblock_ID)) &
-      """ gen=""" &
+      "<sb lsgen=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Last_Secured_Generation)) &
       """ snap=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Curr_Snap)) &
@@ -118,12 +116,9 @@ is
       Debug.To_String (Debug.Uint64_Type (SB.Degree)) &
       """>");
 
-   function Superblock_XML_Tag_Invalid (SB : Superblock_Type)
+   function Superblock_XML_Tag_Invalid
    return String
-   is (
-      "<sb id=""" &
-      Debug.To_String (Debug.Uint64_Type (SB.Superblock_ID)) &
-      """/>");
+   is ("<sb/>");
 
    function Superblock_XML_Tag_Close
    return String
@@ -215,7 +210,6 @@ is
    is
       Result : Superblock_Type;
    begin
-      Result.Superblock_ID           := Generation_Type'First;
       Result.Keys                    := (others => Key_Invalid);
       Result.Snapshots               := (others => Snapshot_Invalid);
       Result.Last_Secured_Generation := Generation_Type'Last;
@@ -503,10 +497,6 @@ is
    is
       Off : Block_Data_Index_Type := 0;
    begin
-      SB.Superblock_ID :=
-         Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
-      Off := Off + 8;
-
       Keys_From_Block_Data (SB.Keys, Data, Off);
       Off := Off + Superblock_Keys_Storage_Size_Bytes;
 
@@ -748,10 +738,6 @@ is
       Off : Block_Data_Index_Type := 0;
    begin
       Data := (others => 0);
-
-      Block_Data_From_Unsigned_64 (
-         Data, Off, Unsigned_64 (SB.Superblock_ID));
-      Off := Off + 8;
 
       Block_Data_From_Keys (Data, Off, SB.Keys);
       Off := Off + Superblock_Keys_Storage_Size_Bytes;

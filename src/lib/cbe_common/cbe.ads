@@ -276,7 +276,6 @@ is
       --  reused blocks reference by a snapshot in the older SB.)
       --
 
-      Superblock_ID           : Generation_Type;
       Keys                    : Keys_Type;
       Snapshots               : Snapshots_Type;
       Last_Secured_Generation : Generation_Type;
@@ -350,7 +349,7 @@ is
    function Superblock_XML_Tag_Open (SB : Superblock_Type)
    return String;
 
-   function Superblock_XML_Tag_Invalid (SB : Superblock_Type)
+   function Superblock_XML_Tag_Invalid
    return String;
 
    function Superblock_XML_Tag_Close
