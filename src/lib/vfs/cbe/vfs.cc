@@ -848,7 +848,7 @@ class Vfs_cbe::Wrapper
 					frontend_request.state = ST::COMPLETE;
 
 					if (_verbose) {
-						Genode::log("Complete invalid READ request: ",
+						Genode::log("Complete unaligned READ request: ",
 						            " (frontend request: ", _frontend_request.cbe_request,
 						            " (helper request: ", _helper_read_request.cbe_request,
 						            " offset: ", _frontend_request.helper_offset,
@@ -893,7 +893,7 @@ class Vfs_cbe::Wrapper
 
 			if (_helper_write_request.complete()) {
 				if (_verbose) {
-					Genode::log("Complete invalid WRITE request: ",
+					Genode::log("Complete unaligned WRITE request: ",
 					            " (frontend request: ", _frontend_request.cbe_request,
 					            " (helper request: ", _helper_read_request.cbe_request,
 					            " offset: ", _frontend_request.helper_offset,
