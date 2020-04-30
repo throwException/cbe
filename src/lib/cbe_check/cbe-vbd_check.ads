@@ -101,6 +101,7 @@ private
 
    procedure Execute_Leaf_Child (
       Progress     : in out Boolean;
+      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
@@ -113,6 +114,7 @@ private
 
    procedure Execute_Inner_T1_Child (
       Progress     : in out Boolean;
+      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
