@@ -809,6 +809,16 @@ class Vfs_cbe::Wrapper
 				if (!cbe_request.valid()) { break; }
 
 				cbe.drop_completed_client_request(cbe_request);
+				progress = true;
+
+				if (cbe_request.success() != Cbe::Request::Success::TRUE) {
+					_helper_read_request.state  = Helper_request::State::NONE;
+					_helper_write_request.state = Helper_request::State::NONE;
+
+					frontend_request.state = ST::COMPLETE;
+					frontend_request.cbe_request.success(cbe_request.success());
+					break;
+				}
 
 				if (_helper_read_request.in_progress()) {
 					_helper_read_request.state = Helper_request::State::COMPLETE;
@@ -816,13 +826,13 @@ class Vfs_cbe::Wrapper
 					_helper_write_request.state = Helper_request::State::COMPLETE;
 				} else {
 					frontend_request.state = ST::COMPLETE;
+					frontend_request.cbe_request.success(cbe_request.success());
 					if (_verbose) {
 						Genode::log("Complete request: ",
 						            " (frontend request: ", _frontend_request.cbe_request,
 						            " count: ", _frontend_request.count, ")");
 					}
 				}
-				progress = true;
 			}
 
 			if (_helper_read_request.complete()) {
