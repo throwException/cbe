@@ -649,13 +649,6 @@ is
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
 
-   procedure Write_Current_State_To_Snapshot_Slot (
-      SB : in out Superblock_Type)
-   is
-   begin
-      SB.Snapshots (SB.Curr_Snap).Keep := True;
-   end Write_Current_State_To_Snapshot_Slot;
-
    procedure Try_Discard_Snapshot (
       Snaps     : in out Snapshots_Type;
       Keep_Snap :        Snapshots_Index_Type;
@@ -1599,8 +1592,7 @@ is
                not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
 
             Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
-
-            Write_Current_State_To_Snapshot_Slot (Obj.Superblock);
+            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Keep := True;
 
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,

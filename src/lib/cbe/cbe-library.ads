@@ -478,9 +478,6 @@ private
 
    end record;
 
-   procedure Write_Current_State_To_Snapshot_Slot (
-      SB : in out Superblock_Type);
-
    procedure Try_Discard_Snapshot (
       Snaps     : in out Snapshots_Type;
       Keep_Snap :        Snapshots_Index_Type;
