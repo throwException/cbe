@@ -478,8 +478,6 @@ private
 
    end record;
 
-   procedure Advance_Current_Snapshot_Slot (SB : in out Superblock_Type);
-
    procedure Write_Current_State_To_Snapshot_Slot (
       SB : in out Superblock_Type);
 
@@ -500,12 +498,6 @@ private
 
    function Next_Snap_Slot (SB : Superblock_Type)
    return Snapshots_Index_Type;
-
-   procedure Update_Snapshot_Hash (
-      WB       :        Write_Back.Object_Type;
-      Curr_Gen :        Generation_Type;
-      Snap     : in out Snapshot_Type;
-      Prim     :        Primitive.Object_Type);
 
    function Front_End_Busy_With_Other_Request (
       Obj : Object_Type;

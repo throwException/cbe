@@ -120,8 +120,6 @@ is
 
       Obj.WB_Prim := Primitive.Invalid_Object;
 
-      Advance_Current_Snapshot_Slot (Obj.Superblock);
-
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
@@ -651,25 +649,6 @@ is
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
 
-   procedure Advance_Current_Snapshot_Slot (SB : in out Superblock_Type)
-   is
-   begin
-      declare
-         Next_Snap : constant Snapshots_Index_Type := Next_Snap_Slot (SB);
-      begin
-         SB.Snapshots (Next_Snap) :=
-            SB.Snapshots (SB.Curr_Snap);
-         --
-         --  Clear flags to prevent creating a quarantine snapshot
-         --  unintentionally.
-         --
-         SB.Snapshots (Next_Snap).Keep  := False;
-         SB.Snapshots (Next_Snap).Valid := True;
-         --  SB.Snapshots (Next_Snap).Gen := Obj.Cur_Gen;
-         SB.Curr_Snap := Next_Snap;
-      end;
-   end Advance_Current_Snapshot_Slot;
-
    procedure Write_Current_State_To_Snapshot_Slot (
       SB : in out Superblock_Type)
    is
@@ -754,24 +733,6 @@ is
          Virtual_Block_Address_Type (
             Obj.Superblock.Snapshots (Curr_Snap (Obj)).Nr_Of_Leafs - 1);
    end Max_VBA;
-
-   procedure Update_Snapshot_Hash (
-      WB       :        Write_Back.Object_Type;
-      Curr_Gen :        Generation_Type;
-      Snap     : in out Snapshot_Type;
-      Prim     :        Primitive.Object_Type)
-   is
-      PBA : constant Physical_Block_Address_Type :=
-         Write_Back.Peek_Completed_Root (WB, Prim);
-   begin
-      pragma Debug (Debug.Print_String ("Update_Snapshot_Hash: "
-         & " Gen: " & Debug.To_String (Curr_Gen)
-         & " PBA: " & Debug.To_String (PBA)));
-
-      Snap.Gen := Curr_Gen;
-      Snap.PBA := PBA;
-      Write_Back.Peek_Completed_Root_Hash (WB, Prim, Snap.Hash);
-   end Update_Snapshot_Hash;
 
    procedure Execute_VBD (
       Obj              : in out Object_Type;
@@ -1779,11 +1740,33 @@ is
                raise Program_Error;
             end if;
 
-            Update_Snapshot_Hash (
-               Obj.Write_Back_Obj,
-               Obj.Cur_Gen,
-               Obj.Superblock.Snapshots (Curr_Snap (Obj)),
-               Prim);
+            if Obj.Superblock.Snapshots (Curr_Snap (Obj)).Gen < Obj.Cur_Gen
+            then
+               declare
+                  Snap_Idx : constant Snapshots_Index_Type :=
+                     Next_Snap_Slot (Obj.Superblock);
+               begin
+                  Obj.Superblock.Snapshots (Snap_Idx) :=
+                     Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
+
+                  Obj.Superblock.Snapshots (Snap_Idx).Gen := Obj.Cur_Gen;
+                  Obj.Superblock.Curr_Snap := Snap_Idx;
+               end;
+            end if;
+
+            declare
+               PBA : constant Physical_Block_Address_Type :=
+                  Write_Back.Peek_Completed_Root (Obj.Write_Back_Obj, Prim);
+
+               Snap_Idx : constant Snapshots_Index_Type :=
+                  Obj.Superblock.Curr_Snap;
+            begin
+               Obj.Superblock.Snapshots (Snap_Idx).Gen := Obj.Cur_Gen;
+               Obj.Superblock.Snapshots (Snap_Idx).PBA := PBA;
+               Write_Back.Peek_Completed_Root_Hash (
+                  Obj.Write_Back_Obj, Prim,
+                  Obj.Superblock.Snapshots (Snap_Idx).Hash);
+            end;
 
             --
             --  We touched the super-block, either by updating a snapshot or by
@@ -2053,35 +2036,13 @@ is
                raise Program_Error;
             end if;
 
-            --  handle state
             Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
 
-            --  Obj.Superblock.Last_Secured_Generation :=
-            --     Sync_Superblock.Peek_Completed_Generation (
-            --        Obj.Sync_SB_Obj, Prim);
-            pragma Debug (Debug.Print_String ("Old Cur_Gen: "
-               & Debug.To_String (Obj.Cur_Gen)));
-            Obj.Cur_Gen := Obj.Cur_Gen + 1;
-            pragma Debug (Debug.Print_String ("New Cur_Gen: "
-               & Debug.To_String (Obj.Cur_Gen)));
-
-            pragma Debug (Debug.Print_String (" Cur_Gen: "
-               & Debug.To_String (Obj.Cur_Gen)
-               & " Curr_Snap: " & Debug.To_String (
-                  Debug.Uint64_Type (Curr_Snap (Obj)))));
-
-            pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
-
-            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Valid := True;
-            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Gen := Obj.Cur_Gen;
-
-            pragma Debug (Debug.Print_String (
-               "Loop_Sync_SB_Completed_Prims "
-               & " Obj.Last_Secured_Generation: "
-               & Debug.To_String (Debug.Uint64_Type (
-                  Obj.Superblock.Last_Secured_Generation))));
-
-            pragma Debug (Debug.Print_String ("Complete Sync_Request"));
+            if Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen =
+                  Obj.Cur_Gen
+            then
+               Obj.Cur_Gen := Obj.Cur_Gen + 1;
+            end if;
 
             if not Obj.Write_Stalled then
 
@@ -2110,8 +2071,6 @@ is
 
                            Pool.Drop_Completed_Request (
                               Obj.Request_Pool_Obj, Req);
-
-                           Advance_Current_Snapshot_Slot (Obj.Superblock);
 
                            Obj.Creating_Quarantine_Snapshot := False;
 
