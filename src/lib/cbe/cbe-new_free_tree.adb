@@ -544,16 +544,21 @@ is
          return False;
       end if;
 
-      if not Node.Reserved then
-         return True;
-      end if;
-
       Declare_Generations :
       declare
          F_Gen : constant Generation_Type := Node.Free_Gen;
          A_Gen : constant Generation_Type := Node.Alloc_Gen;
          S_Gen : constant Generation_Type := Last_Secured_Gen;
       begin
+
+         if not Node.Reserved then
+            if F_Gen <= S_Gen then
+               return True;
+            else
+               return False;
+            end if;
+         end if;
+
          --
          --  If the node was freed before the last secured generation,
          --  check if there is a active snapshot that might be using the node,
