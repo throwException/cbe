@@ -336,6 +336,12 @@ struct Cbe::Block_session_component
 				request.operation.block_number, ", cnt ",
 				request.operation.count);
 		}
+		for (unsigned idx = 0;
+		     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
+		     idx++)
+		{
+			_blk_data.values[idx] = _blk_data.values[idx] + 1;
+		}
 		_test_in_progress.destruct();
 	}
 
@@ -347,6 +353,12 @@ struct Cbe::Block_session_component
 		_config_rom { config_rom },
 		_alloc      { alloc }
 	{
+		for (unsigned idx = 0;
+		     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
+		     idx++)
+		{
+			_blk_data.values[idx] = (char)idx + 1;
+		}
 		_config_rom.xml().with_sub_node("tests", [&] (Xml_node const &node) {
 			_read_tests_node(node);
 		});
