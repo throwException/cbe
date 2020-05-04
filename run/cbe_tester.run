@@ -115,7 +115,13 @@ append config {
 				</initialize>
 
 				<replay verbose="yes" bulk="no">
-					<request type="write" lba="0"  count="3"/>
+					<request type="write" lba="0"  count="1"/>
+					<create-snapshot id="1" quarantine="yes"/>
+					<request type="write" lba="65"  count="1"/>
+					<create-snapshot id="2" quarantine="yes"/>
+					<request type="write" lba="129" count="1"/>
+					<create-snapshot id="3" quarantine="yes"/>
+					<request type="write" lba="0" count="1"/>
 					<rekey key_id="13"/>
 				</replay>
 
