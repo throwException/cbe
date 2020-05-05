@@ -49,6 +49,7 @@ is
       Root_Node        :        Type_1_Node_Type;
       Tree_Geom        :        Tree_Geometry_Type;
       Current_Gen      :        Generation_Type;
+      Free_Gen         :        Generation_Type;
       Requested_Blocks :        Number_Of_Blocks_Type;
       New_Blocks       :        Write_Back.New_PBAs_Type;
       Old_Blocks       :        Type_1_Node_Walk_Type;
@@ -394,6 +395,7 @@ private
       Root_Node        : Type_1_Node_Type;
       Tree_Geom        : Tree_Geometry_Type;
       Current_Gen      : Generation_Type;
+      Free_Gen         : Generation_Type;
       Requested_Blocks : Number_Of_Blocks_Type;
 
       Needed_Blocks : Number_Of_Blocks_Type;
@@ -488,7 +490,7 @@ private
       Progress         : in out Boolean);
 
    procedure Exchange_Type_2_Leafs (
-      Current_Gen      :        Generation_Type;
+      Free_Gen         :        Generation_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Old_Blocks       : in     Type_1_Node_Walk_Type;
       New_Blocks       : in out Write_Back.New_PBAs_Type;

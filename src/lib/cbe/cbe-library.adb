@@ -1348,6 +1348,7 @@ is
                      Edges     => Obj.Superblock.Free_Degree,
                      Leafs     => Obj.Superblock.Free_Leafs),
                   Current_Gen    => Obj.Cur_Gen,
+                  Free_Gen         => Obj.Cur_Gen,
                   Requested_Blocks => Obj.SCD_New_Blocks,
                   New_Blocks       => Obj.SCD_New_PBAs,
                   Old_Blocks       => Old_PBAs,

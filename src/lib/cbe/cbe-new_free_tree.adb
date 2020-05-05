@@ -139,6 +139,7 @@ is
       Root_Node        :        Type_1_Node_Type;
       Tree_Geom        :        Tree_Geometry_Type;
       Current_Gen      :        Generation_Type;
+      Free_Gen         :        Generation_Type;
       Requested_Blocks :        Number_Of_Blocks_Type;
       New_Blocks       :        Write_Back.New_PBAs_Type;
       Old_Blocks       :        Type_1_Node_Walk_Type;
@@ -156,6 +157,7 @@ is
       Obj.Root_Node        := Root_Node;
       Obj.Tree_Geom        := Tree_Geom;
       Obj.Current_Gen      := Current_Gen;
+      Obj.Free_Gen         := Free_Gen;
       Obj.Requested_Blocks := Requested_Blocks;
       Obj.Exchanged_Blocks := 0;
 
@@ -876,7 +878,7 @@ is
                Unsigned_32 (VBD_Level)))));
 
    procedure Exchange_Type_2_Leafs (
-      Current_Gen      :        Generation_Type;
+      Free_Gen         :        Generation_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Old_Blocks       : in     Type_1_Node_Walk_Type;
       New_Blocks       : in out Write_Back.New_PBAs_Type;
@@ -913,7 +915,7 @@ is
                   Entries (Natural (Info.Index)).Alloc_Gen :=
                      Old_Blocks (I).Gen;
                   Entries (Natural (Info.Index)).Free_Gen :=
-                     Current_Gen;
+                     Free_Gen;
 
                   Entries (Natural (Info.Index)).Last_VBA    :=
                      VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
@@ -949,7 +951,7 @@ is
          Handled : Boolean;
       begin
          Exchange_Type_2_Leafs (
-            Obj.Current_Gen,
+            Obj.Free_Gen,
             Obj.WB_Data.Tree_Max_Level,
             Obj.WB_Data.Old_PBAs,
             Obj.WB_Data.New_PBAs,
