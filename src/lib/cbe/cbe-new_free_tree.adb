@@ -546,47 +546,45 @@ is
          return False;
       end if;
 
-      Declare_Generations :
-      declare
-         F_Gen : constant Generation_Type := Node.Free_Gen;
-         A_Gen : constant Generation_Type := Node.Alloc_Gen;
-         S_Gen : constant Generation_Type := Last_Secured_Gen;
-      begin
+      if not Node.Reserved then
+         if Node.Free_Gen <= Last_Secured_Gen then
+            return True;
+         else
+            return False;
+         end if;
+      end if;
 
-         if not Node.Reserved then
-            if F_Gen <= S_Gen then
-               return True;
-            else
-               return False;
+      --
+      --  If the node was freed before the last secured generation,
+      --  check if there is a active snapshot that might be using the node,
+      --  i.e., its generation is after the allocation generation and
+      --  before the free generation.
+      --
+      if Node.Free_Gen <= Last_Secured_Gen then
+         For_Active_Snaps :
+         for Snap of Active_Snaps loop
+            if Snap.Valid then
+               Declare_Is_Free :
+               declare
+                  --
+                  --  FIXME
+                  --  I'm not sure yet which condition is correct:
+                  --     'Node.Free_Gen <= Snap.Gen' or
+                  --     'Node.Free_Gen < Snap.Gen'
+                  --
+                  Is_Free : constant Boolean := (
+                     Node.Free_Gen < Snap.Gen or else
+                     Node.Alloc_Gen >= (Snap.Gen + 1));
+               begin
+                  In_Use := In_Use or else not Is_Free;
+                  exit For_Active_Snaps when In_Use;
+               end Declare_Is_Free;
             end if;
-         end if;
-
-         --
-         --  If the node was freed before the last secured generation,
-         --  check if there is a active snapshot that might be using the node,
-         --  i.e., its generation is after the allocation generation and
-         --  before the free generation.
-         --
-         if F_Gen <= S_Gen then
-            For_Active_Snaps :
-            for Snap of Active_Snaps loop
-               if Snap.Valid then
-                  Declare_B_Generation :
-                  declare
-                     B_Gen   : constant Generation_Type := Snap.Gen;
-                     --  XXX check reuse condition, f <= b vs. f < b
-                     Is_Free : constant Boolean :=
-                        (F_Gen < B_Gen or else A_Gen >= (B_Gen + 1));
-                  begin
-                     In_Use := In_Use or else not Is_Free;
-                     exit For_Active_Snaps when In_Use;
-                  end Declare_B_Generation;
-               end if;
-            end loop For_Active_Snaps;
-            Free := not In_Use;
-         end if;
-      end Declare_Generations;
+         end loop For_Active_Snaps;
+         Free := not In_Use;
+      end if;
       return Free;
+
    end Check_Type_2_Leaf_Usable;
 
    procedure Compute_Node_Hash (
