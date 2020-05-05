@@ -1879,7 +1879,7 @@ is
                 Obj.Superblock.Free_Degree,
                 Obj.Superblock.Free_Leafs),
                Obj.Cur_Gen,
-               Obj.Cur_Gen,
+               VBD_Rekeying.Peek_Generated_Free_Gen (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_Nr_Of_Blks (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_New_PBAs (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_T1_Node_Walk (Obj.VBD_Rkg, Prim),
@@ -2100,7 +2100,7 @@ is
                not VBD_Rekeying.Primitive_Acceptable (Obj.VBD_Rkg);
 
             VBD_Rekeying.Submit_Primitive (
-               Obj.VBD_Rkg, Prim,
+               Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
                Superblock_Control.Peek_Generated_VBA (
                   Obj.SB_Ctrl, Prim, Obj.Superblock),
                Superblock_Control.Peek_Generated_Snapshots (

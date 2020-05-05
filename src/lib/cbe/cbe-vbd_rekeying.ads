@@ -40,6 +40,7 @@ is
    procedure Submit_Primitive (
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
+      Curr_Gen         :        Generation_Type;
       VBA              :        Virtual_Block_Address_Type;
       Snapshots        :        Snapshots_Type;
       Snapshots_Degree :        Tree_Degree_Type;
@@ -170,6 +171,14 @@ is
    return Key_ID_Type;
 
    --
+   --  Peek_Generated_Free_Gen
+   --
+   function Peek_Generated_Free_Gen (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -251,6 +260,9 @@ private
       Write_Root_Node_Pending,
       Write_Root_Node_In_Progress,
       Write_Root_Node_Completed,
+      Alloc_New_Inner_Node_PBAs_Pending,
+      Alloc_New_Inner_Node_PBAs_In_Progress,
+      Alloc_New_Inner_Node_PBAs_Completed,
       Completed
    );
 
@@ -272,7 +284,6 @@ private
       Snapshots         : Snapshots_Type;
       Snapshots_Degree  : Tree_Degree_Type;
       Snapshot_Idx      : Snapshots_Index_Type;
-      First_Snapshot    : Boolean;
       Old_Key_ID        : Key_ID_Type;
       New_Key_ID        : Key_ID_Type;
       T1_Blks           : Type_1_Node_Blocks_Type;
@@ -280,10 +291,13 @@ private
       T1_Blk_Idx        : Type_1_Node_Blocks_Index_Type;
       Data_Blk          : Block_Data_Type;
       Data_Blk_Old_PBA  : Physical_Block_Address_Type;
+      First_Snapshot    : Boolean;
       VBA               : Virtual_Block_Address_Type;
       T1_Node_Walk      : Type_1_Node_Walk_Type;
       New_PBAs          : Write_Back.New_PBAs_Type;
       Nr_Of_Blks        : Number_Of_Blocks_Type;
+      Curr_Gen          : Generation_Type;
+      Free_Gen          : Generation_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -310,9 +324,9 @@ private
    return Type_1_Node_Block_Index_Type;
 
    --
-   --  Execute_Rekey_VBA_Read_Node_Completed
+   --  Execute_Rekey_VBA_Read_Inner_Node_Completed
    --
-   procedure Execute_Rekey_VBA_Read_Node_Completed (
+   procedure Execute_Rekey_VBA_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Hash     :        Hash_Type;
@@ -334,14 +348,18 @@ private
    --  Set_Args_For_Alloc_Of_New_PBAs
    --
    procedure Set_Args_For_Alloc_Of_New_PBAs (
-      Snapshot        :     Snapshot_Type;
-      Snapshot_Degree :     Tree_Degree_Type;
-      VBA             :     Virtual_Block_Address_Type;
-      Prim_Idx        :     Primitive.Index_Type;
-      T1_Blks         :     Type_1_Node_Blocks_Type;
-      T1_Walk         : out Type_1_Node_Walk_Type;
-      New_PBAs        : out Write_Back.New_PBAs_Type;
-      Nr_Of_Blks      : out Number_Of_Blocks_Type;
-      Prim            : out Primitive.Object_Type);
+      For_Curr_Gen_Blks :        Boolean;
+      Curr_Gen          :        Generation_Type;
+      Snapshot          :        Snapshot_Type;
+      Snapshot_Degree   :        Tree_Degree_Type;
+      VBA               :        Virtual_Block_Address_Type;
+      Min_Lvl_Idx       :        Tree_Level_Index_Type;
+      Prim_Idx          :        Primitive.Index_Type;
+      T1_Blks           :        Type_1_Node_Blocks_Type;
+      T1_Walk           :    out Type_1_Node_Walk_Type;
+      New_PBAs          : in out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks        :    out Number_Of_Blocks_Type;
+      Free_Gen          :    out Generation_Type;
+      Prim              :    out Primitive.Object_Type);
 
 end CBE.VBD_Rekeying;

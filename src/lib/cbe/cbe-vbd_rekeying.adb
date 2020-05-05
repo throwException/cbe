@@ -165,7 +165,9 @@ is
             VBA => Virtual_Block_Address_Type'First,
             T1_Node_Walk => (others => Type_1_Node_Invalid),
             New_PBAs => (others => Physical_Block_Address_Type'First),
-            Nr_Of_Blks => Number_Of_Blocks_Type'First);
+            Nr_Of_Blks => Number_Of_Blocks_Type'First,
+            Curr_Gen => Generation_Type'First,
+            Free_Gen => Generation_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Rekeying;
 
@@ -182,6 +184,7 @@ is
    procedure Submit_Primitive (
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
+      Curr_Gen         :        Generation_Type;
       VBA              :        Virtual_Block_Address_Type;
       Snapshots        :        Snapshots_Type;
       Snapshots_Degree :        Tree_Degree_Type;
@@ -200,6 +203,7 @@ is
 
                Rkg.Jobs (Idx).Operation        := Rekey_VBA;
                Rkg.Jobs (Idx).Submitted_Prim   := Prim;
+               Rkg.Jobs (Idx).Curr_Gen         := Curr_Gen;
                Rkg.Jobs (Idx).VBA              := VBA;
                Rkg.Jobs (Idx).Snapshots        := Snapshots;
                Rkg.Jobs (Idx).Snapshots_Degree := Snapshots_Degree;
@@ -286,9 +290,9 @@ is
    end Child_Idx_For_VBA;
 
    --
-   --  Execute_Rekey_VBA_Read_Node_Completed
+   --  Execute_Rekey_VBA_Read_Inner_Node_Completed
    --
-   procedure Execute_Rekey_VBA_Read_Node_Completed (
+   procedure Execute_Rekey_VBA_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Hash     :        Hash_Type;
@@ -304,7 +308,7 @@ is
          raise Program_Error;
       end if;
 
-      if Job.T1_Blk_Idx > Type_1_Node_Blocks_Index_Type'First then
+      if Job.T1_Blk_Idx > 1 then
 
          Declare_Child_PBA_1 :
          declare
@@ -312,7 +316,7 @@ is
                Job.T1_Blk_Idx;
 
             Child_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
-               Type_1_Node_Blocks_Index_Type'Pred (Parent_Lvl_Idx);
+               Job.T1_Blk_Idx - 1;
 
             Child_Idx : constant Type_1_Node_Block_Index_Type :=
                Child_Idx_For_VBA (
@@ -322,26 +326,54 @@ is
                Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA;
          begin
 
-            Job.T1_Blk_Idx := Child_Lvl_Idx;
-            Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) := Child_PBA;
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Read,
-               Succ   => False,
-               Tg     => Primitive.Tag_VBD_Rkg_Cache,
-               Blk_Nr => Block_Number_Type (Child_PBA),
-               Idx    => Primitive.Index_Type (Job_Idx));
+            if not Job.First_Snapshot and then
+               Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) = Child_PBA
+            then
+
+               Job.T1_Blk_Idx := Child_Lvl_Idx;
+
+               Set_Args_For_Alloc_Of_New_PBAs (
+                  For_Curr_Gen_Blks => Job.First_Snapshot,
+                  Curr_Gen          => Job.Curr_Gen,
+                  Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
+                  Snapshot_Degree   => Job.Snapshots_Degree,
+                  VBA               => Job.VBA,
+                  Min_Lvl_Idx       => Parent_Lvl_Idx,
+                  Prim_Idx          => Primitive.Index_Type (Job_Idx),
+                  T1_Blks           => Job.T1_Blks,
+                  T1_Walk           => Job.T1_Node_Walk,
+                  New_PBAs          => Job.New_PBAs,
+                  Nr_Of_Blks        => Job.Nr_Of_Blks,
+                  Free_Gen          => Job.Free_Gen,
+                  Prim              => Job.Generated_Prim);
+
+               Job.State := Alloc_New_Inner_Node_PBAs_Pending;
+               Progress := True;
+
+            else
+
+               Job.T1_Blk_Idx := Child_Lvl_Idx;
+               Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) := Child_PBA;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Read,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_VBD_Rkg_Cache,
+                  Blk_Nr => Block_Number_Type (Child_PBA),
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Debug.Print_String (
+                  "   READ LVL " &
+                  Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+                  " PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
+
+               Job.State := Read_Inner_Node_Pending;
+               Progress := True;
+
+            end if;
 
          end Declare_Child_PBA_1;
-
-         Debug.Print_String (
-            "READ LVL " &
-            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
-            " PBA " &
-            Debug.To_String (Debug.Uint64_Type (
-               Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
-
-         Job.State := Read_Inner_Node_Pending;
-         Progress := True;
 
       else
 
@@ -358,28 +390,39 @@ is
                Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA;
          begin
 
-            Job.Data_Blk_Old_PBA := Child_PBA;
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Read,
-               Succ   => False,
-               Tg     => Primitive.Tag_VBD_Rkg_Blk_IO,
-               Blk_Nr => Block_Number_Type (Child_PBA),
-               Idx    => Primitive.Index_Type (Job_Idx));
+            if not Job.First_Snapshot and then
+               Job.Data_Blk_Old_PBA = Child_PBA
+            then
+
+               Job.State := Write_Leaf_Node_Completed;
+               Progress := True;
+
+            else
+
+               Job.Data_Blk_Old_PBA := Child_PBA;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Read,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_VBD_Rkg_Blk_IO,
+                  Blk_Nr => Block_Number_Type (Child_PBA),
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Debug.Print_String (
+                  "   READ LVL " &
+                  Debug.To_String (Debug.Uint64_Type (0)) &
+                  " PBA " &
+                  Debug.To_String (Debug.Uint64_Type (Job.Data_Blk_Old_PBA)));
+
+               Job.State := Read_Leaf_Node_Pending;
+               Progress := True;
+
+            end if;
 
          end Declare_Child_PBA_2;
 
-         Debug.Print_String (
-            "READ LVL " &
-            Debug.To_String (Debug.Uint64_Type (0)) &
-            " PBA " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk_Old_PBA)));
-
-         Job.State := Read_Leaf_Node_Pending;
-         Progress := True;
-
       end if;
 
-   end Execute_Rekey_VBA_Read_Node_Completed;
+   end Execute_Rekey_VBA_Read_Inner_Node_Completed;
 
    --
    --  Newest_Snapshot_Idx
@@ -415,19 +458,33 @@ is
    --  Set_Args_For_Alloc_Of_New_PBAs
    --
    procedure Set_Args_For_Alloc_Of_New_PBAs (
-      Snapshot        :     Snapshot_Type;
-      Snapshot_Degree :     Tree_Degree_Type;
-      VBA             :     Virtual_Block_Address_Type;
-      Prim_Idx        :     Primitive.Index_Type;
-      T1_Blks         :     Type_1_Node_Blocks_Type;
-      T1_Walk         : out Type_1_Node_Walk_Type;
-      New_PBAs        : out Write_Back.New_PBAs_Type;
-      Nr_Of_Blks      : out Number_Of_Blocks_Type;
-      Prim            : out Primitive.Object_Type)
+      For_Curr_Gen_Blks :        Boolean;
+      Curr_Gen          :        Generation_Type;
+      Snapshot          :        Snapshot_Type;
+      Snapshot_Degree   :        Tree_Degree_Type;
+      VBA               :        Virtual_Block_Address_Type;
+      Min_Lvl_Idx       :        Tree_Level_Index_Type;
+      Prim_Idx          :        Primitive.Index_Type;
+      T1_Blks           :        Type_1_Node_Blocks_Type;
+      T1_Walk           :    out Type_1_Node_Walk_Type;
+      New_PBAs          : in out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks        :    out Number_Of_Blocks_Type;
+      Free_Gen          :    out Generation_Type;
+      Prim              :    out Primitive.Object_Type)
    is
    begin
 
+      if Min_Lvl_Idx > Snapshot.Max_Level then
+         raise Program_Error;
+      end if;
+
       Nr_Of_Blks := 0;
+
+      if For_Curr_Gen_Blks then
+         Free_Gen := Curr_Gen;
+      else
+         Free_Gen := Snapshot.Gen + 1;
+      end if;
 
       For_Each_Lvl :
       for Lvl_Idx in Tree_Level_Index_Type loop
@@ -446,7 +503,7 @@ is
                Gen => Snapshot.Gen,
                Hash => Snapshot.Hash);
 
-         else
+         elsif Lvl_Idx >= Min_Lvl_Idx then
 
             Nr_Of_Blks := Nr_Of_Blks + 1;
             New_PBAs (Lvl_Idx) := 0;
@@ -461,27 +518,44 @@ is
 
             end Declare_Child_Idx;
 
+         else
+
+            Declare_Child_Idx_2 :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+            begin
+
+               T1_Walk (Lvl_Idx) := (
+                  PBA => New_PBAs (Lvl_Idx),
+                  Gen => T1_Blks (Lvl_Idx + 1) (Child_Idx).Gen,
+                  Hash => T1_Blks (Lvl_Idx + 1) (Child_Idx).Hash);
+
+            end Declare_Child_Idx_2;
+
          end if;
 
       end loop For_Each_Lvl;
 
-      Debug.Print_String ("PBAs before allocation");
-      for Lvl_Idx in reverse 0 .. Snapshot.Max_Level
-      loop
-         Debug.Print_String ("   " &
-            Debug.To_String (Debug.Uint64_Type (Lvl_Idx))
-            & "     new " &
-            Debug.To_String (Debug.Uint64_Type (New_PBAs (Lvl_Idx)))
-            & "     old " &
-            Debug.To_String (Debug.Uint64_Type (T1_Walk (Lvl_Idx).PBA)));
-      end loop;
+      if For_Curr_Gen_Blks then
 
-      Prim := Primitive.Valid_Object_No_Pool_Idx (
-         Op     => Primitive_Operation_Type'First,
-         Succ   => False,
-         Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks,
-         Blk_Nr => Block_Number_Type'First,
-         Idx    => Prim_Idx);
+         Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Prim_Idx);
+
+      else
+
+         Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Prim_Idx);
+
+      end if;
 
    end Set_Args_For_Alloc_Of_New_PBAs;
 
@@ -499,6 +573,16 @@ is
       when Submitted =>
 
          Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
+         Debug.Print_String (
+            "START SNAPSHOT IDX " &
+            Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
+            " PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).PBA)) &
+            " GEN " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Gen)));
+
          Job.First_Snapshot := True;
          Job.T1_Blk_Idx :=
             Type_1_Node_Blocks_Index_Type (
@@ -515,7 +599,7 @@ is
             Idx    => Primitive.Index_Type (Job_Idx));
 
          Debug.Print_String (
-            "READ LVL " &
+            "   READ LVL " &
             Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
             " PBA " &
             Debug.To_String (Debug.Uint64_Type (
@@ -526,7 +610,7 @@ is
 
       when Read_Root_Node_Completed =>
 
-         Execute_Rekey_VBA_Read_Node_Completed (
+         Execute_Rekey_VBA_Read_Inner_Node_Completed (
             Job, Job_Idx, Job.Snapshots (Job.Snapshot_Idx).Hash, Progress);
 
       when Read_Inner_Node_Completed =>
@@ -545,7 +629,7 @@ is
                   Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
          begin
 
-            Execute_Rekey_VBA_Read_Node_Completed (
+            Execute_Rekey_VBA_Read_Inner_Node_Completed (
                Job, Job_Idx, Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash,
                Progress);
 
@@ -592,17 +676,21 @@ is
          end if;
 
          Set_Args_For_Alloc_Of_New_PBAs (
-            Snapshot        => Job.Snapshots (Job.Snapshot_Idx),
-            Snapshot_Degree => Job.Snapshots_Degree,
-            VBA             => Job.VBA,
-            Prim_Idx        => Primitive.Index_Type (Job_Idx),
-            T1_Blks         => Job.T1_Blks,
-            T1_Walk         => Job.T1_Node_Walk,
-            New_PBAs        => Job.New_PBAs,
-            Nr_Of_Blks      => Job.Nr_Of_Blks,
-            Prim            => Job.Generated_Prim);
+            For_Curr_Gen_Blks => Job.First_Snapshot,
+            Curr_Gen          => Job.Curr_Gen,
+            Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
+            Snapshot_Degree   => Job.Snapshots_Degree,
+            VBA               => Job.VBA,
+            Min_Lvl_Idx       => 0,
+            Prim_Idx          => Primitive.Index_Type (Job_Idx),
+            T1_Blks           => Job.T1_Blks,
+            T1_Walk           => Job.T1_Node_Walk,
+            New_PBAs          => Job.New_PBAs,
+            Nr_Of_Blks        => Job.Nr_Of_Blks,
+            Free_Gen          => Job.Free_Gen,
+            Prim              => Job.Generated_Prim);
 
-         Debug.Print_String ("PLAIN LEAF DATA " &
+         Debug.Print_String ("   PLAIN LEAF DATA " &
             Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (0))) & " " &
             Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (1))) & " " &
             Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (2))) & " " &
@@ -621,15 +709,15 @@ is
             raise Program_Error;
          end if;
 
-         Debug.Print_String ("PBAs after allocation");
+         Debug.Print_String ("   PBAS ALLOCATED");
          for PBA_Idx in
             reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
          loop
-            Debug.Print_String ("   " &
+            Debug.Print_String ("      LVL " &
                Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-               & "     new " &
+               & "     NEW " &
                Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
-               & "     old " &
+               & "     OLD " &
                Debug.To_String (
                   Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
          end loop;
@@ -652,20 +740,10 @@ is
 
          Declare_Child_Idx_3 :
          declare
-            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type := 1;
             Child_Lvl_Idx : constant Tree_Level_Index_Type := 0;
-
-            Child_Idx : constant Type_1_Node_Block_Index_Type :=
-               Child_Idx_For_VBA (
-                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
-
             Child_PBA : constant Physical_Block_Address_Type :=
                Job.New_PBAs (Child_Lvl_Idx);
          begin
-
-            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
-            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
-               Hash_Of_Data_Blk (Job.Data_Blk);
 
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Write,
@@ -675,7 +753,7 @@ is
                Idx    => Primitive.Index_Type (Job_Idx));
 
             Debug.Print_String (
-               "WRITE LVL " &
+               "   WRITE LVL " &
                Debug.To_String (Debug.Uint64_Type (0)) &
                " PBA " &
                Debug.To_String (Debug.Uint64_Type (Child_PBA)));
@@ -691,27 +769,43 @@ is
             raise Program_Error;
          end if;
 
+         Declare_Child_Idx_13 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type := 1;
+            Child_Lvl_Idx : constant Tree_Level_Index_Type := 0;
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+
+            Child_PBA : constant Physical_Block_Address_Type :=
+               Job.New_PBAs (Child_Lvl_Idx);
+         begin
+
+            Debug.Print_String (
+               "   UPDATE PARENT LVL " &
+               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
+               " CHILD " &
+               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
+
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
+               Hash_Of_Data_Blk (Job.Data_Blk);
+
+         end Declare_Child_Idx_13;
+
          if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level then
 
             Declare_Child_Idx_4 :
             declare
-               Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
-                  Job.T1_Blk_Idx + 1;
-
                Child_Lvl_Idx : constant Tree_Level_Index_Type :=
                   Job.T1_Blk_Idx;
-
-               Child_Idx : constant Type_1_Node_Block_Index_Type :=
-                  Child_Idx_For_VBA (
-                     Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
 
                Child_PBA : constant Physical_Block_Address_Type :=
                   Job.New_PBAs (Child_Lvl_Idx);
             begin
-
-               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
-               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
-                  Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
 
                Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                   Op     => Write,
@@ -721,7 +815,7 @@ is
                   Idx    => Primitive.Index_Type (Job_Idx));
 
                Debug.Print_String (
-                  "WRITE LVL " &
+                  "   WRITE LVL " &
                   Debug.To_String (Debug.Uint64_Type (Child_Lvl_Idx)) &
                   " PBA " &
                   Debug.To_String (Debug.Uint64_Type (Child_PBA)));
@@ -743,29 +837,48 @@ is
             raise Program_Error;
          end if;
 
+         Declare_Child_Idx_14 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.T1_Blk_Idx + 1;
+
+            Child_Lvl_Idx : constant Tree_Level_Index_Type :=
+               Job.T1_Blk_Idx;
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+
+            Child_PBA : constant Physical_Block_Address_Type :=
+               Job.New_PBAs (Child_Lvl_Idx);
+         begin
+
+            Debug.Print_String (
+               "   UPDATE PARENT LVL " &
+               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
+               " CHILD " &
+               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
+
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
+            Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
+               Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
+
+         end Declare_Child_Idx_14;
+
          Job.T1_Blk_Idx := Job.T1_Blk_Idx + 1;
 
          if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level then
 
             Declare_Child_Idx_5 :
             declare
-               Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
-                  Job.T1_Blk_Idx + 1;
-
                Child_Lvl_Idx : constant Tree_Level_Index_Type :=
                   Job.T1_Blk_Idx;
-
-               Child_Idx : constant Type_1_Node_Block_Index_Type :=
-                  Child_Idx_For_VBA (
-                     Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
 
                Child_PBA : constant Physical_Block_Address_Type :=
                   Job.New_PBAs (Child_Lvl_Idx);
             begin
-
-               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
-               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
-                  Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
 
                Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                   Op     => Write,
@@ -775,7 +888,7 @@ is
                   Idx    => Primitive.Index_Type (Job_Idx));
 
                Debug.Print_String (
-                  "WRITE LVL " &
+                  "   WRITE LVL " &
                   Debug.To_String (Debug.Uint64_Type (Child_Lvl_Idx)) &
                   " PBA " &
                   Debug.To_String (Debug.Uint64_Type (Child_PBA)));
@@ -796,10 +909,6 @@ is
                   Job.New_PBAs (Child_Lvl_Idx);
             begin
 
-               Job.Snapshots (Job.Snapshot_Idx).PBA := Child_PBA;
-               Job.Snapshots (Job.Snapshot_Idx).Hash :=
-                  Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
-
                Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                   Op     => Write,
                   Succ   => False,
@@ -808,7 +917,7 @@ is
                   Idx    => Primitive.Index_Type (Job_Idx));
 
                Debug.Print_String (
-                  "WRITE LVL " &
+                  "   WRITE LVL " &
                   Debug.To_String (Debug.Uint64_Type (Child_Lvl_Idx)) &
                   " PBA " &
                   Debug.To_String (Debug.Uint64_Type (Child_PBA)));
@@ -826,7 +935,168 @@ is
             raise Program_Error;
          end if;
 
-         raise Program_Error;
+         --
+         --  Update parent
+         --
+         Declare_Child_Idx_7 :
+         declare
+            Child_Lvl_Idx : constant Tree_Level_Index_Type :=
+               Job.T1_Blk_Idx;
+
+            Child_PBA : constant Physical_Block_Address_Type :=
+               Job.New_PBAs (Child_Lvl_Idx);
+         begin
+
+            Debug.Print_String (
+               "   UPDATE SNAPSHOT IDX " &
+               Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
+
+            Job.Snapshots (Job.Snapshot_Idx).PBA := Child_PBA;
+            Job.Snapshots (Job.Snapshot_Idx).Hash :=
+               Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
+
+         end Declare_Child_Idx_7;
+
+         declare
+            New_Snap_Idx : Snapshots_Index_Type :=
+               Snapshots_Index_Type'First;
+            New_Snap_Idx_Valid : Boolean := False;
+            Old_Snap_Idx : constant Snapshots_Index_Type := Job.Snapshot_Idx;
+         begin
+
+            Debug.Print_String (
+               "FINISH SNAPSHOT IDX " &
+               Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).PBA)) &
+               " GEN " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).Gen)));
+
+            --
+            --  Find the next snapshot
+            --
+            For_Each_Snap_Idx :
+            for Snap_Idx in Job.Snapshots'Range loop
+
+               if Job.Snapshots (Snap_Idx).Valid then
+
+                  if New_Snap_Idx_Valid then
+
+                     if Job.Snapshots (Snap_Idx).Gen >
+                           Job.Snapshots (New_Snap_Idx).Gen and then
+                        Job.Snapshots (Snap_Idx).Gen <
+                           Job.Snapshots (Old_Snap_Idx).Gen
+                     then
+                        New_Snap_Idx := Snap_Idx;
+                        New_Snap_Idx_Valid := True;
+                     end if;
+
+                  else
+
+                     if Job.Snapshots (Snap_Idx).Gen <
+                           Job.Snapshots (Old_Snap_Idx).Gen
+                     then
+                        New_Snap_Idx := Snap_Idx;
+                        New_Snap_Idx_Valid := True;
+                     end if;
+
+                  end if;
+
+               end if;
+
+            end loop For_Each_Snap_Idx;
+
+            if New_Snap_Idx_Valid then
+
+               --
+               --  Start rekeying VBA in next snapshot
+               --
+
+               Job.Snapshot_Idx := New_Snap_Idx;
+
+               Debug.Print_String (
+                  "START SNAPSHOT IDX " &
+                  Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
+                  " PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Snapshots (Job.Snapshot_Idx).PBA)) &
+                  " GEN " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Snapshots (Job.Snapshot_Idx).Gen)));
+
+               Job.First_Snapshot := False;
+               Job.T1_Blk_Idx :=
+                  Type_1_Node_Blocks_Index_Type (
+                     Job.Snapshots (Job.Snapshot_Idx).Max_Level);
+
+               if not Job.First_Snapshot and then
+                  Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) =
+                     Job.Snapshots (Job.Snapshot_Idx).PBA
+               then
+
+                  Progress := True;
+
+               else
+
+                  Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) :=
+                     Job.Snapshots (Job.Snapshot_Idx).PBA;
+
+                  Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                     Op     => Read,
+                     Succ   => False,
+                     Tg     => Primitive.Tag_VBD_Rkg_Cache,
+                     Blk_Nr =>
+                        Block_Number_Type (
+                           Job.Snapshots (Job.Snapshot_Idx).PBA),
+                     Idx    => Primitive.Index_Type (Job_Idx));
+
+                  Debug.Print_String (
+                     "   READ LVL " &
+                     Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+                     " PBA " &
+                     Debug.To_String (Debug.Uint64_Type (
+                        Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
+
+                  Job.State := Read_Root_Node_Pending;
+                  Progress := True;
+
+               end if;
+
+            else
+
+               Primitive.Success (Job.Submitted_Prim, True);
+               Job.State := Completed;
+               Progress := True;
+
+            end if;
+
+         end;
+
+      when Alloc_New_Inner_Node_PBAs_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Debug.Print_String ("   INNER NODE PBAS ALLOCATED");
+         for PBA_Idx in
+            reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
+         loop
+            Debug.Print_String ("      LVL " &
+               Debug.To_String (Debug.Uint64_Type (PBA_Idx))
+               & "     NEW " &
+               Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
+               & "     OLD " &
+               Debug.To_String (
+                  Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
+         end loop;
+
+         Job.State := Write_Inner_Node_Completed;
+         Progress := True;
 
       when others =>
 
@@ -955,7 +1225,7 @@ is
          when Rekey_VBA =>
 
             case Rkg.Jobs (Idx).State is
-            when Alloc_New_PBAs_Pending =>
+            when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
                return Rkg.Jobs (Idx).Generated_Prim;
 
@@ -1028,7 +1298,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1052,6 +1322,45 @@ is
    end Peek_Generated_New_PBAs;
 
    --
+   --  Peek_Generated_Free_Gen
+   --
+   function Peek_Generated_Free_Gen (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Free_Gen;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Free_Gen;
+
+   --
    --  Peek_Generated_Old_Key_ID
    --
    function Peek_Generated_Old_Key_ID (
@@ -1067,7 +1376,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1106,7 +1415,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1145,7 +1454,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1186,7 +1495,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1225,7 +1534,7 @@ is
       when Rekey_VBA =>
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_New_PBAs_Pending =>
+         when Alloc_New_PBAs_Pending | Alloc_New_Inner_Node_PBAs_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -1510,6 +1819,15 @@ is
             Rkg.Jobs (Idx).State := Alloc_New_PBAs_In_Progress;
             return;
 
+         when Alloc_New_Inner_Node_PBAs_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Alloc_New_Inner_Node_PBAs_In_Progress;
+            return;
+
          when Encrypt_Leaf_Node_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
@@ -1742,6 +2060,17 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Alloc_New_PBAs_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Rkg.Jobs (Idx).New_PBAs := New_PBAs;
+            return;
+
+         when Alloc_New_Inner_Node_PBAs_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Alloc_New_Inner_Node_PBAs_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             Rkg.Jobs (Idx).New_PBAs := New_PBAs;
             return;
