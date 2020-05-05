@@ -556,14 +556,8 @@ is
       For_Each_Snapshot :
       for Snap of Snapshots loop
 
-         --
-         --  FIXME
-         --  I'm not sure yet which condition is correct:
-         --     'Node.Free_Gen <= Snap.Gen' or
-         --     'Node.Free_Gen < Snap.Gen'
-         --
          if Snap.Valid and then
-            Node.Free_Gen >= Snap.Gen and then
+            Node.Free_Gen > Snap.Gen and then
             Node.Alloc_Gen < Snap.Gen + 1
          then
             return False;
