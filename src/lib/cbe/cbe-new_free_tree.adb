@@ -532,58 +532,46 @@ is
       end loop;
    end Initialize_Type_1_Node_Block_Array;
 
+   --
+   --  Check_Type_2_Leaf_Usable
+   --
    function Check_Type_2_Leaf_Usable (
-      Active_Snaps     : Snapshots_Type;
+      Snapshots        : Snapshots_Type;
       Last_Secured_Gen : Generation_Type;
       Node             : Type_2_Node_Type)
    return Boolean
    is
-      Free   : Boolean := False;
-      In_Use : Boolean := False;
    begin
-      --  there is no valid PBA
-      if Node.PBA = 0 or else Node.PBA = PBA_Invalid then
+      if Node.PBA = 0 or else
+         Node.PBA = PBA_Invalid or else
+         Node.Free_Gen > Last_Secured_Gen
+      then
          return False;
       end if;
 
       if not Node.Reserved then
-         if Node.Free_Gen <= Last_Secured_Gen then
-            return True;
-         else
-            return False;
-         end if;
+         return True;
       end if;
 
-      --
-      --  If the node was freed before the last secured generation,
-      --  check if there is a active snapshot that might be using the node,
-      --  i.e., its generation is after the allocation generation and
-      --  before the free generation.
-      --
-      if Node.Free_Gen <= Last_Secured_Gen then
-         For_Active_Snaps :
-         for Snap of Active_Snaps loop
-            if Snap.Valid then
-               Declare_Is_Free :
-               declare
-                  --
-                  --  FIXME
-                  --  I'm not sure yet which condition is correct:
-                  --     'Node.Free_Gen <= Snap.Gen' or
-                  --     'Node.Free_Gen < Snap.Gen'
-                  --
-                  Is_Free : constant Boolean := (
-                     Node.Free_Gen < Snap.Gen or else
-                     Node.Alloc_Gen >= (Snap.Gen + 1));
-               begin
-                  In_Use := In_Use or else not Is_Free;
-                  exit For_Active_Snaps when In_Use;
-               end Declare_Is_Free;
-            end if;
-         end loop For_Active_Snaps;
-         Free := not In_Use;
-      end if;
-      return Free;
+      For_Each_Snapshot :
+      for Snap of Snapshots loop
+
+         --
+         --  FIXME
+         --  I'm not sure yet which condition is correct:
+         --     'Node.Free_Gen <= Snap.Gen' or
+         --     'Node.Free_Gen < Snap.Gen'
+         --
+         if Snap.Valid and then
+            Node.Free_Gen >= Snap.Gen and then
+            Node.Alloc_Gen < Snap.Gen + 1
+         then
+            return False;
+         end if;
+
+      end loop For_Each_Snapshot;
+
+      return True;
 
    end Check_Type_2_Leaf_Usable;
 

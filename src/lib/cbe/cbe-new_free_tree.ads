@@ -439,8 +439,11 @@ private
 
    procedure Reset_Block_State (Obj : in out Object_Type);
 
+   --
+   --  Check_Type_2_Leaf_Usable
+   --
    function Check_Type_2_Leaf_Usable (
-      Active_Snaps     : Snapshots_Type;
+      Snapshots        : Snapshots_Type;
       Last_Secured_Gen : Generation_Type;
       Node             : Type_2_Node_Type)
    return Boolean;
