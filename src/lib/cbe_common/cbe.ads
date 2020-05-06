@@ -17,7 +17,6 @@ is
 
    Nr_Of_Superblock_Slots : constant := 8;
    Max_Number_Of_Requests_In_Pool : constant := 16;
-   Superblock_Nr_Of_Keys : constant := 2;
    Superblock_Nr_Of_Snapshots : constant := 48;
    Block_Size_Bytes : constant := 4096;
    Type_1_Node_Storage_Size_Bytes : constant := 64;
@@ -43,9 +42,6 @@ is
    Type_2_Node_Storage_Size : constant := Type_2_Node_Storage_Size_Bytes * 8;
    Type_2_Nodes_Per_Block : constant :=
       Block_Size_Bytes / Type_2_Node_Storage_Size_Bytes;
-
-   Superblock_Keys_Storage_Size_Bytes : constant :=
-      Superblock_Nr_Of_Keys * Key_Storage_Size_Bytes;
 
    Superblock_Snapshots_Storage_Size_Bytes : constant :=
       Superblock_Nr_Of_Snapshots * Snapshot_Storage_Size_Bytes;
@@ -259,9 +255,6 @@ is
    function Key_Valid (ID : Key_ID_Type)
    return Key_Type;
 
-   type Keys_Index_Type is range 0 .. Superblock_Nr_Of_Keys - 1;
-   type Keys_Type is array (Keys_Index_Type) of Key_Type;
-
    --
    --  The CBE::Superblock contains all information of a CBE
    --  instance including the list of active snapshots. For now
@@ -292,7 +285,8 @@ is
       --  reused blocks reference by a snapshot in the older SB.)
       --
 
-      Keys                    : Keys_Type;
+      Previous_Key            : Key_Type;
+      Current_Key             : Key_Type;
       Snapshots               : Snapshots_Type;
       Last_Secured_Generation : Generation_Type;
       Curr_Snap               : Snapshots_Index_Type;
@@ -466,11 +460,6 @@ private
       Data     :     Block_Data_Type;
       Data_Off :     Block_Data_Index_Type);
 
-   procedure Keys_From_Block_Data (
-      Keys     : out Keys_Type;
-      Data     :     Block_Data_Type;
-      Data_Off :     Block_Data_Index_Type);
-
    procedure Block_Data_From_Unsigned_64 (
       Data : in out Block_Data_Type;
       Off  :        Block_Data_Index_Type;
@@ -535,11 +524,6 @@ private
       Data     : in out Block_Data_Type;
       Data_Off :        Block_Data_Index_Type;
       Snap     :        Snapshot_Type);
-
-   procedure Block_Data_From_Keys (
-      Data     : in out Block_Data_Type;
-      Data_Off :        Block_Data_Index_Type;
-      Keys     :        Keys_Type);
 
    procedure Block_Data_From_Snapshots (
       Data     : in out Block_Data_Type;

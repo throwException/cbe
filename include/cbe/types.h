@@ -630,12 +630,12 @@ namespace Cbe {
 
 	struct Superblock
 	{
-		enum { NUM_KEYS = 2u };
 		enum { INVALID_SNAPSHOT_SLOT = NUM_SNAPSHOTS, };
 
 		// XXX w/o snapshots about 265 bytes,
 		//     snapshots about 68 bytes each, all in all 3529 bytes
-		Key key[NUM_KEYS];
+		Key previous_key;
+		Key current_key;
 
 		/*
 		 * (At the moment we just check the active snapshots of

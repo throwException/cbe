@@ -47,12 +47,8 @@ is
          end if;
       end loop For_Snapshots;
 
-      SB.Keys (Keys_Index_Type'First) := Key_Valid (Obj.Key_ID);
-      For_Keys_Except_First :
-      for Idx in Keys_Index_Type'First + 1 .. Keys_Index_Type'Last loop
-         SB.Keys (Idx) := Key_Invalid;
-      end loop For_Keys_Except_First;
-
+      SB.Current_Key             := Key_Valid (Obj.Key_ID);
+      SB.Previous_Key            := Key_Invalid;
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
       SB.Last_Secured_Generation := 0;

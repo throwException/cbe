@@ -229,7 +229,8 @@ is
    is
       Result : Superblock_Type;
    begin
-      Result.Keys                    := (others => Key_Invalid);
+      Result.Previous_Key            := Key_Invalid;
+      Result.Current_Key             := Key_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
       Result.Last_Secured_Generation := Generation_Type'Last;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
@@ -442,21 +443,6 @@ is
       Key.ID := Key_ID_Type (Unsigned_32_From_Block_Data (Data, Key_Off));
    end Key_From_Block_Data;
 
-   procedure Keys_From_Block_Data (
-      Keys     : out Keys_Type;
-      Data     :     Block_Data_Type;
-      Data_Off :     Block_Data_Index_Type)
-   is
-      Keys_Off : Block_Data_Index_Type;
-   begin
-      For_Keys : for Idx in Keys'Range loop
-         Keys_Off :=
-           Data_Off + Block_Data_Index_Type (Idx * Key_Storage_Size_Bytes);
-
-         Key_From_Block_Data (Keys (Idx), Data, Keys_Off);
-      end loop For_Keys;
-   end Keys_From_Block_Data;
-
    procedure Snapshot_From_Block_Data (
       Snap     : out Snapshot_Type;
       Data     :     Block_Data_Type;
@@ -516,8 +502,11 @@ is
    is
       Off : Block_Data_Index_Type := 0;
    begin
-      Keys_From_Block_Data (SB.Keys, Data, Off);
-      Off := Off + Superblock_Keys_Storage_Size_Bytes;
+      Key_From_Block_Data (SB.Previous_Key, Data, Off);
+      Off := Off + Key_Storage_Size_Bytes;
+
+      Key_From_Block_Data (SB.Current_Key, Data, Off);
+      Off := Off + Key_Storage_Size_Bytes;
 
       Snapshots_From_Block_Data (SB.Snapshots, Data, Off);
       Off := Off + Superblock_Snapshots_Storage_Size_Bytes;
@@ -719,21 +708,6 @@ is
          Data, Snap_Off, Unsigned_32 (if Snap.Keep then 1 else 0));
    end Block_Data_From_Snapshot;
 
-   procedure Block_Data_From_Keys (
-      Data     : in out Block_Data_Type;
-      Data_Off :        Block_Data_Index_Type;
-      Keys     :        Keys_Type)
-   is
-      Keys_Off : Block_Data_Index_Type;
-   begin
-      For_Keys : for Idx in Keys'Range loop
-         Keys_Off :=
-           Data_Off + Block_Data_Index_Type (Idx * Key_Storage_Size_Bytes);
-
-         Block_Data_From_Key (Data, Keys_Off, Keys (Idx));
-      end loop For_Keys;
-   end Block_Data_From_Keys;
-
    procedure Block_Data_From_Snapshots (
       Data     : in out Block_Data_Type;
       Data_Off :        Block_Data_Index_Type;
@@ -758,8 +732,11 @@ is
    begin
       Data := (others => 0);
 
-      Block_Data_From_Keys (Data, Off, SB.Keys);
-      Off := Off + Superblock_Keys_Storage_Size_Bytes;
+      Block_Data_From_Key (Data, Off, SB.Previous_Key);
+      Off := Off + Key_Storage_Size_Bytes;
+
+      Block_Data_From_Key (Data, Off, SB.Current_Key);
+      Off := Off + Key_Storage_Size_Bytes;
 
       Block_Data_From_Snapshots (Data, Off, SB.Snapshots);
       Off := Off + Superblock_Snapshots_Storage_Size_Bytes;
