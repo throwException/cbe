@@ -549,7 +549,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
-         Key    => Obj.Superblock.Current_Key.ID,
+         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index),
          Tg     => 0);
    end Crypto_Cipher_Data_Required;
 
@@ -594,7 +594,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
-         Key    => Obj.Superblock.Current_Key.ID,
+         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index),
          Tg     => 0);
    end Crypto_Plain_Data_Required;
 
@@ -798,7 +798,11 @@ is
                begin
                   Primitive.Success (Prim, True);
                   Crypto.Submit_Completed_Primitive (
-                     Obj.Crypto_Obj, Prim, Data_Idx);
+                     Obj.Crypto_Obj,
+                     Prim,
+                     Obj.Superblock.Current_Key.ID,
+                     Data_Idx);
+
                   Crypto_Plain_Buf (Data_Idx) := (others => 0);
                end Declare_Data_Idx;
 
@@ -1818,7 +1822,12 @@ is
 
                Data_Idx : Crypto.Item_Index_Type;
             begin
-               Crypto.Submit_Primitive (Obj.Crypto_Obj, Prim, Data_Idx);
+               Crypto.Submit_Primitive (
+                  Obj.Crypto_Obj,
+                  Prim,
+                  Obj.Superblock.Current_Key.ID,
+                  Data_Idx);
+
                Crypto_Plain_Buf (Data_Idx) :=
                   Obj.Write_Back_Data (Plain_Data_Index);
 
@@ -2271,6 +2280,7 @@ is
                               Prim,
                               Block_IO.Peek_Completed_Tag (
                                  Obj.IO_Obj, Prim)),
+                           Obj.Superblock.Current_Key.ID,
                            Data_Idx);
 
                         Crypto_Cipher_Buf (Data_Idx) := IO_Buf (Index);

@@ -49,6 +49,7 @@ is
    procedure Submit_Primitive (
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
+      Key_ID   :        Key_ID_Type;
       Data_Idx :    out Item_Index_Type)
    with
       Pre => (Primitive_Acceptable (Obj) and then Primitive.Valid (Prim));
@@ -59,6 +60,7 @@ is
    procedure Submit_Completed_Primitive (
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
+      Key_ID   :        Key_ID_Type;
       Data_Idx :    out Item_Index_Type);
 
    --
@@ -68,6 +70,14 @@ is
       Obj      :     Object_Type;
       Item_Idx : out Item_Index_Type;
       Prim     : out Primitive.Object_Type);
+
+   --
+   --  Peek_Generated_Key_ID
+   --
+   function Peek_Generated_Key_ID (
+      Obj        : Object_Type;
+      Item_Index : Item_Index_Type)
+   return Key_ID_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -136,13 +146,17 @@ private
       --
       --  Pending_Object
       --
-      function Pending_Object (Prm : Primitive.Object_Type)
+      function Pending_Object (
+         Prm    : Primitive.Object_Type;
+         Key_ID : Key_ID_Type)
       return Item_Type;
 
       --
       --  Completed_Object
       --
-      function Completed_Object (Prm : Primitive.Object_Type)
+      function Completed_Object (
+         Prm    : Primitive.Object_Type;
+         Key_ID : Key_ID_Type)
       return Item_Type;
 
       ----------------------
@@ -154,6 +168,7 @@ private
       function In_Progress (Obj : Item_Type) return Boolean;
       function Complete    (Obj : Item_Type) return Boolean;
       function Prim        (Obj : Item_Type) return Primitive.Object_Type;
+      function Key_ID      (Obj : Item_Type) return Key_ID_Type;
 
       -----------------------
       --  Write Accessors  --
@@ -168,8 +183,9 @@ private
       --  Item_Type
       --
       type Item_Type is record
-         State : State_Type;
-         Prim  : Primitive.Object_Type;
+         State  : State_Type;
+         Prim   : Primitive.Object_Type;
+         Key_ID : Key_ID_Type;
       end record;
 
    end Item;
