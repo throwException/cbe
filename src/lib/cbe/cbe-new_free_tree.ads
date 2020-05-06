@@ -44,6 +44,9 @@ is
    function Request_Acceptable (Obj : Object_Type)
    return Boolean;
 
+   --
+   --  Submit_Request
+   --
    procedure Submit_Request (
       Obj              : in out Object_Type;
       Root_Node        :        Type_1_Node_Type;
@@ -57,7 +60,10 @@ is
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree       :        Tree_Degree_Type;
-      Key_ID           :        Key_ID_Type);
+      Key_ID           :        Key_ID_Type;
+      Rekeying         :        Boolean;
+      Previous_Key_ID  :        Key_ID_Type;
+      Rekeying_VBA     :        Virtual_Block_Address_Type);
 
    procedure Retry_Allocation (Obj : in out Object_Type);
 
@@ -426,6 +432,10 @@ private
       VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
       Key_ID           : Key_ID_Type;
 
+      Rekeying         : Boolean;
+      Previous_Key_ID  : Key_ID_Type;
+      Rekeying_VBA     : Virtual_Block_Address_Type;
+
    end record;
 
    function Write_Back_Data_Invalid return Write_Back_Data_Type
@@ -445,7 +455,10 @@ private
    function Check_Type_2_Leaf_Usable (
       Snapshots        : Snapshots_Type;
       Last_Secured_Gen : Generation_Type;
-      Node             : Type_2_Node_Type)
+      Node             : Type_2_Node_Type;
+      Rekeying         : Boolean;
+      Previous_Key_ID  : Key_ID_Type;
+      Rekeying_VBA     : Virtual_Block_Address_Type)
    return Boolean;
 
    function Check_Node_Hash (
@@ -458,12 +471,18 @@ private
    function Block_From_Level_0_Node (Entries : Type_2_Node_Block_Type)
    return Block_Data_Type;
 
+   --
+   --  Populate_Level_0_Stack
+   --
    procedure Populate_Level_0_Stack (
-      Stack        : in out Type_2_Info_Stack.Object_Type;
-      Entries      :    out Type_2_Node_Block_Type;
-      Block_Data   :        Block_Data_Type;
-      Active_Snaps :        Snapshots_Type;
-      Secured_Gen  :        Generation_Type);
+      Stack           : in out Type_2_Info_Stack.Object_Type;
+      Entries         :    out Type_2_Node_Block_Type;
+      Block_Data      :        Block_Data_Type;
+      Active_Snaps    :        Snapshots_Type;
+      Secured_Gen     :        Generation_Type;
+      Rekeying        :        Boolean;
+      Previous_Key_ID :        Key_ID_Type;
+      Rekeying_VBA    :        Virtual_Block_Address_Type);
 
    function Block_From_Level_N_Node (Entries : Type_1_Node_Block_Type)
    return Block_Data_Type;

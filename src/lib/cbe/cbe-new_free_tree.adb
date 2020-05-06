@@ -88,6 +88,11 @@ is
       Obj.Type_2_Leafs := Node_Queue.Empty_Node_Queue;
 
       Obj.WB_Data := Write_Back_Data_Invalid;
+
+      Obj.Rekeying         := Boolean'First;
+      Obj.Previous_Key_ID  := Key_ID_Type'First;
+      Obj.Rekeying_VBA     := Virtual_Block_Address_Type'First;
+
    end Initialized_Object;
 
    procedure Reset_Block_State (Obj : in out Object_Type)
@@ -134,6 +139,9 @@ is
    function Request_Acceptable (Obj : Object_Type) return Boolean
    is (Obj.State = Invalid);
 
+   --
+   --  Submit_Request
+   --
    procedure Submit_Request (
       Obj              : in out Object_Type;
       Root_Node        :        Type_1_Node_Type;
@@ -147,7 +155,10 @@ is
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree       :        Tree_Degree_Type;
-      Key_ID           :        Key_ID_Type)
+      Key_ID           :        Key_ID_Type;
+      Rekeying         :        Boolean;
+      Previous_Key_ID  :        Key_ID_Type;
+      Rekeying_VBA     :        Virtual_Block_Address_Type)
    is
    begin
       if Obj.State /= Invalid then
@@ -183,6 +194,11 @@ is
          Tree_Max_Level => Max_Level,
          New_PBAs       => New_Blocks,
          Old_PBAs       => Old_Blocks);
+
+      Obj.Rekeying        := Rekeying;
+      Obj.Previous_Key_ID := Previous_Key_ID;
+      Obj.Rekeying_VBA    := Rekeying_VBA;
+
    end Submit_Request;
 
    procedure Retry_Allocation (Obj : in out Object_Type)
@@ -538,7 +554,10 @@ is
    function Check_Type_2_Leaf_Usable (
       Snapshots        : Snapshots_Type;
       Last_Secured_Gen : Generation_Type;
-      Node             : Type_2_Node_Type)
+      Node             : Type_2_Node_Type;
+      Rekeying         : Boolean;
+      Previous_Key_ID  : Key_ID_Type;
+      Rekeying_VBA     : Virtual_Block_Address_Type)
    return Boolean
    is
    begin
@@ -550,6 +569,13 @@ is
       end if;
 
       if not Node.Reserved then
+         return True;
+      end if;
+
+      if Rekeying and then
+         Node.Last_Key_ID = Previous_Key_ID and then
+         Node.Last_VBA < Rekeying_VBA
+      then
          return True;
       end if;
 
@@ -612,12 +638,18 @@ is
       return Block_Data;
    end Block_From_Level_0_Node;
 
+   --
+   --  Populate_Level_0_Stack
+   --
    procedure Populate_Level_0_Stack (
-      Stack        : in out Type_2_Info_Stack.Object_Type;
-      Entries      :    out Type_2_Node_Block_Type;
-      Block_Data   :        Block_Data_Type;
-      Active_Snaps :        Snapshots_Type;
-      Secured_Gen  :        Generation_Type)
+      Stack           : in out Type_2_Info_Stack.Object_Type;
+      Entries         :    out Type_2_Node_Block_Type;
+      Block_Data      :        Block_Data_Type;
+      Active_Snaps    :        Snapshots_Type;
+      Secured_Gen     :        Generation_Type;
+      Rekeying        :        Boolean;
+      Previous_Key_ID :        Key_ID_Type;
+      Rekeying_VBA    :        Virtual_Block_Address_Type)
    is
    begin
       Type_2_Info_Stack.Reset (Stack);
@@ -627,12 +659,19 @@ is
          declare
             Node : constant Type_2_Node_Type := Entries (I);
          begin
-            if Check_Type_2_Leaf_Usable (Active_Snaps, Secured_Gen, Node) then
+            if Check_Type_2_Leaf_Usable (
+                  Active_Snaps,
+                  Secured_Gen,
+                  Node,
+                  Rekeying,
+                  Previous_Key_ID,
+                  Rekeying_VBA)
+            then
                declare
                   Info : constant Type_2_Info_Type := (
-                     State    => Invalid,
-                     Node     => Node,
-                     Index    => Node_Index_Type (I));
+                     State => Invalid,
+                     Node  => Node,
+                     Index => Node_Index_Type (I));
                begin
                   Type_2_Info_Stack.Push (Stack, Info);
                end;
@@ -779,7 +818,8 @@ is
                   else
                      Populate_Level_0_Stack (Obj.Level_0_Stack,
                         Obj.Level_0_Node, Obj.Cache_Block_Data,
-                        Active_Snaps, Last_Secured_Gen);
+                        Active_Snaps, Last_Secured_Gen,
+                        Obj.Rekeying, Obj.Previous_Key_ID, Obj.Rekeying_VBA);
                   end if;
                   N.State := Read;
                   Type_1_Info_Stack.Update_Top (Obj.Level_N_Stacks (L), N);
@@ -1047,7 +1087,8 @@ is
                   else
                      Populate_Level_0_Stack (Obj.Level_0_Stack,
                         Obj.Level_0_Node, Obj.Cache_Block_Data,
-                        Active_Snaps, Last_Secured_Gen);
+                        Active_Snaps, Last_Secured_Gen,
+                        Obj.Rekeying, Obj.Previous_Key_ID, Obj.Rekeying_VBA);
                      if not Type_2_Info_Stack.Empty (Obj.Level_0_Stack) then
                         N.State := Write;
                      else
