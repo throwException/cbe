@@ -32,6 +32,64 @@ is
    return Boolean
    is (Superblock_Initializer.Primitive_Acceptable (Obj.SB_Init));
 
+   procedure Calculate_MT (
+      FT_Degree       :     Tree_Degree_Type;
+      FT_Nr_Of_Leaves :     Tree_Number_Of_Leafs_Type;
+      MT_Max_Lvl_Idx  : out Tree_Level_Index_Type;
+      MT_Nr_Of_Leaves : out Tree_Number_Of_Leafs_Type);
+
+   procedure Calculate_MT (
+      FT_Degree       :     Tree_Degree_Type;
+      FT_Nr_Of_Leaves :     Tree_Number_Of_Leafs_Type;
+      MT_Max_Lvl_Idx  : out Tree_Level_Index_Type;
+      MT_Nr_Of_Leaves : out Tree_Number_Of_Leafs_Type)
+   is
+      --  Using 32 bit is enough to represent all leaves for
+      --  16 TiB in 4 KiB blocks, which cannot be used anyway because
+      --  we can only address (4 TiB - 1) leaves with the current tree.
+      type Uint32_Type is range 0 .. 2**32 - 1 with Size => 32;
+
+      Height     : Uint32_Type := Uint32_Type (1);
+      Leaves     : Uint32_Type := Uint32_Type (0);
+      Degree     : Uint32_Type := Uint32_Type (FT_Degree);
+      Max_Leaves : Uint32_Type := Uint32_Type (1);
+   begin
+      --  Calculate leaves (=> inner nodes of the FT) and height
+      --  of the MT.
+      Leaves_Loop : while True loop
+         declare
+            V : constant Uint32_Type :=
+               Uint32_Type (FT_Nr_Of_Leaves) / Degree;
+         begin
+            exit Leaves_Loop when V < 1;
+
+            Leaves := Leaves + V;
+            Degree := Degree * Uint32_Type (FT_Degree);
+            Height := Height + 1;
+         end;
+      end loop Leaves_Loop;
+
+      --  Calculate maximum number of leaves that could be addressed
+      --  by the tree of given height and account for root node.
+      Max_Leaves_Loop : for I in 1 .. Height loop
+         Max_Leaves := Max_Leaves * Uint32_Type (FT_Degree);
+      end loop Max_Leaves_Loop;
+
+      if Max_Leaves > Uint32_Type (FT_Nr_Of_Leaves) then
+         Leaves := Leaves + 1;
+      end if;
+
+      --  As crude approximation use two times the leaves needed to
+      --  account for the MTs inner nodes.
+      Leaves := Leaves * 2;
+      if Leaves > Max_Leaves then
+         Height := Height + 1;
+      end if;
+
+      MT_Max_Lvl_Idx  := Tree_Level_Index_Type (Height);
+      MT_Nr_Of_Leaves := Tree_Number_Of_Leafs_Type (Leaves);
+   end Calculate_MT;
+
    procedure Submit_Client_Request (
       Obj             : in out Object_Type;
       Req             :        Request.Object_Type;
@@ -43,7 +101,14 @@ is
       FT_Degree       :        Tree_Degree_Type;
       FT_Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type)
    is
+      MT_Max_Lvl_Idx : Tree_Level_Index_Type :=
+         Tree_Level_Index_Type'First;
+      MT_Nr_Of_Leafs : Tree_Number_Of_Leafs_Type :=
+         Tree_Number_Of_Leafs_Type'First;
    begin
+      Calculate_MT (FT_Degree, FT_Nr_Of_Leafs, MT_Max_Lvl_Idx,
+                    MT_Nr_Of_Leafs);
+
       Superblock_Initializer.Submit_Primitive (
          Obj.SB_Init,
          Primitive.Valid_Object_No_Pool_Idx (
@@ -55,10 +120,9 @@ is
          FT_Max_Lvl_Idx,
          FT_Degree,
          FT_Nr_Of_Leafs,
-         --  calculate MT data
-         FT_Max_Lvl_Idx,
+         MT_Max_Lvl_Idx,
          FT_Degree,
-         FT_Nr_Of_Leafs);
+         MT_Nr_Of_Leafs);
 
       Obj.Client_Req := Req;
 
