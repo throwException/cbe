@@ -75,10 +75,6 @@ main() {
 	local cbe_dir="/dev/cbe"
 	local data_file="$cbe_dir/current/data"
 
-	if [ $KEY_TEST -eq 1 ]; then
-		test_key "$cbe_dir"
-	fi
-
 	if [ $CREATE_SNAPSHOT_TEST -eq 1 ]; then
 		test_create_snapshot "$cbe_dir"
 	fi

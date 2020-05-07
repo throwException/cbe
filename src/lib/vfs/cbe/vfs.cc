@@ -25,7 +25,6 @@ namespace Vfs_cbe {
 	using namespace Genode;
 
 	class Data_file_system;
-	class Key_file_system;
 
 	class Create_snapshot_file_system;
 	class Discard_snapshot_file_system;
@@ -103,7 +102,6 @@ class Vfs_cbe::Wrapper
 		Cbe::Crypto_cipher_buffer _cipher_data { };
 		Cbe::Crypto_plain_buffer  _plain_data { };
 		External::Crypto _crypto { };
-		bool _key_set { false };
 
 		Constructible<Cbe::Library> _cbe;
 
@@ -119,6 +117,24 @@ class Vfs_cbe::Wrapper
 		Cbe::Token       _discard_snapshot_token { 0 };
 		bool             _discard_snapshot       { false };
 
+	public:
+
+		struct Rekeying
+		{
+			enum State { IDLE, IN_PROGRESS, };
+			enum Result { NONE, SUCCESS, FAILED, };
+			State    state;
+			Result   last_result;
+			uint32_t key_id;
+		};
+
+	private:
+
+		Rekeying _rekey_obj {
+			.state       = Rekeying::State::IDLE,
+			.last_result = Rekeying::Result::NONE,
+			.key_id      = 0, };
+
 		/* configuration options */
 		bool _verbose       { true }; // XXX
 		bool _show_progress { false };
@@ -126,25 +142,37 @@ class Vfs_cbe::Wrapper
 		using Backend_device_path = Genode::String<32>;
 		Backend_device_path _block_device { "/dev/block" };
 
+		struct Failed_to_set_key : Genode::Exception { };
+
 		void _read_config(Xml_node config)
 		{
 			_verbose       = config.attribute_value("verbose", _verbose);
 			_show_progress = config.attribute_value("show_progress", _show_progress);
 			_block_device  = config.attribute_value("block", _block_device);
 
-			using Passphrase = Genode::String<32+1>;
-			Passphrase passphrase = config.attribute_value("passphrase", Passphrase());
+			config.with_sub_node ("crypto", [&] (Xml_node const &crypto) {
 
-			uint32_t const key_id = config.attribute_value("key_id", 0u);
+				crypto.for_each_sub_node("key", [&] (Xml_node const &key) {
 
-			if (passphrase.valid() && key_id) {
+					using Key_string = Genode::String<32+1>;
 
-				External::Crypto::Key_data key { }; // XXX clear key material
-				Genode::memset(key.value, 0xa5, sizeof (key.value));
-				Genode::memcpy(key.value, passphrase.string(), passphrase.length()-1);
+					Key_string const value = key.attribute_value("value", Key_string());
 
-				add_key(key_id, key);
-			}
+					External::Crypto::Key_data data { };
+					memcpy(data.value, value.string(), value.length() - 1);
+
+					unsigned const id { key.attribute_value ("id",   0u) };
+
+					/* select the hights id for rekeying */
+					if (id > _rekey_obj.key_id) {
+						_rekey_obj.key_id = id;
+					}
+
+					log("Add crypto key ", id, " '", value, "'");
+
+					_crypto.add_key(id, data);
+				});
+			});
 		}
 
 		Cbe::Superblocks_index _read_superblocks(Cbe::Superblocks &sbs)
@@ -203,6 +231,7 @@ class Vfs_cbe::Wrapper
 					if (result == Result::READ_ERR_IO) {
 						error("complete_read failed, bytes: ", bytes);
 						return Cbe::Superblocks_index(0);
+
 					}
 				}
 
@@ -1050,14 +1079,7 @@ class Vfs_cbe::Wrapper
 
 		bool client_request_acceptable() const
 		{
-			return _key_set ? _cbe->client_request_acceptable()
-		                    : false;
-		}
-
-		void add_key(unsigned id, External::Crypto::Key_data const &key)
-		{
-			_crypto.add_key(id, key);
-			_key_set |= true;
+			return _cbe->client_request_acceptable();
 		}
 
 		void active_snapshot_ids(Cbe::Active_snapshot_ids &ids)
@@ -1340,126 +1362,6 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 
 		static char const *type_name() { return "data"; }
 		char const *type() override { return type_name(); }
-};
-
-
-class Vfs_cbe::Key_file_system : public Vfs::Single_file_system
-{
-	private:
-
-		Wrapper &_w;
-
-		static constexpr Genode::size_t MAX_KEY_SIZE = sizeof (External::Crypto::Key_data);
-
-		struct Vfs_handle : Single_vfs_handle
-		{
-			Wrapper &_w;
-
-			Vfs_handle(Directory_service &ds,
-			           File_io_service   &fs,
-			           Genode::Allocator &alloc,
-			           Wrapper           &w)
-			:
-				Single_vfs_handle(ds, fs, alloc, 0), _w(w)
-			{ }
-
-			Read_result read(char *dst, file_size count,
-			                 file_size &out_count) override
-			{
-				return READ_ERR_IO;
-			}
-
-			Write_result write(char const *src, file_size count, file_size &out_count) override
-			{
-				/* at least (10 for 2^32 in digits, 1, ' ' delim, 32 key
- 				 * and 1 NUL) 54 bytes needed, copy up to 63 bytes */
-				char input_buffer[64] { };
-				if (count > sizeof (input_buffer)) {
-					count = sizeof (input_buffer) - 1;
-				}
-				Genode::strncpy(input_buffer, src, count+1);
-				char *p = input_buffer;
-
-				out_count = 0;
-				uint32_t key_id { 0 };
-				size_t consumed = Genode::ascii_to(p, key_id);
-
-				/* no key specified */
-				if (key_id == 0 || consumed == count || input_buffer[consumed] == '\0') {
-					Genode::error("cannot parse malformed key");
-					return WRITE_ERR_INVALID;
-				}
-				/* eat delimiter */
-				consumed++;
-
-				p     += consumed;
-				count -= consumed;
-
-				External::Crypto::Key_data key { }; // XXX clear key material
-				Genode::memset(key.value, 0xa5, sizeof (key.value));
-				size_t const limit = count > sizeof (key.value)
-				                   ? sizeof (key.value) : count;
-				Genode::memcpy(key.value, p, limit);
-
-				_w.add_key(key_id, key);
-
-				out_count = count;
-				return WRITE_OK;
-			}
-
-			bool read_ready() override { return true; }
-		};
-
-	public:
-
-		Key_file_system(Wrapper &w)
-		:
-			Single_file_system(Node_type::TRANSACTIONAL_FILE, type_name(),
-			                   Node_rwx::rw(), Xml_node("<key/>")),
-			_w(w)
-		{ }
-
-		static char const *type_name() { return "key"; }
-
-		char const *type() override { return type_name(); }
-
-
-		/*********************************
-		 ** Directory-service interface **
-		 *********************************/
-
-		Open_result open(char const  *path, unsigned,
-		                 Vfs::Vfs_handle **out_handle,
-		                 Genode::Allocator   &alloc) override
-		{
-			if (!_single_file(path))
-				return OPEN_ERR_UNACCESSIBLE;
-
-			try {
-				*out_handle = new (alloc)
-					Vfs_handle(*this, *this, alloc, _w);
-				return OPEN_OK;
-			}
-			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
-			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
-		}
-
-		Stat_result stat(char const *path, Stat &out) override
-		{
-			Stat_result result = Single_file_system::stat(path, out);
-			out.size = sizeof (External::Crypto::Key_data);
-			return result;
-		}
-
-
-		/********************************
-		 ** File I/O service interface **
-		 ********************************/
-
-		Ftruncate_result ftruncate(Vfs::Vfs_handle *handle, file_size) override
-		{
-			return FTRUNCATE_OK;
-		}
 };
 
 
@@ -2134,7 +2036,6 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 struct Vfs_cbe::Control_local_factory : File_system_factory
 {
-	Key_file_system               _key_fs;
 	Create_snapshot_file_system   _create_snapshot_fs;
 	Discard_snapshot_file_system  _discard_snapshot_fs;
 
@@ -2142,17 +2043,12 @@ struct Vfs_cbe::Control_local_factory : File_system_factory
 	                      Xml_node      config,
 	                      Wrapper      &cbe)
 	:
-		_key_fs(cbe),
 		_create_snapshot_fs(cbe),
 		_discard_snapshot_fs(cbe)
 	{ }
 
 	Vfs::File_system *create(Vfs::Env&, Xml_node node) override
 	{
-		if (node.has_type(Key_file_system::type_name())) {
-			return &_key_fs;
-		}
-
 		if (node.has_type(Create_snapshot_file_system::type_name())) {
 			return &_create_snapshot_fs;
 		}
@@ -2179,7 +2075,6 @@ class Vfs_cbe::Control_file_system : private Control_local_factory,
 
 			Xml_generator xml(buf, sizeof(buf), "dir", [&] () {
 				xml.attribute("name", "control");
-				xml.node("key", [&] () { });
 				xml.node("create_snapshot", [&] () { });
 				xml.node("discard_snapshot", [&] () { });
 			});
