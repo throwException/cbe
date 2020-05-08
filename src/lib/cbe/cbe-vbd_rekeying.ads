@@ -241,36 +241,51 @@ private
 
    type Job_State_Type is (
       Submitted,
+
       Read_Root_Node_Pending,
       Read_Root_Node_In_Progress,
       Read_Root_Node_Completed,
+
       Read_Inner_Node_Pending,
       Read_Inner_Node_In_Progress,
       Read_Inner_Node_Completed,
+
       Read_Leaf_Node_Pending,
       Read_Leaf_Node_In_Progress,
       Read_Leaf_Node_Completed,
+
       Decrypt_Leaf_Node_Pending,
       Decrypt_Leaf_Node_In_Progress,
       Decrypt_Leaf_Node_Completed,
-      Alloc_New_PBAs_Pending,
-      Alloc_New_PBAs_In_Progress,
-      Alloc_New_PBAs_Completed,
+
+      Alloc_PBAs_For_All_Lvls_Pending,
+      Alloc_PBAs_For_All_Lvls_In_Progress,
+      Alloc_PBAs_For_All_Lvls_Completed,
+
+      Alloc_PBAs_For_All_Inner_Lvls_Pending,
+      Alloc_PBAs_For_All_Inner_Lvls_In_Progress,
+      Alloc_PBAs_For_All_Inner_Lvls_Completed,
+
+      Alloc_PBAs_For_Some_Inner_Lvls_Pending,
+      Alloc_PBAs_For_Some_Inner_Lvls_In_Progress,
+      Alloc_PBAs_For_Some_Inner_Lvls_Completed,
+
       Encrypt_Leaf_Node_Pending,
       Encrypt_Leaf_Node_In_Progress,
       Encrypt_Leaf_Node_Completed,
+
       Write_Leaf_Node_Pending,
       Write_Leaf_Node_In_Progress,
       Write_Leaf_Node_Completed,
+
       Write_Inner_Node_Pending,
       Write_Inner_Node_In_Progress,
       Write_Inner_Node_Completed,
+
       Write_Root_Node_Pending,
       Write_Root_Node_In_Progress,
       Write_Root_Node_Completed,
-      Alloc_New_Inner_Node_PBAs_Pending,
-      Alloc_New_Inner_Node_PBAs_In_Progress,
-      Alloc_New_Inner_Node_PBAs_Completed,
+
       Completed
    );
 
