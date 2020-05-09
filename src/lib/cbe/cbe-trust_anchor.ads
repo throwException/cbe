@@ -114,10 +114,12 @@ private
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
 
+   type Modulo_Byte_Type is mod 2**8;
+
    type Anchor_Type is record
       Jobs : Jobs_Type;
-      Next_Key_Plaintext_Byte : Byte_Type;
-      Next_Key_Ciphertext_Byte : Byte_Type;
+      Next_Key_Plaintext_Byte : Modulo_Byte_Type;
+      Next_Key_Ciphertext_Byte : Modulo_Byte_Type;
       Secured_SB_Hash : Hash_Type;
    end record;
 
