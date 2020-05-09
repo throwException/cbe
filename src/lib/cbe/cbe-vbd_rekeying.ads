@@ -107,6 +107,14 @@ is
    return Key_ID_Type;
 
    --
+   --  Peek_Generated_New_Key_ID
+   --
+   function Peek_Generated_New_Key_ID (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type;
+
+   --
    --  Peek_Generated_VBA
    --
    function Peek_Generated_VBA (

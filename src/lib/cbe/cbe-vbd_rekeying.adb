@@ -1400,6 +1400,49 @@ is
    end Peek_Generated_Old_Key_ID;
 
    --
+   --  Peek_Generated_New_Key_ID
+   --
+   function Peek_Generated_New_Key_ID (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      case Rkg.Jobs (Idx).Operation is
+      when Rekey_VBA =>
+
+         case Rkg.Jobs (Idx).State is
+         when
+            Alloc_PBAs_For_All_Lvls_Pending |
+            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
+            Alloc_PBAs_For_All_Inner_Lvls_Pending
+         =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).New_Key_ID;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_New_Key_ID;
+
+   --
    --  Peek_Generated_VBA
    --
    function Peek_Generated_VBA (

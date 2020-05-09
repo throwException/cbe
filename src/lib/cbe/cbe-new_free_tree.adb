@@ -89,9 +89,10 @@ is
 
       Obj.WB_Data := Write_Back_Data_Invalid;
 
-      Obj.Rekeying         := Boolean'First;
-      Obj.Previous_Key_ID  := Key_ID_Type'First;
-      Obj.Rekeying_VBA     := Virtual_Block_Address_Type'First;
+      Obj.Rekeying        := Boolean'First;
+      Obj.Previous_Key_ID := Key_ID_Type'First;
+      Obj.Current_Key_ID  := Key_ID_Type'First;
+      Obj.Rekeying_VBA    := Virtual_Block_Address_Type'First;
 
    end Initialized_Object;
 
@@ -155,9 +156,9 @@ is
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree       :        Tree_Degree_Type;
-      Key_ID           :        Key_ID_Type;
       Rekeying         :        Boolean;
       Previous_Key_ID  :        Key_ID_Type;
+      Current_Key_ID   :        Key_ID_Type;
       Rekeying_VBA     :        Virtual_Block_Address_Type)
    is
    begin
@@ -182,7 +183,6 @@ is
             Volatile => Node_Volatile (Obj.Root_Node, Obj.Current_Gen)
          ));
 
-      Obj.Key_ID := Key_ID;
       Obj.State := Scan;
       Obj.VBD_Degree_Log_2 :=
          Tree_Degree_Log_2_Type (Log_2 (Unsigned_32 (VBD_Degree)));
@@ -197,6 +197,7 @@ is
 
       Obj.Rekeying        := Rekeying;
       Obj.Previous_Key_ID := Previous_Key_ID;
+      Obj.Current_Key_ID  := Current_Key_ID;
       Obj.Rekeying_VBA    := Rekeying_VBA;
 
    end Submit_Request;
@@ -909,7 +910,10 @@ is
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
       Handled          :    out Boolean;
-      Key_ID           :        Key_ID_Type)
+      Rekeying         :        Boolean;
+      Previous_Key_ID  :        Key_ID_Type;
+      Current_Key_ID   :        Key_ID_Type;
+      Rekeying_VBA     :        Virtual_Block_Address_Type)
    is
       Local_Exchanged : Number_Of_Blocks_Type := 0;
    begin
@@ -945,7 +949,19 @@ is
                      Entries (Natural (Info.Index)).Last_VBA    :=
                         VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
 
-                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
+                     if Rekeying then
+                        if VBA < Rekeying_VBA then
+                           Entries (Natural (Info.Index)).Last_Key_ID :=
+                              Current_Key_ID;
+                        else
+                           Entries (Natural (Info.Index)).Last_Key_ID :=
+                              Previous_Key_ID;
+                        end if;
+                     else
+                        Entries (Natural (Info.Index)).Last_Key_ID :=
+                           Current_Key_ID;
+                     end if;
+
                      Entries (Natural (Info.Index)).Reserved    := True;
 
                   when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks =>
@@ -963,8 +979,10 @@ is
                      Entries (Natural (Info.Index)).Last_VBA    :=
                         VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
 
-                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
-                     Entries (Natural (Info.Index)).Reserved    := False;
+                     Entries (Natural (Info.Index)).Last_Key_ID :=
+                        Previous_Key_ID;
+
+                     Entries (Natural (Info.Index)).Reserved := False;
 
                   when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
 
@@ -978,8 +996,10 @@ is
                      Entries (Natural (Info.Index)).Last_VBA    :=
                         VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
 
-                     Entries (Natural (Info.Index)).Last_Key_ID := Key_ID;
-                     Entries (Natural (Info.Index)).Reserved    := True;
+                     Entries (Natural (Info.Index)).Last_Key_ID :=
+                        Current_Key_ID;
+
+                     Entries (Natural (Info.Index)).Reserved := True;
 
                   when others =>
 
@@ -1027,7 +1047,10 @@ is
             Obj.Level_0_Node,
             Exchanged,
             Handled,
-            Obj.Key_ID);
+            Obj.Rekeying,
+            Obj.Previous_Key_ID,
+            Obj.Current_Key_ID,
+            Obj.Rekeying_VBA);
 
          if Handled then
             if Exchanged > 0 then

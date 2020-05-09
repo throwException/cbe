@@ -1404,12 +1404,12 @@ is
                   Req_Prim         => Prim,
                   VBA              => VBA,
                   VBD_Degree       => Obj.Superblock.Degree,
-                  Key_ID           => Obj.Superblock.Current_Key.ID,
                   Rekeying         =>
                      Obj.Superblock.State = Rekeying_Virtual_Block_Device
                      or else
                      Obj.Superblock.State = Rekeying_Free_Tree,
                   Previous_Key_ID  => Obj.Superblock.Previous_Key.ID,
+                  Current_Key_ID   => Obj.Superblock.Current_Key.ID,
                   Rekeying_VBA     => Obj.Superblock.Rekeying_VBA);
             else
                --
@@ -1893,9 +1893,9 @@ is
                Prim,
                VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
                Obj.Superblock.Degree,
-               VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim),
                True,
                VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim),
+               VBD_Rekeying.Peek_Generated_New_Key_ID (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim));
 
             VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
