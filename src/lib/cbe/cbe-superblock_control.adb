@@ -8,6 +8,7 @@
 
 pragma Ada_2012;
 
+with CBE.Debug;
 with SHA256_4K;
 
 package body CBE.Superblock_Control
@@ -106,7 +107,8 @@ is
             Key_Plaintext => (others => Byte_Type'First),
             Key_Ciphertext => (others => Byte_Type'First),
             Generation => Generation_Type'First,
-            Hash => (others => Byte_Type'First));
+            Hash => (others => Byte_Type'First),
+            Snapshots => (others => Snapshot_Invalid));
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -223,7 +225,6 @@ is
       Job_Idx       :        Jobs_Index_Type;
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
-      Curr_Snap_Idx :        Snapshots_Index_Type;
       Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean)
    is
@@ -331,7 +332,7 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         if SB.Snapshots (Curr_Snap_Idx).Gen = Curr_Gen then
+         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
             Curr_Gen := Curr_Gen + 1;
          end if;
 
@@ -360,33 +361,166 @@ is
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
-      Job      : in out Job_Type;
-      Job_Idx  :        Jobs_Index_Type;
-      SB       :        Superblock_Type;
-      Progress : in out Boolean)
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
    is
    begin
 
       case Job.State is
       when Submitted =>
 
-         if SB.State = Rekeying_Virtual_Block_Device then
-
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Primitive_Operation_Type'First,
-               Succ   => False,
-               Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg,
-               Blk_Nr => Block_Number_Type (SB.Rekeying_VBA),
-               Idx    => Primitive.Index_Type (Job_Idx));
-
-            Job.State := Rekey_VBA_In_VBD_Pending;
-            Progress := True;
-
-         else
-
+         if SB.State /= Rekeying_Virtual_Block_Device then
             raise Program_Error;
-
          end if;
+
+         Debug.Print_String ("REKEY VBA " &
+            Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)));
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg,
+            Blk_Nr => Block_Number_Type (SB.Rekeying_VBA),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Rekey_VBA_In_VBD_Pending;
+         Progress := True;
+
+      when Rekey_VBA_In_VBD_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Snapshots := Job.Snapshots;
+
+         Declare_Max_VBA :
+         declare
+            Max_Nr_Of_Leafs : Tree_Number_Of_Leafs_Type := 0;
+         begin
+
+            For_Each_Snap :
+            for Snap of SB.Snapshots loop
+
+               if Snap.Valid and then
+                  Max_Nr_Of_Leafs < Snap.Nr_Of_Leafs
+               then
+                  Max_Nr_Of_Leafs := Snap.Nr_Of_Leafs;
+               end if;
+
+            end loop For_Each_Snap;
+
+            if SB.Rekeying_VBA <
+                  Virtual_Block_Address_Type (Max_Nr_Of_Leafs - 1)
+            then
+               SB.Rekeying_VBA := SB.Rekeying_VBA + 1;
+            else
+               raise Program_Error;
+            end if;
+
+         end Declare_Max_VBA;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Cache,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Cache_Pending;
+         Progress := True;
+
+      when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
+            Curr_Gen := Curr_Gen + 1;
+         end if;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
+         Progress := True;
 
       when others =>
 
@@ -403,7 +537,6 @@ is
       Ctrl          : in out Control_Type;
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
-      Curr_Snap_Idx :        Snapshots_Index_Type;
       Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean)
    is
@@ -416,13 +549,12 @@ is
          when Initialize_Rekeying =>
 
             Execute_Initialize_Rekeying (
-               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Snap_Idx, Curr_Gen,
-               Progress);
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
          when Rekey_VBA =>
 
             Execute_Rekey_VBA (
-               Ctrl.Jobs (Idx), Idx, SB, Progress);
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
          when Invalid =>
 
@@ -444,8 +576,7 @@ is
       Inspect_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
 
-         case Ctrl.Jobs (Idx).Operation is
-         when Initialize_Rekeying =>
+         if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
             when Create_Key_Pending |
@@ -461,11 +592,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -481,8 +608,7 @@ is
       Inspect_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
 
-         case Ctrl.Jobs (Idx).Operation is
-         when Rekey_VBA =>
+         if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
             when Rekey_VBA_In_VBD_Pending =>
@@ -495,11 +621,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -538,6 +660,43 @@ is
    end Peek_Generated_Hash;
 
    --
+   --  Peek_Generated_Last_Secured_Gen
+   --
+   function Peek_Generated_Last_Secured_Gen (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Generation_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Rekeying_Virtual_Block_Device
+            then
+               return SB.Last_Secured_Generation;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Last_Secured_Gen;
+
+   --
    --  Peek_Generated_VBA
    --
    function Peek_Generated_VBA (
@@ -550,8 +709,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Ctrl.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
          when Rekey_VBA_In_VBD_Pending =>
@@ -570,11 +728,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_VBA;
 
@@ -591,8 +746,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Ctrl.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
          when Rekey_VBA_In_VBD_Pending =>
@@ -611,11 +765,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Snapshots;
 
@@ -632,8 +783,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Ctrl.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
          when Rekey_VBA_In_VBD_Pending =>
@@ -652,11 +802,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Snapshots_Degree;
 
@@ -673,8 +820,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Ctrl.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
          when Rekey_VBA_In_VBD_Pending =>
@@ -697,11 +843,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Old_Key_ID;
 
@@ -718,8 +861,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Ctrl.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
          when Rekey_VBA_In_VBD_Pending =>
@@ -742,11 +884,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_New_Key_ID;
 
@@ -792,8 +931,7 @@ is
       Inspect_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
 
-         case Ctrl.Jobs (Idx).Operation is
-         when Initialize_Rekeying =>
+         if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
             when Sync_Cache_Pending =>
@@ -806,11 +944,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -827,8 +961,7 @@ is
       Inspect_Each_Job :
       for Idx in Ctrl.Jobs'Range loop
 
-         case Ctrl.Jobs (Idx).Operation is
-         when Initialize_Rekeying =>
+         if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
             when Sync_Blk_IO_Pending | Write_SB_Pending =>
@@ -841,11 +974,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -966,6 +1095,43 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Complete_Key_Plaintext;
+
+   --
+   --  Mark_Generated_Prim_Complete_Snapshots
+   --
+   procedure Mark_Generated_Prim_Complete_Snapshots (
+      Ctrl      : in out Control_Type;
+      Prim      :        Primitive.Object_Type;
+      Snapshots :        Snapshots_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Rekey_VBA_In_VBD_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Rekey_VBA_In_VBD_Completed;
+               Ctrl.Jobs (Idx).Snapshots := Snapshots;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_Snapshots;
 
    --
    --  Mark_Generated_Prim_Complete_Key_Ciphertext

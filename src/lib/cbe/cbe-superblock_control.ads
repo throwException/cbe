@@ -59,7 +59,6 @@ is
       Ctrl          : in out Control_Type;
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
-      Curr_Snap_Idx :        Snapshots_Index_Type;
       Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean);
 
@@ -111,6 +110,15 @@ is
       Prim : Primitive.Object_Type;
       SB   : Superblock_Type)
    return Virtual_Block_Address_Type;
+
+   --
+   --  Peek_Generated_Last_Secured_Gen
+   --
+   function Peek_Generated_Last_Secured_Gen (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Generation_Type;
 
    --
    --  Peek_Generated_Snapshots
@@ -172,6 +180,14 @@ is
       Key  :        Key_Ciphertext_Type);
 
    --
+   --  Mark_Generated_Prim_Complete_Snapshots
+   --
+   procedure Mark_Generated_Prim_Complete_Snapshots (
+      Ctrl      : in out Control_Type;
+      Prim      :        Primitive.Object_Type;
+      Snapshots :        Snapshots_Type);
+
+   --
    --  Mark_Generated_Prim_Complete
    --
    procedure Mark_Generated_Prim_Complete (
@@ -219,6 +235,7 @@ private
       Key_Ciphertext : Key_Ciphertext_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
+      Snapshots : Snapshots_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -235,7 +252,6 @@ private
       Job_Idx       :        Jobs_Index_Type;
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
-      Curr_Snap_Idx :        Snapshots_Index_Type;
       Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean);
 
@@ -243,10 +259,12 @@ private
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
-      Job      : in out Job_Type;
-      Job_Idx  :        Jobs_Index_Type;
-      SB       :        Superblock_Type;
-      Progress : in out Boolean);
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
 
    --
    --  Superblock_Enter_Rekeying_State

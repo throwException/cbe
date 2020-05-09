@@ -333,6 +333,23 @@ is
          Itm.State := Rekey_VBA_Pending;
          Progress := True;
 
+      when Rekey_VBA_Complete =>
+
+         if not Primitive.Success (Itm.Prim) then
+            raise Program_Error;
+         end if;
+
+         Itm.Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Itm.State := Rekey_VBA_Pending;
+         Progress := True;
+
       when others =>
 
          null;
@@ -398,6 +415,11 @@ is
 
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Rekey_Init_Complete;
+
+         when Rekey_VBA_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Rekey_VBA_Complete;
 
          when others =>
 

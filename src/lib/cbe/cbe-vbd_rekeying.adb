@@ -167,6 +167,7 @@ is
             New_PBAs => (others => Physical_Block_Address_Type'First),
             Nr_Of_Blks => Number_Of_Blocks_Type'First,
             Curr_Gen => Generation_Type'First,
+            Last_Secured_Gen => Generation_Type'First,
             Free_Gen => Generation_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Rekeying;
@@ -185,6 +186,7 @@ is
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type;
       VBA              :        Virtual_Block_Address_Type;
       Snapshots        :        Snapshots_Type;
       Snapshots_Degree :        Tree_Degree_Type;
@@ -204,6 +206,7 @@ is
                Rkg.Jobs (Idx).Operation        := Rekey_VBA;
                Rkg.Jobs (Idx).Submitted_Prim   := Prim;
                Rkg.Jobs (Idx).Curr_Gen         := Curr_Gen;
+               Rkg.Jobs (Idx).Last_Secured_Gen := Last_Secured_Gen;
                Rkg.Jobs (Idx).VBA              := VBA;
                Rkg.Jobs (Idx).Snapshots        := Snapshots;
                Rkg.Jobs (Idx).Snapshots_Degree := Snapshots_Degree;
@@ -242,6 +245,27 @@ is
       end loop Find_Completed_Job;
       return Primitive.Invalid_Object;
    end Peek_Completed_Primitive;
+
+   --
+   --  Peek_Completed_Snapshots
+   --
+   function Peek_Completed_Snapshots (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Snapshots_Type
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Rkg.Jobs'Range loop
+         if Rkg.Jobs (Idx).Operation /= Invalid and then
+            Rkg.Jobs (Idx).State = Completed and then
+            Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+         then
+            return Rkg.Jobs (Idx).Snapshots;
+         end if;
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+   end Peek_Completed_Snapshots;
 
    --
    --  Drop_Completed_Primitive
@@ -617,6 +641,37 @@ is
    end Set_Args_For_Alloc_Of_New_PBAs;
 
    --
+   --  Discard_Disposable_Snapshots
+   --
+   procedure Discard_Disposable_Snapshots (
+      Snapshots        : in out Snapshots_Type;
+      Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type)
+   is
+      Could_Discard_Snapshots : Boolean := False;
+   begin
+
+      For_Each_Snap :
+      for Idx in Snapshots'Range loop
+
+         if Snapshots (Idx).Valid and then
+            not Snapshots (Idx).Keep and then
+            Snapshots (Idx).Gen /= Curr_Gen and then
+            Snapshots (Idx).Gen /= Last_Secured_Gen
+         then
+            Could_Discard_Snapshots := True;
+            Snapshots (Idx).Valid := False;
+         end if;
+
+      end loop For_Each_Snap;
+
+      if not Could_Discard_Snapshots then
+         raise Program_Error;
+      end if;
+
+   end Discard_Disposable_Snapshots;
+
+   --
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
@@ -762,58 +817,78 @@ is
 
       when Alloc_PBAs_For_All_Inner_Lvls_Completed =>
 
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
+         if Primitive.Success (Job.Generated_Prim) then
+
+            Debug.Print_String ("   PBAS ALLOCATED");
+            for PBA_Idx in
+               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
+            loop
+               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
+               then
+                  Debug.Print_String ("      LVL " &
+                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
+                     & "     NEW " &
+                     Debug.To_String (Debug.Uint64_Type (
+                        Job.New_PBAs (PBA_Idx)))
+                     & "     OLD " &
+                     Debug.To_String (
+                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
+               end if;
+            end loop;
+
+            Job.State := Write_Leaf_Node_Completed;
+            Progress := True;
+
+         else
+
+            Discard_Disposable_Snapshots (
+               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
+
+            Job.State := Alloc_PBAs_For_All_Inner_Lvls_Pending;
+            Progress := True;
+
          end if;
-
-         Debug.Print_String ("   PBAS ALLOCATED");
-         for PBA_Idx in
-            reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-         loop
-            if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA then
-               Debug.Print_String ("      LVL " &
-                  Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                  & "     NEW " &
-                  Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
-                  & "     OLD " &
-                  Debug.To_String (
-                     Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-            end if;
-         end loop;
-
-         Job.State := Write_Leaf_Node_Completed;
-         Progress := True;
 
       when Alloc_PBAs_For_All_Lvls_Completed =>
 
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
+         if Primitive.Success (Job.Generated_Prim) then
+
+            Debug.Print_String ("   PBAS ALLOCATED");
+            for PBA_Idx in
+               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
+            loop
+               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
+               then
+                  Debug.Print_String ("      LVL " &
+                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
+                     & "     NEW " &
+                     Debug.To_String (Debug.Uint64_Type (
+                        Job.New_PBAs (PBA_Idx)))
+                     & "     OLD " &
+                     Debug.To_String (
+                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
+               end if;
+            end loop;
+
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Write,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Crypto_Encrypt,
+               Blk_Nr => Block_Number_Type (Job.New_PBAs (0)),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Encrypt_Leaf_Node_Pending;
+            Progress := True;
+
+         else
+
+            Discard_Disposable_Snapshots (
+               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
+
+            Job.State := Alloc_PBAs_For_All_Lvls_Pending;
+            Progress := True;
+
          end if;
-
-         Debug.Print_String ("   PBAS ALLOCATED");
-         for PBA_Idx in
-            reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-         loop
-            if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA then
-               Debug.Print_String ("      LVL " &
-                  Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                  & "     NEW " &
-                  Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
-                  & "     OLD " &
-                  Debug.To_String (
-                     Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-            end if;
-         end loop;
-
-         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-            Op     => Write,
-            Succ   => False,
-            Tg     => Primitive.Tag_VBD_Rkg_Crypto_Encrypt,
-            Blk_Nr => Block_Number_Type (Job.New_PBAs (0)),
-            Idx    => Primitive.Index_Type (Job_Idx));
-
-         Job.State := Encrypt_Leaf_Node_Pending;
-         Progress := True;
 
       when Encrypt_Leaf_Node_Completed =>
 
@@ -1126,27 +1201,37 @@ is
 
       when Alloc_PBAs_For_Some_Inner_Lvls_Completed =>
 
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
+         if Primitive.Success (Job.Generated_Prim) then
+
+            Debug.Print_String ("   PBAS ALLOCATED");
+            for PBA_Idx in
+               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
+            loop
+               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
+               then
+                  Debug.Print_String ("      LVL " &
+                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
+                     & "     NEW " &
+                     Debug.To_String (
+                        Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
+                     & "     OLD " &
+                     Debug.To_String (
+                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
+               end if;
+            end loop;
+
+            Job.State := Write_Inner_Node_Completed;
+            Progress := True;
+
+         else
+
+            Discard_Disposable_Snapshots (
+               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
+
+            Job.State := Alloc_PBAs_For_Some_Inner_Lvls_Pending;
+            Progress := True;
+
          end if;
-
-         Debug.Print_String ("   PBAS ALLOCATED");
-         for PBA_Idx in
-            reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-         loop
-            if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA then
-               Debug.Print_String ("      LVL " &
-                  Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                  & "     NEW " &
-                  Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
-                  & "     OLD " &
-                  Debug.To_String (
-                     Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-            end if;
-         end loop;
-
-         Job.State := Write_Inner_Node_Completed;
-         Progress := True;
 
       when others =>
 

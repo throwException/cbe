@@ -41,6 +41,7 @@ is
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type;
       VBA              :        Virtual_Block_Address_Type;
       Snapshots        :        Snapshots_Type;
       Snapshots_Degree :        Tree_Degree_Type;
@@ -52,6 +53,14 @@ is
    --
    function Peek_Completed_Primitive (Rkg : Rekeying_Type)
    return Primitive.Object_Type;
+
+   --
+   --  Peek_Completed_Snapshots
+   --
+   function Peek_Completed_Snapshots (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Snapshots_Type;
 
    --
    --  Drop_Completed_Primitive
@@ -300,27 +309,28 @@ private
    is array (Type_1_Node_Blocks_Index_Type) of Physical_Block_Address_Type;
 
    type Job_Type is record
-      Operation         : Job_Operation_Type;
-      State             : Job_State_Type;
-      Submitted_Prim    : Primitive.Object_Type;
-      Generated_Prim    : Primitive.Object_Type;
-      Snapshots         : Snapshots_Type;
-      Snapshots_Degree  : Tree_Degree_Type;
-      Snapshot_Idx      : Snapshots_Index_Type;
-      Old_Key_ID        : Key_ID_Type;
-      New_Key_ID        : Key_ID_Type;
-      T1_Blks           : Type_1_Node_Blocks_Type;
-      T1_Blks_Old_PBAs  : Type_1_Node_Blocks_PBAs_Type;
-      T1_Blk_Idx        : Type_1_Node_Blocks_Index_Type;
-      Data_Blk          : Block_Data_Type;
-      Data_Blk_Old_PBA  : Physical_Block_Address_Type;
-      First_Snapshot    : Boolean;
-      VBA               : Virtual_Block_Address_Type;
-      T1_Node_Walk      : Type_1_Node_Walk_Type;
-      New_PBAs          : Write_Back.New_PBAs_Type;
-      Nr_Of_Blks        : Number_Of_Blocks_Type;
-      Curr_Gen          : Generation_Type;
-      Free_Gen          : Generation_Type;
+      Operation        : Job_Operation_Type;
+      State            : Job_State_Type;
+      Submitted_Prim   : Primitive.Object_Type;
+      Generated_Prim   : Primitive.Object_Type;
+      Snapshots        : Snapshots_Type;
+      Snapshots_Degree : Tree_Degree_Type;
+      Snapshot_Idx     : Snapshots_Index_Type;
+      Old_Key_ID       : Key_ID_Type;
+      New_Key_ID       : Key_ID_Type;
+      T1_Blks          : Type_1_Node_Blocks_Type;
+      T1_Blks_Old_PBAs : Type_1_Node_Blocks_PBAs_Type;
+      T1_Blk_Idx       : Type_1_Node_Blocks_Index_Type;
+      Data_Blk         : Block_Data_Type;
+      Data_Blk_Old_PBA : Physical_Block_Address_Type;
+      First_Snapshot   : Boolean;
+      VBA              : Virtual_Block_Address_Type;
+      T1_Node_Walk     : Type_1_Node_Walk_Type;
+      New_PBAs         : Write_Back.New_PBAs_Type;
+      Nr_Of_Blks       : Number_Of_Blocks_Type;
+      Curr_Gen         : Generation_Type;
+      Last_Secured_Gen : Generation_Type;
+      Free_Gen         : Generation_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -384,5 +394,13 @@ private
       Nr_Of_Blks        :    out Number_Of_Blocks_Type;
       Free_Gen          :    out Generation_Type;
       Prim              :    out Primitive.Object_Type);
+
+   --
+   --  Discard_Disposable_Snapshots
+   --
+   procedure Discard_Disposable_Snapshots (
+      Snapshots        : in out Snapshots_Type;
+      Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type);
 
 end CBE.VBD_Rekeying;

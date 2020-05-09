@@ -2068,8 +2068,10 @@ is
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Ctrl_VBD_Rkg =>
 
-               Superblock_Control.Mark_Generated_Prim_Complete (
-                  Obj.SB_Ctrl, Prim);
+               Superblock_Control.Mark_Generated_Prim_Complete_Snapshots (
+                  Obj.SB_Ctrl,
+                  Prim,
+                  VBD_Rekeying.Peek_Completed_Snapshots (Obj.VBD_Rkg, Prim));
 
                VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
                Progress := True;
@@ -2095,8 +2097,7 @@ is
    is
    begin
       Superblock_Control.Execute (
-         Obj.SB_Ctrl, Obj.Superblock, Obj.Cur_SB, Curr_Snap (Obj), Obj.Cur_Gen,
-         Progress);
+         Obj.SB_Ctrl, Obj.Superblock, Obj.Cur_SB, Obj.Cur_Gen, Progress);
 
       Loop_Generated_VBD_Rkg_Prims :
       loop
@@ -2112,6 +2113,8 @@ is
 
             VBD_Rekeying.Submit_Primitive (
                Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
+               Superblock_Control.Peek_Generated_Last_Secured_Gen (
+                  Obj.SB_Ctrl, Prim, Obj.Superblock),
                Superblock_Control.Peek_Generated_VBA (
                   Obj.SB_Ctrl, Prim, Obj.Superblock),
                Superblock_Control.Peek_Generated_Snapshots (
@@ -2256,7 +2259,10 @@ is
             exit Loop_Completed_Prims when not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_Pool_SB_Ctrl_Init_Rekey =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
+               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA
+            =>
 
                Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
