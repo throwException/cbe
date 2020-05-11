@@ -26,6 +26,7 @@ namespace Vfs_cbe {
 
 	class Data_file_system;
 
+	class Rekey_file_system;
 	class Create_snapshot_file_system;
 	class Discard_snapshot_file_system;
 
@@ -75,28 +76,41 @@ class Vfs_cbe::Wrapper
 		struct Backend_io_response_handler : Vfs::Io_response_handler
 		{
 			Vfs_cbe::Wrapper &_wrapper;
+			Genode::Signal_context_capability _io_sigh;
 
-			Backend_io_response_handler(Vfs_cbe::Wrapper &wrapper)
-			: _wrapper(wrapper) { }
+			Backend_io_response_handler(Vfs_cbe::Wrapper &wrapper,
+			                            Genode::Signal_context_capability io_sigh)
+			: _wrapper(wrapper), _io_sigh(io_sigh) { }
 
 			void read_ready_response() override { }
 
 			void io_progress_response() override
 			{
-				_wrapper._notify_backend_io_progress();
+				if (_io_sigh.valid()) {
+					Genode::Signal_transmitter(_io_sigh).submit();
+				}
 			}
 		};
 
-		Backend_io_response_handler _backend_io_response_handler { *this };
+		Genode::Io_signal_handler<Wrapper> _io_handler {
+			_env.env().ep(), *this, &Wrapper::_handle_io };
+
+		void _handle_io()
+		{
+			_notify_backend_io_progress();
+		}
 
 		void _notify_backend_io_progress()
 		{
 			if (_enqueued_vfs_handle) {
 				_enqueued_vfs_handle->io_progress_response();
 			} else {
+				handle_frontend_request();
 				_io_progress_pending = true;
 			}
 		}
+
+		Backend_io_response_handler _backend_io_response_handler { *this, _io_handler };
 
 		Cbe::Io_buffer            _io_data { };
 		Cbe::Crypto_cipher_buffer _cipher_data { };
@@ -141,8 +155,6 @@ class Vfs_cbe::Wrapper
 
 		using Backend_device_path = Genode::String<32>;
 		Backend_device_path _block_device { "/dev/block" };
-
-		struct Failed_to_set_key : Genode::Exception { };
 
 		void _read_config(Xml_node config)
 		{
@@ -840,6 +852,15 @@ class Vfs_cbe::Wrapper
 				cbe.drop_completed_client_request(cbe_request);
 				progress = true;
 
+				if (cbe_request.operation() == Cbe::Request::Operation::REKEY) {
+					bool const req_sucess =
+						cbe_request.success() == Cbe::Request::Success::TRUE;
+					_rekey_obj.state = Rekeying::State::IDLE;
+					_rekey_obj.last_result = req_sucess ? Rekeying::Result::SUCCESS
+					                                    : Rekeying::Result::FAILED;
+					continue;
+				}
+
 				if (cbe_request.success() != Cbe::Request::Success::TRUE) {
 					_helper_read_request.state  = Helper_request::State::NONE;
 					_helper_write_request.state = Helper_request::State::NONE;
@@ -1080,6 +1101,33 @@ class Vfs_cbe::Wrapper
 		bool client_request_acceptable() const
 		{
 			return _cbe->client_request_acceptable();
+		}
+
+		bool start_rekeying()
+		{
+			if (!_cbe->client_request_acceptable()) {
+				return false;
+			}
+
+			Cbe::Request req(
+				Cbe::Request::Operation::REKEY,
+				Cbe::Request::Success::FALSE,
+				0, 0, 0,
+				_rekey_obj.key_id,
+				0);
+
+			_cbe->submit_client_request(req, 0);
+			_rekey_obj.state       = Rekeying::State::IN_PROGRESS;
+			_rekey_obj.last_result = Rekeying::Rekeying::FAILED;
+
+			// XXX kick-off rekeying
+			handle_frontend_request();
+			return true;
+		}
+
+		Rekeying const &rekeying_progress() const
+		{
+			return _rekey_obj;
 		}
 
 		void active_snapshot_ids(Cbe::Active_snapshot_ids &ids)
@@ -1362,6 +1410,134 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 
 		static char const *type_name() { return "data"; }
 		char const *type() override { return type_name(); }
+};
+
+
+class Vfs_cbe::Rekey_file_system : public Vfs::Single_file_system
+{
+	private:
+
+		Wrapper &_w;
+
+		struct Vfs_handle : Single_vfs_handle
+		{
+			Wrapper &_w;
+
+			Vfs_handle(Directory_service &ds,
+			           File_io_service   &fs,
+			           Genode::Allocator &alloc,
+			           Wrapper &w)
+			:
+				Single_vfs_handle(ds, fs, alloc, 0),
+				_w(w)
+			{ }
+
+			Read_result read(char *dst, file_size count,
+			                 file_size &out_count) override
+			{
+				if (seek() != 0) {
+					out_count = 0;
+					return READ_OK;
+				}
+
+				Wrapper::Rekeying const & rkp =
+					_w.rekeying_progress();
+
+				using Result = Genode::String<32>;
+				using Rekeying = Wrapper::Rekeying;
+				bool const in_progress =
+					rkp.state == Rekeying::State::IN_PROGRESS;
+				bool const last_result =
+					!in_progress && rkp.last_result != Rekeying::Result::NONE;
+				bool const success =
+					rkp.last_result == Rekeying::Result::SUCCESS;
+
+				Result result {
+					in_progress ? "in-progress" : "idle",
+					" last-result:", last_result ? success ?
+					                 "success" : "failed" : "none",
+					"\n" };
+				strncpy(dst, result.string(), count);
+				size_t const length_without_nul = result.length() - 1;
+				out_count = count > length_without_nul - 1 ?
+				            length_without_nul : count;
+				return READ_OK;
+			}
+
+			Write_result write(char const *src, file_size count, file_size &out_count) override
+			{
+				using State = Wrapper::Rekeying::State;
+				if (_w.rekeying_progress().state != State::IDLE) {
+					return WRITE_ERR_IO;
+				}
+
+				bool start_rekeying { false };
+				Genode::ascii_to(src, start_rekeying);
+
+				if (!start_rekeying) {
+					return WRITE_ERR_IO;
+				}
+
+				if (!_w.start_rekeying()) {
+					return WRITE_ERR_IO;
+				}
+
+				out_count = count;
+				return WRITE_OK;
+			}
+
+			bool read_ready() override { return true; }
+		};
+
+	public:
+
+		Rekey_file_system(Wrapper &w)
+		:
+			Single_file_system(Node_type::TRANSACTIONAL_FILE, type_name(),
+			                   Node_rwx::wo(), Xml_node("<rekey/>")),
+			_w(w)
+		{ }
+
+		static char const *type_name() { return "rekey"; }
+
+		char const *type() override { return type_name(); }
+
+
+		/*********************************
+		 ** Directory-service interface **
+		 *********************************/
+
+		Open_result open(char const  *path, unsigned,
+		                 Vfs::Vfs_handle **out_handle,
+		                 Genode::Allocator   &alloc) override
+		{
+			if (!_single_file(path))
+				return OPEN_ERR_UNACCESSIBLE;
+
+			try {
+				*out_handle =
+					new (alloc) Vfs_handle(*this, *this, alloc, _w);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
+		}
+
+		Stat_result stat(char const *path, Stat &out) override
+		{
+			Stat_result result = Single_file_system::stat(path, out);
+			return result;
+		}
+
+
+		/********************************
+		 ** File I/O service interface **
+		 ********************************/
+
+		Ftruncate_result ftruncate(Vfs::Vfs_handle *handle, file_size) override
+		{
+			return FTRUNCATE_OK;
+		}
 };
 
 
@@ -2036,6 +2212,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 struct Vfs_cbe::Control_local_factory : File_system_factory
 {
+	Rekey_file_system             _rekeying_fs;
 	Create_snapshot_file_system   _create_snapshot_fs;
 	Discard_snapshot_file_system  _discard_snapshot_fs;
 
@@ -2043,12 +2220,17 @@ struct Vfs_cbe::Control_local_factory : File_system_factory
 	                      Xml_node      config,
 	                      Wrapper      &cbe)
 	:
+		_rekeying_fs(cbe),
 		_create_snapshot_fs(cbe),
 		_discard_snapshot_fs(cbe)
 	{ }
 
 	Vfs::File_system *create(Vfs::Env&, Xml_node node) override
 	{
+		if (node.has_type(Rekey_file_system::type_name())) {
+			return &_rekeying_fs;
+		}
+
 		if (node.has_type(Create_snapshot_file_system::type_name())) {
 			return &_create_snapshot_fs;
 		}
@@ -2075,6 +2257,7 @@ class Vfs_cbe::Control_file_system : private Control_local_factory,
 
 			Xml_generator xml(buf, sizeof(buf), "dir", [&] () {
 				xml.attribute("name", "control");
+				xml.node("rekey", [&] () { });
 				xml.node("create_snapshot", [&] () { });
 				xml.node("discard_snapshot", [&] () { });
 			});
