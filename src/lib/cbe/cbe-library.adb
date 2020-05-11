@@ -1404,6 +1404,7 @@ is
                   Req_Prim         => Prim,
                   VBA              => VBA,
                   VBD_Degree       => Obj.Superblock.Degree,
+                  VBD_Highest_VBA  => Max_VBA (Obj),
                   Rekeying         =>
                      Obj.Superblock.State = Rekeying_Virtual_Block_Device
                      or else
@@ -1893,6 +1894,7 @@ is
                Prim,
                VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
                Obj.Superblock.Degree,
+               Max_VBA (Obj),
                True,
                VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_New_Key_ID (Obj.VBD_Rkg, Prim),

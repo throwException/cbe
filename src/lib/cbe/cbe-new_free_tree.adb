@@ -156,6 +156,7 @@ is
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree       :        Tree_Degree_Type;
+      VBD_Highest_VBA  :        Virtual_Block_Address_Type;
       Rekeying         :        Boolean;
       Previous_Key_ID  :        Key_ID_Type;
       Current_Key_ID   :        Key_ID_Type;
@@ -195,6 +196,7 @@ is
          New_PBAs       => New_Blocks,
          Old_PBAs       => Old_Blocks);
 
+      Obj.VBD_Highest_VBA := VBD_Highest_VBA;
       Obj.Rekeying        := Rekeying;
       Obj.Previous_Key_ID := Previous_Key_ID;
       Obj.Current_Key_ID  := Current_Key_ID;
@@ -882,9 +884,9 @@ is
    end Execute_Scan;
 
    --
-   --  VBD_Inner_Node_VBA
+   --  VBD_Node_Lowest_VBA
    --
-   function VBD_Inner_Node_VBA (
+   function VBD_Node_Lowest_VBA (
       VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
       VBD_Level        : Tree_Level_Index_Type;
       VBD_Leaf_VBA     : Virtual_Block_Address_Type)
@@ -898,6 +900,31 @@ is
                Unsigned_32 (VBD_Degree_Log_2) *
                Unsigned_32 (VBD_Level)))));
 
+   --
+   --  VBD_Node_Nr_Of_VBAs
+   --
+   function VBD_Node_Nr_Of_VBAs (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type)
+   return Virtual_Block_Address_Type
+   is (
+      Virtual_Block_Address_Type (
+         Shift_Left (
+            Unsigned_64 (1),
+            Natural (VBD_Level) * Natural (VBD_Degree_Log_2))));
+
+   --
+   --  VBD_Node_Highest_VBA
+   --
+   function VBD_Node_Highest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type
+   is (
+      VBD_Node_Lowest_VBA (VBD_Degree_Log_2, VBD_Level, VBD_Leaf_VBA) +
+         VBD_Node_Nr_Of_VBAs (VBD_Degree_Log_2, VBD_Level) - 1);
+
    procedure Exchange_Type_2_Leafs (
       Free_Gen         :        Generation_Type;
       Max_Level        :        Tree_Level_Index_Type;
@@ -910,6 +937,7 @@ is
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
       Handled          :    out Boolean;
+      VBD_Highest_VBA  :        Virtual_Block_Address_Type;
       Rekeying         :        Boolean;
       Previous_Key_ID  :        Key_ID_Type;
       Current_Key_ID   :        Key_ID_Type;
@@ -947,7 +975,7 @@ is
                         Free_Gen;
 
                      Entries (Natural (Info.Index)).Last_VBA    :=
-                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+                        VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
 
                      if Rekeying then
                         if VBA < Rekeying_VBA then
@@ -977,7 +1005,7 @@ is
                         Free_Gen;
 
                      Entries (Natural (Info.Index)).Last_VBA    :=
-                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+                        VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
 
                      Entries (Natural (Info.Index)).Last_Key_ID :=
                         Previous_Key_ID;
@@ -993,11 +1021,40 @@ is
                      Entries (Natural (Info.Index)).Free_Gen :=
                         Free_Gen;
 
-                     Entries (Natural (Info.Index)).Last_VBA    :=
-                        VBD_Inner_Node_VBA (VBD_Degree_Log_2, I, VBA);
+                     declare
+                        Node_Highest_VBA :
+                           constant Virtual_Block_Address_Type :=
+                              VBD_Node_Highest_VBA (VBD_Degree_Log_2, I, VBA);
+                     begin
 
-                     Entries (Natural (Info.Index)).Last_Key_ID :=
-                        Current_Key_ID;
+                        if Rekeying_VBA < Node_Highest_VBA and then
+                           Rekeying_VBA < VBD_Highest_VBA
+                        then
+
+                           Entries (Natural (Info.Index)).Last_VBA    :=
+                              Rekeying_VBA + 1;
+
+                           Entries (Natural (Info.Index)).Last_Key_ID :=
+                              Previous_Key_ID;
+
+                        elsif
+                           Rekeying_VBA = Node_Highest_VBA or else
+                           Rekeying_VBA = VBD_Highest_VBA
+                        then
+
+                           Entries (Natural (Info.Index)).Last_VBA    :=
+                              VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
+
+                           Entries (Natural (Info.Index)).Last_Key_ID :=
+                              Current_Key_ID;
+
+                        else
+
+                           raise Program_Error;
+
+                        end if;
+
+                     end;
 
                      Entries (Natural (Info.Index)).Reserved := True;
 
@@ -1047,6 +1104,7 @@ is
             Obj.Level_0_Node,
             Exchanged,
             Handled,
+            Obj.VBD_Highest_VBA,
             Obj.Rekeying,
             Obj.Previous_Key_ID,
             Obj.Current_Key_ID,

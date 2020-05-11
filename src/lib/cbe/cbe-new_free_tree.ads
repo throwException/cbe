@@ -60,6 +60,7 @@ is
       Req_Prim         :        Primitive.Object_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree       :        Tree_Degree_Type;
+      VBD_Highest_VBA  :        Virtual_Block_Address_Type;
       Rekeying         :        Boolean;
       Previous_Key_ID  :        Key_ID_Type;
       Current_Key_ID   :        Key_ID_Type;
@@ -431,6 +432,7 @@ private
 
       VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
 
+      VBD_Highest_VBA  : Virtual_Block_Address_Type;
       Rekeying         : Boolean;
       Previous_Key_ID  : Key_ID_Type;
       Current_Key_ID   : Key_ID_Type;
@@ -523,6 +525,7 @@ private
       Entries          : in out Type_2_Node_Block_Type;
       Exchanged        :    out Number_Of_Blocks_Type;
       Handled          :    out Boolean;
+      VBD_Highest_VBA  :        Virtual_Block_Address_Type;
       Rekeying         :        Boolean;
       Previous_Key_ID  :        Key_ID_Type;
       Current_Key_ID   :        Key_ID_Type;
@@ -541,9 +544,26 @@ private
    return Unsigned_32;
 
    --
-   --  VBD_Inner_Node_VBA
+   --  VBD_Node_Lowest_VBA
    --
-   function VBD_Inner_Node_VBA (
+   function VBD_Node_Lowest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  VBD_Node_Nr_Of_VBAs
+   --
+   function VBD_Node_Nr_Of_VBAs (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  VBD_Node_Highest_VBA
+   --
+   function VBD_Node_Highest_VBA (
       VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
       VBD_Level        : Tree_Level_Index_Type;
       VBD_Leaf_VBA     : Virtual_Block_Address_Type)
