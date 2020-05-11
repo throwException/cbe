@@ -10,7 +10,6 @@ pragma Ada_2012;
 
 with SHA256_4K;
 with Interfaces;
-with CBE.Debug;
 
 use Interfaces;
 
@@ -354,15 +353,6 @@ is
                Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) = Child.PBA
             then
 
-               Debug.Print_String (
-                  "   INNER NODE PBA " &
-                  Debug.To_String (
-                     Debug.Uint64_Type (Child.PBA)) &
-                  " -> " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.New_PBAs (Child_Lvl_Idx))) &
-                  " ALREADY REKEYED");
-
                Job.T1_Blk_Idx := Child_Lvl_Idx;
 
                Set_Args_For_Alloc_Of_New_PBAs (
@@ -394,13 +384,6 @@ is
                   Blk_Nr => Block_Number_Type (Child.PBA),
                   Idx    => Primitive.Index_Type (Job_Idx));
 
-               Debug.Print_String (
-                  "   READ LVL " &
-                  Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
-                  " PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
-
                Job.State := Read_Inner_Node_Pending;
                Progress := True;
 
@@ -427,13 +410,6 @@ is
                Job.Data_Blk_Old_PBA = Child.PBA
             then
 
-               Debug.Print_String (
-                  "   LEAF NODE PBA " &
-                  Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-                  " -> " &
-                  Debug.To_String (Debug.Uint64_Type (Job.New_PBAs (0))) &
-                  " ALREADY REKEYED");
-
                Set_Args_For_Alloc_Of_New_PBAs (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
                   Curr_Gen          => Job.Curr_Gen,
@@ -453,11 +429,6 @@ is
                Progress := True;
 
             elsif Child.Gen = 0 then
-
-               Debug.Print_String (
-                  "   LEAF NODE PBA " &
-                  Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-                  " OF GENERATION 0");
 
                Set_Args_For_Alloc_Of_New_PBAs (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
@@ -487,12 +458,6 @@ is
                   Tg     => Primitive.Tag_VBD_Rkg_Blk_IO,
                   Blk_Nr => Block_Number_Type (Child.PBA),
                   Idx    => Primitive.Index_Type (Job_Idx));
-
-               Debug.Print_String (
-                  "   READ LVL " &
-                  Debug.To_String (Debug.Uint64_Type (0)) &
-                  " PBA " &
-                  Debug.To_String (Debug.Uint64_Type (Job.Data_Blk_Old_PBA)));
 
                Job.State := Read_Leaf_Node_Pending;
                Progress := True;
@@ -685,16 +650,6 @@ is
       when Submitted =>
 
          Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
-         Debug.Print_String (
-            "START SNAPSHOT IDX " &
-            Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
-            " PBA " &
-            Debug.To_String (Debug.Uint64_Type (
-               Job.Snapshots (Job.Snapshot_Idx).PBA)) &
-            " GEN " &
-            Debug.To_String (Debug.Uint64_Type (
-               Job.Snapshots (Job.Snapshot_Idx).Gen)));
-
          Job.First_Snapshot := True;
          Job.T1_Blk_Idx :=
             Type_1_Node_Blocks_Index_Type (
@@ -709,13 +664,6 @@ is
             Tg     => Primitive.Tag_VBD_Rkg_Cache,
             Blk_Nr => Block_Number_Type (Job.Snapshots (Job.Snapshot_Idx).PBA),
             Idx    => Primitive.Index_Type (Job_Idx));
-
-         Debug.Print_String (
-            "   READ LVL " &
-            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
-            " PBA " &
-            Debug.To_String (Debug.Uint64_Type (
-               Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
 
          Job.State := Read_Root_Node_Pending;
          Progress := True;
@@ -802,39 +750,12 @@ is
             Free_Gen          => Job.Free_Gen,
             Prim              => Job.Generated_Prim);
 
-         Debug.Print_String ("   PLAIN LEAF DATA " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (0))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (1))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (2))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (3))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (4))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (5))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (6))) & " " &
-            Debug.To_String (Debug.Uint64_Type (Job.Data_Blk (7))) & " ");
-
          Job.State := Alloc_PBAs_For_All_Lvls_Pending;
          Progress := True;
 
       when Alloc_PBAs_For_All_Inner_Lvls_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
-
-            Debug.Print_String ("   PBAS ALLOCATED");
-            for PBA_Idx in
-               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-            loop
-               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
-               then
-                  Debug.Print_String ("      LVL " &
-                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                     & "     NEW " &
-                     Debug.To_String (Debug.Uint64_Type (
-                        Job.New_PBAs (PBA_Idx)))
-                     & "     OLD " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-               end if;
-            end loop;
 
             Job.State := Write_Leaf_Node_Completed;
             Progress := True;
@@ -852,23 +773,6 @@ is
       when Alloc_PBAs_For_All_Lvls_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
-
-            Debug.Print_String ("   PBAS ALLOCATED");
-            for PBA_Idx in
-               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-            loop
-               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
-               then
-                  Debug.Print_String ("      LVL " &
-                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                     & "     NEW " &
-                     Debug.To_String (Debug.Uint64_Type (
-                        Job.New_PBAs (PBA_Idx)))
-                     & "     OLD " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-               end if;
-            end loop;
 
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Write,
@@ -910,12 +814,6 @@ is
                Blk_Nr => Block_Number_Type (Child_PBA),
                Idx    => Primitive.Index_Type (Job_Idx));
 
-            Debug.Print_String (
-               "   WRITE LVL " &
-               Debug.To_String (Debug.Uint64_Type (0)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
-
          end Declare_Child_Idx_3;
 
          Job.State := Write_Leaf_Node_Pending;
@@ -943,14 +841,6 @@ is
                Job.New_PBAs (Parent_Lvl_Idx);
          begin
 
-            Debug.Print_String (
-               "   UPDATE PARENT LVL " &
-               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
-               " CHILD " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
-
             Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
             Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
                Hash_Of_Data_Blk (Job.Data_Blk);
@@ -961,12 +851,6 @@ is
                Tg     => Primitive.Tag_VBD_Rkg_Cache,
                Blk_Nr => Block_Number_Type (Parent_PBA),
                Idx    => Primitive.Index_Type (Job_Idx));
-
-            Debug.Print_String (
-               "   WRITE LVL " &
-               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Parent_PBA)));
 
             Job.State := Write_Inner_Node_Pending;
             Progress := True;
@@ -998,14 +882,6 @@ is
                Job.New_PBAs (Parent_Lvl_Idx);
          begin
 
-            Debug.Print_String (
-               "   UPDATE PARENT LVL " &
-               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
-               " CHILD " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
-
             Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).PBA := Child_PBA;
             Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash :=
                Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
@@ -1018,12 +894,6 @@ is
                Tg     => Primitive.Tag_VBD_Rkg_Cache,
                Blk_Nr => Block_Number_Type (Parent_PBA),
                Idx    => Primitive.Index_Type (Job_Idx));
-
-            Debug.Print_String (
-               "   WRITE LVL " &
-               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Parent_PBA)));
 
             if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level
             then
@@ -1058,12 +928,6 @@ is
                Job.New_PBAs (Child_Lvl_Idx);
          begin
 
-            Debug.Print_String (
-               "   UPDATE SNAPSHOT IDX " &
-               Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (Child_PBA)));
-
             Job.Snapshots (Job.Snapshot_Idx).PBA := Child_PBA;
             Job.Snapshots (Job.Snapshot_Idx).Hash :=
                Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
@@ -1077,16 +941,6 @@ is
             New_Snap_Idx_Valid : Boolean := False;
             Old_Snap_Idx : constant Snapshots_Index_Type := Job.Snapshot_Idx;
          begin
-
-            Debug.Print_String (
-               "FINISH SNAPSHOT IDX " &
-               Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.Snapshots (Job.Snapshot_Idx).PBA)) &
-               " GEN " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.Snapshots (Job.Snapshot_Idx).Gen)));
 
             --
             --  Find the next snapshot
@@ -1129,17 +983,6 @@ is
                --
 
                Job.Snapshot_Idx := New_Snap_Idx;
-
-               Debug.Print_String (
-                  "START SNAPSHOT IDX " &
-                  Debug.To_String (Debug.Uint64_Type (Job.Snapshot_Idx)) &
-                  " PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Snapshots (Job.Snapshot_Idx).PBA)) &
-                  " GEN " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Snapshots (Job.Snapshot_Idx).Gen)));
-
                Job.First_Snapshot := False;
                Job.T1_Blk_Idx :=
                   Type_1_Node_Blocks_Index_Type (
@@ -1149,17 +992,6 @@ is
                   Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) =
                      Job.Snapshots (Job.Snapshot_Idx).PBA
                then
-
-                  Debug.Print_String (
-                     "   INNER NODE PBA " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (
-                           Job.Snapshots (Job.Snapshot_Idx).PBA)) &
-                     " -> " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (
-                           Job.New_PBAs (Job.T1_Blk_Idx))) &
-                     " ALREADY REKEYED");
 
                   Progress := True;
 
@@ -1176,13 +1008,6 @@ is
                         Block_Number_Type (
                            Job.Snapshots (Job.Snapshot_Idx).PBA),
                      Idx    => Primitive.Index_Type (Job_Idx));
-
-                  Debug.Print_String (
-                     "   READ LVL " &
-                     Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
-                     " PBA " &
-                     Debug.To_String (Debug.Uint64_Type (
-                        Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx))));
 
                   Job.State := Read_Root_Node_Pending;
                   Progress := True;
@@ -1202,23 +1027,6 @@ is
       when Alloc_PBAs_For_Some_Inner_Lvls_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
-
-            Debug.Print_String ("   PBAS ALLOCATED");
-            for PBA_Idx in
-               reverse 0 .. Job.Snapshots (Job.Snapshot_Idx).Max_Level
-            loop
-               if Job.New_PBAs (PBA_Idx) /= Job.T1_Node_Walk (PBA_Idx).PBA
-               then
-                  Debug.Print_String ("      LVL " &
-                     Debug.To_String (Debug.Uint64_Type (PBA_Idx))
-                     & "     NEW " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (Job.New_PBAs (PBA_Idx)))
-                     & "     OLD " &
-                     Debug.To_String (
-                        Debug.Uint64_Type (Job.T1_Node_Walk (PBA_Idx).PBA)));
-               end if;
-            end loop;
 
             Job.State := Write_Inner_Node_Completed;
             Progress := True;
