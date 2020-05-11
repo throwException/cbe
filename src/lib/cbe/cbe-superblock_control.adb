@@ -108,6 +108,7 @@ is
             Key_Ciphertext => (others => Byte_Type'First),
             Generation => Generation_Type'First,
             Hash => (others => Byte_Type'First),
+            Rekeying_Finished => Boolean'First,
             Snapshots => (others => Snapshot_Invalid));
       end loop Initialize_Each_Job;
    end Initialize_Control;
@@ -173,6 +174,27 @@ is
       end loop Find_Completed_Job;
       return Primitive.Invalid_Object;
    end Peek_Completed_Primitive;
+
+   --
+   --  Peek_Completed_Rekeying_Finished
+   --
+   function Peek_Completed_Rekeying_Finished (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type)
+   return Boolean
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         if Ctrl.Jobs (Idx).Operation = Rekey_VBA and then
+            Ctrl.Jobs (Idx).State = Completed and then
+            Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
+         then
+            return Ctrl.Jobs (Idx).Rekeying_Finished;
+         end if;
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+   end Peek_Completed_Rekeying_Finished;
 
    --
    --  Drop_Completed_Primitive
@@ -418,8 +440,11 @@ is
                   Virtual_Block_Address_Type (Max_Nr_Of_Leafs - 1)
             then
                SB.Rekeying_VBA := SB.Rekeying_VBA + 1;
+               Job.Rekeying_Finished := False;
             else
-               raise Program_Error;
+               SB.Previous_Key := Key_Invalid;
+               SB.State := Normal;
+               Job.Rekeying_Finished := True;
             end if;
 
          end Declare_Max_VBA;

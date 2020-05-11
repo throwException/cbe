@@ -51,6 +51,7 @@ is
                   Req                   => Req,
                   Snap_ID               => Snap_ID,
                   Prim                  => Primitive.Invalid_Object,
+                  Rekeying_Finished     => Boolean'First,
                   Nr_Of_Prims_Completed => 0);
 
                Request.Success (Obj.Items (Idx).Req, True);
@@ -339,16 +340,26 @@ is
             raise Program_Error;
          end if;
 
-         Itm.Prim := Primitive.Valid_Object (
-            Op     => Primitive_Operation_Type'First,
-            Succ   => False,
-            Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
-            Pl_Idx => Idx,
-            Blk_Nr => Block_Number_Type'First,
-            Idx    => Primitive.Index_Type'First);
+         if Itm.Rekeying_Finished then
 
-         Itm.State := Rekey_VBA_Pending;
-         Progress := True;
+            Request.Success (Itm.Req, True);
+            Itm.State := Complete;
+            Progress := True;
+
+         else
+
+            Itm.Prim := Primitive.Valid_Object (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
+               Pl_Idx => Idx,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type'First);
+
+            Itm.State := Rekey_VBA_Pending;
+            Progress := True;
+
+         end if;
 
       when others =>
 
@@ -416,11 +427,6 @@ is
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Rekey_Init_Complete;
 
-         when Rekey_VBA_In_Progress =>
-
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Rekey_VBA_Complete;
-
          when others =>
 
             raise Program_Error;
@@ -449,6 +455,47 @@ is
       end case;
 
    end Mark_Generated_Primitive_Complete;
+
+   --
+   --  Mark_Generated_Primitive_Complete_Rekeying
+   --
+   procedure Mark_Generated_Primitive_Complete_Rekeying (
+      Obj               : in out Object_Type;
+      Idx               :        Pool_Index_Type;
+      Success           :        Boolean;
+      Rekeying_Finished :        Boolean)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) or else
+         Index_Queue.Head (Obj.Indices) /= Idx
+      then
+         raise Program_Error;
+      end if;
+
+      case Request.Operation (Obj.Items (Idx).Req) is
+      when Rekey =>
+
+         case Obj.Items (Idx).State is
+         when Rekey_VBA_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Rekey_VBA_Complete;
+            Obj.Items (Idx).Rekeying_Finished := Rekeying_Finished;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Mark_Generated_Primitive_Complete_Rekeying;
 
    --
    --  Peek_Completed_Request
@@ -524,6 +571,7 @@ is
       Req                   => Request.Invalid_Object,
       Snap_ID               => 0,
       Prim                  => Primitive.Invalid_Object,
+      Rekeying_Finished     => Boolean'First,
       Nr_Of_Prims_Completed => 0);
 
    --

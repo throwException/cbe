@@ -2259,15 +2259,24 @@ is
             exit Loop_Completed_Prims when not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
-            when
-               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
-               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA
-            =>
+            when Primitive.Tag_Pool_SB_Ctrl_Init_Rekey =>
 
                Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
+
+               Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
+            when Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA =>
+
+               Pool.Mark_Generated_Primitive_Complete_Rekeying (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+                  Primitive.Success (Prim),
+                  Superblock_Control.Peek_Completed_Rekeying_Finished (
+                     Obj.SB_Ctrl, Prim));
 
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;

@@ -46,6 +46,14 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Completed_Rekeying_Finished
+   --
+   function Peek_Completed_Rekeying_Finished (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type)
+   return Boolean;
+
+   --
    --  Drop_Completed_Primitive
    --
    procedure Drop_Completed_Primitive (
@@ -235,6 +243,7 @@ private
       Key_Ciphertext : Key_Ciphertext_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
+      Rekeying_Finished : Boolean;
       Snapshots : Snapshots_Type;
    end record;
 

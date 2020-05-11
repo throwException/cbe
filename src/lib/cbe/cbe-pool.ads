@@ -100,6 +100,15 @@ is
       Success :        Boolean);
 
    --
+   --  Mark_Generated_Primitive_Complete_Rekeying
+   --
+   procedure Mark_Generated_Primitive_Complete_Rekeying (
+      Obj               : in out Object_Type;
+      Idx               :        Pool_Index_Type;
+      Success           :        Boolean;
+      Rekeying_Finished :        Boolean);
+
+   --
    --  Peek_Completed_Request
    --
    function Peek_Completed_Request (Obj : Pool.Object_Type)
@@ -140,6 +149,7 @@ private
       Req                   : Request.Object_Type;
       Snap_ID               : Snapshot_ID_Type;
       Prim                  : Primitive.Object_Type;
+      Rekeying_Finished     : Boolean;
       Nr_Of_Prims_Completed : Number_Of_Primitives_Type;
    end record;
 
