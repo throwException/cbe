@@ -93,10 +93,10 @@ is
    --
    --  Peek_Generated_Plain_Key
    --
-   function Peek_Generated_Key_Plaintext (
+   function Peek_Generated_Key_Value_Plaintext (
       Ctrl : Control_Type;
       Prim : Primitive.Object_Type)
-   return Key_Plaintext_Type;
+   return Key_Value_Plaintext_Type;
 
    --
    --  Peek_Generated_Cache_Primitive
@@ -109,6 +109,14 @@ is
    --
    function Peek_Generated_Blk_IO_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Blk_Data
+   --
+   function Peek_Generated_Blk_Data (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type)
+   return Block_Data_Type;
 
    --
    --  Peek_Generated_VBA
@@ -172,20 +180,20 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Mark_Generated_Prim_Complete_Key_Plaintext
+   --  Mark_Generated_Prim_Complete_Key_Value_Plaintext
    --
-   procedure Mark_Generated_Prim_Complete_Key_Plaintext (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type;
-      Key  :        Key_Plaintext_Type);
+   procedure Mark_Generated_Prim_Complete_Key_Value_Plaintext (
+      Ctrl      : in out Control_Type;
+      Prim      :        Primitive.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
 
    --
-   --  Mark_Generated_Prim_Complete_Key_Ciphertext
+   --  Mark_Generated_Prim_Complete_Key_Value_Ciphertext
    --
-   procedure Mark_Generated_Prim_Complete_Key_Ciphertext (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type;
-      Key  :        Key_Ciphertext_Type);
+   procedure Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
+      Ctrl      : in out Control_Type;
+      Prim      :        Primitive.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type);
 
    --
    --  Mark_Generated_Prim_Complete_Snapshots
@@ -217,9 +225,12 @@ private
       Create_Key_Pending,
       Create_Key_In_Progress,
       Create_Key_Completed,
-      Encrypt_Key_Pending,
-      Encrypt_Key_In_Progress,
-      Encrypt_Key_Completed,
+      Encrypt_Current_Key_Pending,
+      Encrypt_Current_Key_In_Progress,
+      Encrypt_Current_Key_Completed,
+      Encrypt_Previous_Key_Pending,
+      Encrypt_Previous_Key_In_Progress,
+      Encrypt_Previous_Key_Completed,
       Sync_Cache_Pending,
       Sync_Cache_In_Progress,
       Sync_Cache_Completed,
@@ -239,8 +250,8 @@ private
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
       Generated_Prim : Primitive.Object_Type;
-      Key_Plaintext : Key_Plaintext_Type;
-      Key_Ciphertext : Key_Ciphertext_Type;
+      Key_Value_Plaintext : Key_Value_Plaintext_Type;
+      SB_Ciphertext : Superblock_Ciphertext_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
       Rekeying_Finished : Boolean;
@@ -279,7 +290,14 @@ private
    --  Superblock_Enter_Rekeying_State
    --
    procedure Superblock_Enter_Rekeying_State (
-      SB            : in out Superblock_Type;
-      Key_Plaintext :        Key_Plaintext_Type);
+      SB        : in out Superblock_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   --
+   --  Init_SB_Ciphertext_Without_Keys
+   --
+   procedure Init_SB_Ciphertext_Without_Keys (
+      SB_Plain  :     Superblock_Type;
+      SB_Cipher : out Superblock_Ciphertext_Type);
 
 end CBE.Superblock_Control;

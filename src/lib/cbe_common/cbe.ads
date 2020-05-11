@@ -228,8 +228,8 @@ is
       Keep        => False);
 
    type Key_Value_Index_Type is range 0 .. Key_Value_Size_Bytes - 1;
-   type Key_Plaintext_Type is array (Key_Value_Index_Type) of Byte_Type;
-   type Key_Ciphertext_Type is array (Key_Value_Index_Type) of Byte_Type;
+   type Key_Value_Plaintext_Type is array (Key_Value_Index_Type) of Byte_Type;
+   type Key_Value_Ciphertext_Type is array (Key_Value_Index_Type) of Byte_Type;
 
    --
    --  The CBE::Key contains the key-material that is used to
@@ -239,9 +239,20 @@ is
    --  by type 2 nodes.)
    --
    type Key_Type is record
-      Value : Key_Plaintext_Type;
+      Value : Key_Value_Plaintext_Type;
       ID    : Key_ID_Type;
    end record;
+
+   type Key_Ciphertext_Type is record
+      Value : Key_Value_Ciphertext_Type;
+      ID    : Key_ID_Type;
+   end record;
+
+   --
+   --  Key_Ciphertext_Invalid
+   --
+   function Key_Ciphertext_Invalid
+   return Key_Ciphertext_Type;
 
    --
    --  Key_ID_Invalid
@@ -318,6 +329,35 @@ is
       Meta_Degree             : Tree_Degree_Type;
       Meta_Leafs              : Tree_Number_Of_Leafs_Type;
    end record;
+
+   type Superblock_Ciphertext_Type is record
+      State                   : Superblock_State_Type;
+      Rekeying_VBA            : Virtual_Block_Address_Type;
+      Previous_Key            : Key_Ciphertext_Type;
+      Current_Key             : Key_Ciphertext_Type;
+      Snapshots               : Snapshots_Type;
+      Last_Secured_Generation : Generation_Type;
+      Curr_Snap               : Snapshots_Index_Type;
+      Degree                  : Tree_Degree_Type;
+      Free_Gen                : Generation_Type;
+      Free_Number             : Physical_Block_Address_Type;
+      Free_Hash               : Hash_Type;
+      Free_Max_Level          : Tree_Level_Index_Type;
+      Free_Degree             : Tree_Degree_Type;
+      Free_Leafs              : Tree_Number_Of_Leafs_Type;
+      Meta_Gen                : Generation_Type;
+      Meta_Number             : Physical_Block_Address_Type;
+      Meta_Hash               : Hash_Type;
+      Meta_Max_Level          : Tree_Level_Index_Type;
+      Meta_Degree             : Tree_Degree_Type;
+      Meta_Leafs              : Tree_Number_Of_Leafs_Type;
+   end record;
+
+   --
+   --  Superblock_Ciphertext_Invalid
+   --
+   function Superblock_Ciphertext_Invalid
+   return Superblock_Ciphertext_Type;
 
    function Superblock_Invalid
    return Superblock_Type;
@@ -421,6 +461,13 @@ is
    procedure Block_Data_From_Superblock (
       Data  : out Block_Data_Type;
       SB    :     Superblock_Type);
+
+   --
+   --  Block_Data_From_Superblock_Ciphertext
+   --
+   procedure Block_Data_From_Superblock_Ciphertext (
+      Data  : out Block_Data_Type;
+      SB    :     Superblock_Ciphertext_Type);
 
    type Pool_Index_Type is range 1 .. Max_Number_Of_Requests_In_Pool;
    type Pool_Index_Slot_Type is private;
@@ -539,6 +586,14 @@ private
       Data     : in out Block_Data_Type;
       Data_Off :        Block_Data_Index_Type;
       Key      :        Key_Type);
+
+   --
+   --  Block_Data_From_Key_Ciphertext
+   --
+   procedure Block_Data_From_Key_Ciphertext (
+      Data     : in out Block_Data_Type;
+      Data_Off :        Block_Data_Index_Type;
+      Key      :        Key_Ciphertext_Type);
 
    procedure Block_Data_From_Snapshot (
       Data     : in out Block_Data_Type;

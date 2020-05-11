@@ -36,12 +36,12 @@ is
       Prim   :        Primitive.Object_Type);
 
    --
-   --  Submit_Primitive_Key_Plaintext
+   --  Submit_Primitive_Key_Value_Plaintext
    --
-   procedure Submit_Primitive_Key_Plaintext (
+   procedure Submit_Primitive_Key_Value_Plaintext (
       Anchor : in out Anchor_Type;
       Prim   :        Primitive.Object_Type;
-      Key    :        Key_Plaintext_Type);
+      Key    :        Key_Value_Plaintext_Type);
 
    --
    --  Submit_Primitive_Hash
@@ -58,20 +58,20 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Completed_Key_Plaintext
+   --  Peek_Completed_Key_Value_Plaintext
    --
-   function Peek_Completed_Key_Plaintext (
+   function Peek_Completed_Key_Value_Plaintext (
       Anchor : Anchor_Type;
       Prim   : Primitive.Object_Type)
-   return Key_Plaintext_Type;
+   return Key_Value_Plaintext_Type;
 
    --
-   --  Peek_Completed_Key_Ciphertext
+   --  Peek_Completed_Key_Value_Ciphertext
    --
-   function Peek_Completed_Key_Ciphertext (
+   function Peek_Completed_Key_Value_Ciphertext (
       Anchor : Anchor_Type;
       Prim   : Primitive.Object_Type)
-   return Key_Ciphertext_Type;
+   return Key_Value_Ciphertext_Type;
 
    --
    --  Drop_Completed_Primitive
@@ -107,8 +107,8 @@ private
       Operation : Job_Operation_Type;
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
-      Key_Plaintext : Key_Plaintext_Type;
-      Key_Ciphertext : Key_Ciphertext_Type;
+      Key_Value_Plaintext : Key_Value_Plaintext_Type;
+      Key_Value_Ciphertext : Key_Value_Ciphertext_Type;
       Hash : Hash_Type;
    end record;
 
@@ -118,8 +118,8 @@ private
 
    type Anchor_Type is record
       Jobs : Jobs_Type;
-      Next_Key_Plaintext_Byte : Modulo_Byte_Type;
-      Next_Key_Ciphertext_Byte : Modulo_Byte_Type;
+      Next_Key_Value_Plaintext_Byte : Modulo_Byte_Type;
+      Next_Key_Value_Ciphertext_Byte : Modulo_Byte_Type;
       Secured_SB_Hash : Hash_Type;
    end record;
 

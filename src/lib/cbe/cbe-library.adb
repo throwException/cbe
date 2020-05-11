@@ -2150,9 +2150,9 @@ is
 
             when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
 
-               Trust_Anchor.Submit_Primitive_Key_Plaintext (
+               Trust_Anchor.Submit_Primitive_Key_Value_Plaintext (
                   Obj.TA, Prim,
-                  Superblock_Control.Peek_Generated_Key_Plaintext (
+                  Superblock_Control.Peek_Generated_Key_Value_Plaintext (
                      Obj.SB_Ctrl, Prim));
 
             when Primitive.Tag_SB_Ctrl_TA_Secure_SB =>
@@ -2217,9 +2217,8 @@ is
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB =>
 
-               Declare_Data :
+               Declare_Data_Idx :
                declare
-                  Data : Block_Data_Type;
                   Data_Idx : Block_IO.Data_Index_Type;
                begin
 
@@ -2227,10 +2226,11 @@ is
                      Obj.IO_Obj, Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB, Prim,
                      Data_Idx);
 
-                  Block_Data_From_Superblock (Data, Obj.Superblock);
-                  Blk_IO_Buf (Data_Idx) := Data;
+                  Blk_IO_Buf (Data_Idx) :=
+                     Superblock_Control.Peek_Generated_Blk_Data (
+                        Obj.SB_Ctrl, Prim);
 
-               end Declare_Data;
+               end Declare_Data_Idx;
 
             when Primitive.Tag_SB_Ctrl_Blk_IO_Sync =>
 
@@ -2314,18 +2314,22 @@ is
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Ctrl_TA_Create_Key =>
 
-               Superblock_Control.Mark_Generated_Prim_Complete_Key_Plaintext (
-                  Obj.SB_Ctrl, Prim,
-                  Trust_Anchor.Peek_Completed_Key_Plaintext (Obj.TA, Prim));
+               Superblock_Control.
+                  Mark_Generated_Prim_Complete_Key_Value_Plaintext (
+                     Obj.SB_Ctrl, Prim,
+                     Trust_Anchor.Peek_Completed_Key_Value_Plaintext (
+                        Obj.TA, Prim));
 
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;
 
             when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
 
-               Superblock_Control.Mark_Generated_Prim_Complete_Key_Ciphertext (
-                  Obj.SB_Ctrl, Prim,
-                  Trust_Anchor.Peek_Completed_Key_Ciphertext (Obj.TA, Prim));
+               Superblock_Control.
+                  Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
+                     Obj.SB_Ctrl, Prim,
+                     Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
+                        Obj.TA, Prim));
 
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;
