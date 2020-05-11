@@ -505,9 +505,9 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
-            Curr_Gen := Curr_Gen + 1;
-         end if;
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
 
          Progress := True;
 
