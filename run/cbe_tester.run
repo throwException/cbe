@@ -106,12 +106,12 @@ append config {
 					<virtual-block-device
 						nr_of_levels="4"
 						nr_of_children="64"
-						nr_of_leafs="8000" />
+						nr_of_leafs="200" />
 
 					<free-tree
 						nr_of_levels="4"
 						nr_of_children="64"
-						nr_of_leafs="8000" />
+						nr_of_leafs="200" />
 				</initialize>
 
 				<replay verbose="yes" bulk="no">
@@ -124,6 +124,10 @@ append config {
 					<request type="write" lba="1" count="1"/>
 					<request type="write" lba="0" count="1"/>
 					<rekey key_id="13"/>
+					<request type="write" lba="0" count="3"/>
+					<request type="write" lba="1" count="1"/>
+					<request type="write" lba="5" count="2"/>
+					<request type="write" lba="9" count="1"/>
 				</replay>
 
 			</tests>
