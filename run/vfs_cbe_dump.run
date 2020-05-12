@@ -94,7 +94,7 @@ append config {
 install_config $config
 
 append boot_modules {
-	core init cbe timer lx_block cbe_dump
+	core init timer lx_block cbe_dump
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
 	log_terminal report_rom
 }
