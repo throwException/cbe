@@ -1,5 +1,18 @@
 assert_spec linux
 
+exec rm -rf var/libcache/cbe
+exec rm -rf var/libcache/cbe_cxx
+exec rm -rf var/libcache/cbe_common
+exec rm -rf var/libcache/cbe_common_cxx
+exec rm -rf var/libcache/cbe_init
+exec rm -rf var/libcache/cbe_init_cxx
+exec rm -rf var/libcache/cbe_check
+exec rm -rf var/libcache/cbe_check_cxx
+exec rm -rf var/libcache/cbe_dump
+exec rm -rf var/libcache/cbe_dump_cxx
+exec rm -rf var/libcache/external_crypto
+exec rm -rf var/libcache/external_crypto_cxx
+
 create_boot_directory
 
 proc cbe_image_file { } {

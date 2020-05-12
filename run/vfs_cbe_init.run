@@ -1,5 +1,18 @@
 assert_spec linux
 
+exec rm -rf var/libcache/cbe
+exec rm -rf var/libcache/cbe_cxx
+exec rm -rf var/libcache/cbe_common
+exec rm -rf var/libcache/cbe_common_cxx
+exec rm -rf var/libcache/cbe_init
+exec rm -rf var/libcache/cbe_init_cxx
+exec rm -rf var/libcache/cbe_check
+exec rm -rf var/libcache/cbe_check_cxx
+exec rm -rf var/libcache/cbe_dump
+exec rm -rf var/libcache/cbe_dump_cxx
+exec rm -rf var/libcache/external_crypto
+exec rm -rf var/libcache/external_crypto_cxx
+
 proc cbe_image_file { } {
 	return "vfs_cbe_block.img"
 }
@@ -21,13 +34,6 @@ proc cbe_vbd_size_mb { } {
 proc cbe_ft_size_mb { } {
 	return [expr [cbe_image_size_mb] / 8]
 }
-
-exec rm -rf var/libcache/cbe
-exec rm -rf var/libcache/cbe_cxx
-exec rm -rf var/libcache/cbe_init
-exec rm -rf var/libcache/cbe_init_cxx
-exec rm -rf var/libcache/external_crypto
-exec rm -rf var/libcache/external_crypto_cxx
 
 append build_components {
 	core init timer
@@ -112,7 +118,7 @@ exec rm -rf bin/[cbe_image_file]
 exec truncate -s [cbe_image_size_mb]M bin/[cbe_image_file]
 
 append boot_modules {
-	core init cbe block_tester timer lx_block cbe_init
+	core init timer lx_block cbe_init
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
 	log_terminal report_rom
 }
