@@ -34,6 +34,29 @@ is
       Idx :        Index_Type);
 
    --
+   --  Next_Item
+   --
+   function Next_Item (
+      Obj : Queue_Type;
+      Idx : Index_Type)
+   return Index_Type;
+
+   --
+   --  Move_One_Item_Towards_Tail
+   --
+   procedure Move_One_Item_Towards_Tail (
+      Obj : in out Queue_Type;
+      Idx :        Index_Type);
+
+   --
+   --  Item_Is_Tail
+   --
+   function Item_Is_Tail (
+      Obj : Queue_Type;
+      Idx : Index_Type)
+   return Boolean;
+
+   --
    --  Dequeue
    --
    procedure Dequeue (

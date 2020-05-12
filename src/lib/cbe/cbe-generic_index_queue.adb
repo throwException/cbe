@@ -47,6 +47,110 @@ is
    end Enqueue;
 
    --
+   --  Next_Item
+   --
+   function Next_Item (
+      Obj : Queue_Type;
+      Idx : Index_Type)
+   return Index_Type
+   is
+      Slot_Idx : Slots_Index_Type := Obj.Head;
+      Next_Slot_Idx : Slots_Index_Type;
+   begin
+
+      if Empty (Obj) then
+         raise Program_Error;
+      end if;
+
+      loop
+
+         if Slot_Idx < Slots_Index_Type'Last then
+            Next_Slot_Idx := Slots_Index_Type'Succ (Slot_Idx);
+         else
+            Next_Slot_Idx := Slots_Index_Type'First;
+         end if;
+
+         if Next_Slot_Idx = Obj.Tail then
+            raise Program_Error;
+         end if;
+
+         if Obj.Slots (Slot_Idx) = Idx then
+            return Obj.Slots (Next_Slot_Idx);
+         else
+            Slot_Idx := Next_Slot_Idx;
+         end if;
+
+      end loop;
+
+   end Next_Item;
+
+   --
+   --  Move_One_Item_Towards_Tail
+   --
+   procedure Move_One_Item_Towards_Tail (
+      Obj : in out Queue_Type;
+      Idx :        Index_Type)
+   is
+      Slot_Idx : Slots_Index_Type := Obj.Head;
+      Next_Slot_Idx : Slots_Index_Type;
+      Next_Idx : Index_Type;
+   begin
+
+      if Empty (Obj) then
+         raise Program_Error;
+      end if;
+
+      loop
+
+         if Slot_Idx < Slots_Index_Type'Last then
+            Next_Slot_Idx := Slots_Index_Type'Succ (Slot_Idx);
+         else
+            Next_Slot_Idx := Slots_Index_Type'First;
+         end if;
+
+         if Next_Slot_Idx = Obj.Tail then
+            raise Program_Error;
+         end if;
+
+         if Obj.Slots (Slot_Idx) = Idx then
+            Next_Idx := Obj.Slots (Next_Slot_Idx);
+            Obj.Slots (Next_Slot_Idx) := Obj.Slots (Slot_Idx);
+            Obj.Slots (Slot_Idx) := Next_Idx;
+            return;
+         else
+            Slot_Idx := Next_Slot_Idx;
+         end if;
+
+      end loop;
+
+   end Move_One_Item_Towards_Tail;
+
+   --
+   --  Item_Is_Tail
+   --
+   function Item_Is_Tail (
+      Obj : Queue_Type;
+      Idx : Index_Type)
+   return Boolean
+   is
+      Slot_Idx : Slots_Index_Type;
+   begin
+
+      if Empty (Obj) then
+         raise Program_Error;
+      end if;
+
+      if Obj.Tail > Slots_Index_Type'First then
+         Slot_Idx := Slots_Index_Type'Pred (Obj.Tail);
+      else
+         Slot_Idx := Slots_Index_Type'Last;
+      end if;
+
+      return Obj.Slots (Slot_Idx) = Idx;
+
+   end Item_Is_Tail;
+
+   --
    --  Dequeue
    --
    procedure Dequeue (
