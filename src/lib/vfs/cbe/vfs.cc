@@ -143,7 +143,7 @@ class Vfs_cbe::Wrapper
 				Genode::memset(key.value, 0xa5, sizeof (key.value));
 				Genode::memcpy(key.value, passphrase.string(), passphrase.length()-1);
 
-				set_key(0, key_id, key);
+				add_key(key_id, key);
 			}
 		}
 
@@ -1044,10 +1044,9 @@ class Vfs_cbe::Wrapper
 		                    : false;
 		}
 
-		void set_key(unsigned slot, unsigned id,
-		             External::Crypto::Key_data const &key)
+		void add_key(unsigned id, External::Crypto::Key_data const &key)
 		{
-			_crypto.set_key(slot, id, key);
+			_crypto.add_key(id, key);
 			_key_set |= true;
 		}
 
@@ -1392,7 +1391,7 @@ class Vfs_cbe::Key_file_system : public Vfs::Single_file_system
 				                   ? sizeof (key.value) : count;
 				Genode::memcpy(key.value, p, limit);
 
-				_w.set_key(0, key_id, key);
+				_w.add_key(key_id, key);
 
 				out_count = count;
 				return WRITE_OK;

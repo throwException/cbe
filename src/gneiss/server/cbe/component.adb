@@ -289,11 +289,11 @@ package body Component is
    is
       Success : Boolean;
    begin
-      External.Crypto.Set_Key
-         (Crypto, 1, 0, External.Crypto.Key_Data_Type'(others => 42), Success);
+      External.Crypto.Add_Key
+         (Crypto, 0, External.Crypto.Key_Data_Type'(others => 42), Success);
       if Success then
-         External.Crypto.Set_Key
-            (Crypto, 2, 0, External.Crypto.Key_Data_Type'(others => 42),
+         External.Crypto.Add_Key
+            (Crypto, 0, External.Crypto.Key_Data_Type'(others => 42),
              Success);
       end if;
       if not Success then

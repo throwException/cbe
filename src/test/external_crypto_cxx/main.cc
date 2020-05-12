@@ -42,7 +42,7 @@ struct Main
 		Genode::memset(key.value, 0, sizeof (External::Crypto::Key_data));
 		Genode::memcpy(key.value, "Foobar", 6);
 
-		_crypto.set_key(0, key_id, key);
+		_crypto.add_key(key_id, key);
 
 		/* first encrypt */
 		{

@@ -1858,8 +1858,6 @@ class Cbe::Main
 		:
 			_env { env }
 		{
-			struct Failed_to_set_key : Exception { };
-
 			_config_rom.xml().with_sub_node ("crypto", [&] (Xml_node const &crypto) {
 				crypto.for_each_sub_node("key", [&] (Xml_node const &key) {
 					External::Crypto::Key_data data { };
@@ -1869,15 +1867,13 @@ class Cbe::Main
 						key.attribute_value ("value", String<33>("")).string(),
 						32);
 
-					unsigned const slot { key.attribute_value ("slot", (unsigned)0) };
-					unsigned const id   { key.attribute_value ("id", (unsigned)0) };
+					unsigned const id { key.attribute_value ("id", (unsigned)0) };
 
-					log("set crypto key ", slot, " ", id, " ",
-					    String<33>(Cstring((char const*)data.value)).string());
+					log("add crypto key ID " , id, " value \"",
+					    String<33>(Cstring((char const*)data.value)).string(),
+					    "\"");
 
-					if (!_crypto.set_key(slot, id, data)) {
-						throw Failed_to_set_key();
-					}
+					_crypto.add_key(id, data);
 				});
 			});
 

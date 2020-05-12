@@ -30,22 +30,37 @@ is
       Keys => (others => Invalid_Key));
 
    --
-   --  Set_Key
+   --  Add_Key
    --
-   procedure Set_Key (
+   procedure Add_Key (
       Obj      : in out Object_Type;
-      Key_Idx  :        Keys_Index_Type;
       Key_ID   :        CBE.Key_ID_Type;
       Key_Data :        Key_Data_Type)
    is
+      use CBE;
+      Evict_Key_Idx : Keys_Index_Type := Keys_Index_Type'First;
+      Evict_Key_ID  : CBE.Key_ID_Type := CBE.Key_ID_Type'Last;
    begin
 
-      Obj.Keys (Key_Idx) := (
+      For_Each_Key :
+      for Idx in Obj.Keys'Range loop
+         if Obj.Keys (Idx).Valid then
+            if Obj.Keys (Idx).ID < Evict_Key_ID then
+               Evict_Key_Idx := Idx;
+               Evict_Key_ID := Obj.Keys (Idx).ID;
+            end if;
+         else
+            Evict_Key_Idx := Idx;
+            exit For_Each_Key;
+         end if;
+      end loop For_Each_Key;
+
+      Obj.Keys (Evict_Key_Idx) := (
          Data  => Key_Data,
          ID    => Key_ID,
          Valid => True);
 
-   end Set_Key;
+   end Add_Key;
 
    --
    --  Key_Idx_For_Job

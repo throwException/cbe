@@ -41,16 +41,14 @@ is
       Convention    => C,
       External_Name => "_ZN8External6CryptoC1Ev";
 
-   procedure Set_Key (
+   procedure Add_Key (
       Obj      : in out External.Crypto.Object_Type;
-      Slot     :        CXX_Key_Slot_Type;
       Key_Id   :        CXX_Key_Id_Type;
-      Key_Data :        External.Crypto.Key_Data_Type;
-      Result   :    out CBE.CXX.CXX_Bool_Type)
+      Key_Data :        External.Crypto.Key_Data_Type)
    with
       Export,
       Convention    => C,
-      External_Name => "_ZN8External6Crypto8_set_keyEjjRKNS0_8Key_dataERb";
+      External_Name => "_ZN8External6Crypto7add_keyEjRKNS0_8Key_dataE";
 
    procedure Execute (
       Obj     : in out External.Crypto.Object_Type;

@@ -94,8 +94,8 @@ append config {
 		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
 
 			<crypto>
-				<key slot="0" id="13"  value="This is a creative key value   !"/>
-				<key slot="1" id="12" value="All your base are belong to us ?"/>
+				<key id="13" value="This is a creative key value   !"/>
+				<key id="12" value="All your base are belong to us ?"/>
 			</crypto>
 
 			<tests>

@@ -22,20 +22,14 @@ is
       External.Crypto.Initialize_Object (Obj);
    end Initialize_Object;
 
-   procedure Set_Key (
+   procedure Add_Key (
       Obj      : in out External.Crypto.Object_Type;
-      Slot     :        CXX_Key_Slot_Type;
       Key_Id   :        CXX_Key_Id_Type;
-      Key_Data :        External.Crypto.Key_Data_Type;
-      Result   :    out CBE.CXX.CXX_Bool_Type)
+      Key_Data :        External.Crypto.Key_Data_Type)
    is
    begin
-      External.Crypto.Set_Key (
-         Obj, Crypto.Keys_Index_Type (Slot), CBE.Key_ID_Type (Key_Id),
-         Key_Data);
-
-      Result := CBE.CXX.CXX_Bool_From_SPARK (True);
-   end Set_Key;
+      External.Crypto.Add_Key (Obj, CBE.Key_ID_Type (Key_Id), Key_Data);
+   end Add_Key;
 
    procedure Execute (
       Obj     : in out External.Crypto.Object_Type;

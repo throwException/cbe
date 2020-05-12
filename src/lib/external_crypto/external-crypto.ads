@@ -41,11 +41,10 @@ is
    return Object_Type;
 
    --
-   --  Set_Key
+   --  Add_Key
    --
-   procedure Set_Key (
+   procedure Add_Key (
       Obj      : in out Object_Type;
-      Key_Idx  :        Keys_Index_Type;
       Key_ID   :        CBE.Key_ID_Type;
       Key_Data :        Key_Data_Type);
 

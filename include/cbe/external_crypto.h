@@ -42,7 +42,6 @@ class External::Crypto : public Cbe::Spark_object<16592>
 		 * procedures that return the 'progress' result as last out parameter.
 		 */
 
-		void _set_key(unsigned const, unsigned const, Key_data const &, bool &);
 		void _execute(bool &);
 
 		void _submit_encryption_request(Cbe::Request const &, Cbe::Block_data const &, bool &);
@@ -59,25 +58,12 @@ class External::Crypto : public Cbe::Spark_object<16592>
 	Crypto();
 
 	/**
-	 * Set key material
+	 * Add key material
 	 *
-	 * \param slot  slot where the key should be stored
-	 *              (XXX slot managed is not really fleshed out,
-	 *                   maybe it is enough just to have 2 slots...)
 	 * \param id   id of the given key
 	 * \param key  key data
-	 *
-	 * \return  true if setting key was successful, otherwise false
-	 *          (XXX method could be made void as well, the external
-	 *           crypto should not care about overriding already set
-	 *           keys)
 	 */
-	bool set_key(unsigned slot, unsigned id, Key_data const &key)
-	{
-		bool result = false;
-		_set_key(slot, id, key, result);
-		return result;
-	}
+	void add_key(unsigned id, Key_data const &key);
 
 	/**
 	 *
