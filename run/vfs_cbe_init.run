@@ -17,22 +17,11 @@ proc cbe_image_file { } {
 	return "vfs_cbe_block.img"
 }
 
-set image_size 512
-if {[info exists ::env(CBE_IMAGE_SIZE)]} {
-	set image_size $::env(CBE_IMAGE_SIZE)
-}
+set image_size 32
 
 proc cbe_image_size_mb { } {
 	global image_size
 	return $image_size
-}
-
-proc cbe_vbd_size_mb { } {
-	return [expr [cbe_image_size_mb] / 2]
-}
-
-proc cbe_ft_size_mb { } {
-	return [expr [cbe_image_size_mb] / 8]
 }
 
 append build_components {
@@ -96,12 +85,12 @@ append config {
 			<virtual-block-device
 				nr_of_levels="4"
 				nr_of_children="64"
-				nr_of_leafs="8192" />
+				nr_of_leafs="4096" />
 
 			<free-tree
 				nr_of_levels="3"
 				nr_of_children="64"
-				nr_of_leafs="1024" />
+				nr_of_leafs="512" />
 		</config>
 		<route>
 			<service name="Block"> <child name="lx_block"/> </service>

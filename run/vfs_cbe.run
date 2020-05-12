@@ -192,7 +192,7 @@ append config {
 			      stderr="/dev/terminal" rtc="/dev/rtc" pipe="/dev/pipe"/>
 			<vfs>
 				<fs/>
-				<rom name=".bashrc" label="cbe_vfs_snaps.sh"/>
+				<rom name=".bashrc" label="vfs_cbe.sh"/>
 			</vfs>
 			<arg value="bash"/>
 			<env key="TERM" value="screen"/>
@@ -212,14 +212,14 @@ append config {
 
 install_config $config
 
-set shell_script "run/cbe_vfs_snaps.sh"
+set shell_script "run/vfs_cbe.sh"
 set repo "[repository_contains $shell_script]"
 exec cp $repo/$shell_script bin/
 
 append boot_modules {
 	lx_block lx_fs
 	spark.lib.so libsparkcrypto.lib.so vfs_cbe.lib.so
-	cbe_vfs_snaps.sh
+	vfs_cbe.sh
 
 	vfs.lib.so libc.lib.so
 }
