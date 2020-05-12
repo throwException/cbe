@@ -131,6 +131,8 @@ is
 
 private
 
+   Max_Nr_Of_Requests_Preponed_At_A_Time : constant := 8;
+
    type Item_State_Type is (
       Invalid,
       Pending,
@@ -139,18 +141,21 @@ private
       Rekey_Init_Pending,
       Rekey_Init_In_Progress,
       Rekey_Init_Complete,
+      Prepone_Requests_Pending,
+      Prepone_Requests_Complete,
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
       Complete);
 
    type Item_Type is record
-      State                 : Item_State_Type;
-      Req                   : Request.Object_Type;
-      Snap_ID               : Snapshot_ID_Type;
-      Prim                  : Primitive.Object_Type;
-      Rekeying_Finished     : Boolean;
-      Nr_Of_Prims_Completed : Number_Of_Primitives_Type;
+      State                   : Item_State_Type;
+      Req                     : Request.Object_Type;
+      Snap_ID                 : Snapshot_ID_Type;
+      Prim                    : Primitive.Object_Type;
+      Rekeying_Finished       : Boolean;
+      Nr_Of_Requests_Preponed : Number_Of_Requests_Type;
+      Nr_Of_Prims_Completed   : Number_Of_Primitives_Type;
    end record;
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
@@ -181,7 +186,8 @@ private
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Itm      : in out Item_Type;
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
 

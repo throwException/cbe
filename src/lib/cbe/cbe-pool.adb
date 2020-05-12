@@ -47,12 +47,13 @@ is
             when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
 
                Obj.Items (Idx) := (
-                  State                 => Pending,
-                  Req                   => Req,
-                  Snap_ID               => Snap_ID,
-                  Prim                  => Primitive.Invalid_Object,
-                  Rekeying_Finished     => Boolean'First,
-                  Nr_Of_Prims_Completed => 0);
+                  State                   => Pending,
+                  Req                     => Req,
+                  Snap_ID                 => Snap_ID,
+                  Prim                    => Primitive.Invalid_Object,
+                  Rekeying_Finished       => Boolean'First,
+                  Nr_Of_Requests_Preponed => 0,
+                  Nr_Of_Prims_Completed   => 0);
 
                Request.Success (Obj.Items (Idx).Req, True);
                Index_Queue.Enqueue (Obj.Indices, Idx);
@@ -297,16 +298,17 @@ is
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Itm      : in out Item_Type;
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Itm.State is
+      case Items (Idx).State is
       when Submitted =>
 
-         Itm.Prim := Primitive.Valid_Object (
+         Items (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Init_Rekey,
@@ -314,16 +316,91 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Itm.State := Rekey_Init_Pending;
+         Items (Idx).State := Rekey_Init_Pending;
          Progress := True;
 
       when Rekey_Init_Complete =>
 
-         if not Primitive.Success (Itm.Prim) then
+         if not Primitive.Success (Items (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         Itm.Prim := Primitive.Valid_Object (
+         Items (Idx).Nr_Of_Requests_Preponed := 0;
+         Items (Idx).State := Prepone_Requests_Pending;
+         Progress := True;
+
+      when Rekey_VBA_Complete =>
+
+         if not Primitive.Success (Items (Idx).Prim) then
+            raise Program_Error;
+         end if;
+
+         if Items (Idx).Rekeying_Finished then
+
+            Request.Success (Items (Idx).Req, True);
+            Items (Idx).State := Complete;
+            Progress := True;
+
+         else
+
+            Items (Idx).Nr_Of_Requests_Preponed := 0;
+            Items (Idx).State := Prepone_Requests_Pending;
+            Progress := True;
+
+         end if;
+
+      when Prepone_Requests_Pending =>
+
+         Declare_Requests_Preponed :
+         declare
+            Requests_Preponed : Boolean := False;
+         begin
+
+            Try_Prepone_Requests :
+            loop
+
+               exit Try_Prepone_Requests when
+                  Items (Idx).Nr_Of_Requests_Preponed >=
+                     Max_Nr_Of_Requests_Preponed_At_A_Time or else
+                  Index_Queue.Item_Is_Tail (Indices, Idx);
+
+               declare
+                  Next_Idx : constant Pool_Index_Type :=
+                     Index_Queue.Next_Item (Indices, Idx);
+               begin
+
+                  case Request.Operation (Items (Next_Idx).Req) is
+                  when Read | Write | Sync | Discard_Snapshot =>
+
+                     Index_Queue.Move_One_Item_Towards_Tail (Indices, Idx);
+                     Items (Idx).Nr_Of_Requests_Preponed :=
+                        Items (Idx).Nr_Of_Requests_Preponed + 1;
+
+                     Requests_Preponed := True;
+                     Progress := True;
+
+                  when others =>
+
+                     exit Try_Prepone_Requests;
+
+                  end case;
+
+               end;
+
+            end loop Try_Prepone_Requests;
+
+            if not Requests_Preponed then
+
+               Items (Idx).State := Prepone_Requests_Complete;
+               Progress := True;
+
+            end if;
+
+         end Declare_Requests_Preponed;
+
+      when Prepone_Requests_Complete =>
+
+         Items (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
@@ -331,35 +408,8 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Itm.State := Rekey_VBA_Pending;
+         Items (Idx).State := Rekey_VBA_Pending;
          Progress := True;
-
-      when Rekey_VBA_Complete =>
-
-         if not Primitive.Success (Itm.Prim) then
-            raise Program_Error;
-         end if;
-
-         if Itm.Rekeying_Finished then
-
-            Request.Success (Itm.Req, True);
-            Itm.State := Complete;
-            Progress := True;
-
-         else
-
-            Itm.Prim := Primitive.Valid_Object (
-               Op     => Primitive_Operation_Type'First,
-               Succ   => False,
-               Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
-               Pl_Idx => Idx,
-               Blk_Nr => Block_Number_Type'First,
-               Idx    => Primitive.Index_Type'First);
-
-            Itm.State := Rekey_VBA_Pending;
-            Progress := True;
-
-         end if;
 
       when others =>
 
@@ -388,7 +438,7 @@ is
             case Request.Operation (Obj.Items (Idx).Req) is
             when Rekey =>
 
-               Execute_Rekey (Obj.Items (Idx), Idx, Progress);
+               Execute_Rekey (Obj.Items, Obj.Indices, Idx, Progress);
 
             when others =>
 
@@ -567,12 +617,13 @@ is
    function Item_Invalid
    return Item_Type
    is (
-      State                 => Invalid,
-      Req                   => Request.Invalid_Object,
-      Snap_ID               => 0,
-      Prim                  => Primitive.Invalid_Object,
-      Rekeying_Finished     => Boolean'First,
-      Nr_Of_Prims_Completed => 0);
+      State                   => Invalid,
+      Req                     => Request.Invalid_Object,
+      Snap_ID                 => 0,
+      Prim                    => Primitive.Invalid_Object,
+      Rekeying_Finished       => Boolean'First,
+      Nr_Of_Requests_Preponed => 0,
+      Nr_Of_Prims_Completed   => 0);
 
    --
    --  Initialized_Object
