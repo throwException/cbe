@@ -514,7 +514,7 @@ namespace Cbe {
 	 */
 	struct Key
 	{
-		enum { KEY_SIZE = 64u };
+		enum { KEY_SIZE = 32 };
 		char value[KEY_SIZE];
 
 		struct Id { uint32_t value; };
@@ -670,7 +670,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[351];
+		char                   padding[415];
 
 		void print(Genode::Output &out) const
 		{

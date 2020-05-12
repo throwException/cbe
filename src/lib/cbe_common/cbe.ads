@@ -22,8 +22,8 @@ is
    Type_1_Node_Storage_Size_Bytes : constant := 64;
    Type_2_Node_Storage_Size_Bytes : constant := 64;
    Hash_Size_Bytes : constant := 32;
-   Key_Storage_Size_Bytes : constant := 68;
-   Key_Value_Size_Bytes : constant := 64;
+   Key_Value_Size_Bytes : constant := 32;
+   Key_Storage_Size_Bytes : constant := Key_Value_Size_Bytes + 4;
    Snapshot_Storage_Size_Bytes : constant := 72;
    Tree_Min_Degree_Log_2 : constant := 0;
    Tree_Max_Degree_Log_2 : constant := 6;
