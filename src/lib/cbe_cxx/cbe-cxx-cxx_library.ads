@@ -224,6 +224,34 @@ is
       Convention    => C,
       External_Name => "_ZNK3Cbe7Library16execute_progressEv";
 
+   procedure Crypto_Add_Key_Required (
+      Obj :     Library.Object_Type;
+      Req : out CXX_Request_Type;
+      Key : out CXX_Key_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZNK3Cbe7Library24_crypto_add_key_requiredERNS_7RequestERNS_3KeyE";
+
+   procedure Crypto_Add_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library24crypto_add_key_requestedERKNS_7RequestE";
+
+   procedure Crypto_Add_Key_Completed (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library24crypto_add_key_completedERKNS_7RequestE";
+
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Library.Object_Type;
       Req        : out CXX_Request_Type;

@@ -569,6 +569,64 @@ is
       end case;
    end Supply_Client_Data;
 
+   --
+   --  Crypto_Add_Key_Required
+   --
+   procedure Crypto_Add_Key_Required (
+      Obj :     Object_Type;
+      Req : out Request.Object_Type;
+      Key : out Key_Plaintext_Type)
+   is
+      Item_Index : Crypto.Item_Index_Type;
+      Prim       : Primitive.Object_Type;
+   begin
+
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+      if not Primitive.Valid (Prim) or else
+         not Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim)
+      then
+         Req := Request.Invalid_Object;
+         return;
+      end if;
+
+      Key := Crypto.Peek_Generated_Key (Obj.Crypto_Obj, Item_Index);
+      Req := Request.Valid_Object (
+         Op     => Read,
+         Succ   => False,
+         Blk_Nr => 0,
+         Off    => 0,
+         Cnt    => 1,
+         Key    => 0,
+         Tg     => Request.Tag_Type (Item_Index));
+
+   end Crypto_Add_Key_Required;
+
+   --
+   --  Crypto_Add_Key_Requested
+   --
+   procedure Crypto_Add_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        Request.Object_Type)
+   is
+   begin
+      Crypto.Drop_Generated_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Request.Tag (Req)));
+   end Crypto_Add_Key_Requested;
+
+   --
+   --  Crypto_Add_Key_Completed
+   --
+   procedure Crypto_Add_Key_Completed (
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type)
+   is
+   begin
+      Crypto.Mark_Completed_Primitive (
+         Obj.Crypto_Obj,
+         Crypto.Item_Index_Type (Request.Tag (Req)),
+         Request.Success (Req));
+   end Crypto_Add_Key_Completed;
+
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Object_Type;
       Req        : out Request.Object_Type;
@@ -580,6 +638,7 @@ is
       Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
       Data_Index := Crypto.Plain_Buffer_Index_Type (Item_Index);
       if not Primitive.Valid (Prim) or else
+         Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim) or else
          Primitive.Operation (Prim) /= Write
       then
          Req := Request.Invalid_Object;
@@ -622,9 +681,11 @@ is
       Item_Index : Crypto.Item_Index_Type;
       Prim       : Primitive.Object_Type;
    begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+
       Data_Index := Crypto.Cipher_Buffer_Index_Type (Item_Index);
       if not Primitive.Valid (Prim) or else
+         Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim) or else
          Primitive.Operation (Prim) /= Read
       then
          Req := Request.Invalid_Object;
@@ -2174,6 +2235,38 @@ is
          end Declare_TA_Prim;
       end loop Loop_Generated_TA_Prims;
 
+      Loop_Generated_Crypto_Prims :
+      loop
+         Declare_Crypto_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_Crypto_Primitive (
+                  Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_Crypto_Prims when
+               not Primitive.Valid (Prim) or else
+               not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_Crypto_Add_Key =>
+
+               Crypto.Submit_Primitive_Key (
+                  Obj.Crypto_Obj, Prim,
+                  Superblock_Control.Peek_Generated_Key_Plaintext (
+                     Obj.SB_Ctrl, Prim));
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+            Progress := True;
+
+         end Declare_Crypto_Prim;
+      end loop Loop_Generated_Crypto_Prims;
+
       Loop_Generated_Cache_Prims :
       loop
          Declare_Cache_Prim :
@@ -2839,6 +2932,14 @@ is
             --  filter those out through their tags.
             --
             case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_Crypto_Add_Key =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete (
+                  Obj.SB_Ctrl, Prim);
+
+               Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
+               Progress := True;
+
             when Primitive.Tag_VBD_Rkg_Crypto_Decrypt =>
 
                VBD_Rekeying.Mark_Generated_Prim_Completed_Plain_Data (

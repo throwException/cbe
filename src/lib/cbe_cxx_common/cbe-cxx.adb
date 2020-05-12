@@ -12,6 +12,21 @@ package body CBE.CXX
 with SPARK_Mode
 is
    --
+   --  CXX_Key_From_SPARK
+   --
+   function CXX_Key_From_SPARK (SPARK_Key : Key_Plaintext_Type)
+   return CXX_Key_Type
+   is
+      CXX_Key : CXX_Key_Type;
+   begin
+      for Idx in CXX_Key.Value'Range loop
+         CXX_Key.Value (Idx) := CXX_UInt8_Type (SPARK_Key.Value (Idx));
+      end loop;
+      CXX_Key.ID := CXX_Key_ID_Type (SPARK_Key.ID);
+      return CXX_Key;
+   end CXX_Key_From_SPARK;
+
+   --
    --  CXX_Bool_To_SPARK
    --
    function CXX_Bool_To_SPARK (Input : CXX_Bool_Type)

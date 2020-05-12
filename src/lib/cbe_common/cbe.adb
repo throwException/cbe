@@ -196,17 +196,17 @@ is
    is ("</t1>");
 
    --
-   --  Key_Invalid
+   --  Key_Plaintext_Invalid
    --
-   function Key_Invalid
-   return Key_Type
+   function Key_Plaintext_Invalid
+   return Key_Plaintext_Type
    is
-      Result : Key_Type;
+      Result : Key_Plaintext_Type;
    begin
       Result.Value := (others => Byte_Type'First);
       Result.ID    := Key_ID_Invalid;
       return Result;
-   end Key_Invalid;
+   end Key_Plaintext_Invalid;
 
    --
    --  Key_Ciphertext_Invalid
@@ -222,12 +222,12 @@ is
    end Key_Ciphertext_Invalid;
 
    --
-   --  Key_Valid
+   --  Key_Plaintext_Valid
    --
-   function Key_Valid (ID : Key_ID_Type)
-   return Key_Type
+   function Key_Plaintext_Valid (ID : Key_ID_Type)
+   return Key_Plaintext_Type
    is
-      Result : Key_Type;
+      Result : Key_Plaintext_Type;
    begin
       if ID = Key_ID_Invalid then
          raise Program_Error;
@@ -235,7 +235,7 @@ is
       Result.Value := (others => Byte_Type'First);
       Result.ID    := ID;
       return Result;
-   end Key_Valid;
+   end Key_Plaintext_Valid;
 
    function Superblock_Valid (SB : Superblock_Type)
    return Boolean
@@ -248,8 +248,8 @@ is
    begin
       Result.State                   := Superblock_State_Type'First;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
-      Result.Previous_Key            := Key_Invalid;
-      Result.Current_Key             := Key_Invalid;
+      Result.Previous_Key            := Key_Plaintext_Invalid;
+      Result.Current_Key             := Key_Plaintext_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
       Result.Last_Secured_Generation := Generation_Type'Last;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
@@ -507,8 +507,8 @@ is
       return Result;
    end Hash_From_Block_Data;
 
-   procedure Key_From_Block_Data (
-      Key      : out Key_Type;
+   procedure Key_Plaintext_From_Block_Data (
+      Key      : out Key_Plaintext_Type;
       Data     :     Block_Data_Type;
       Data_Off :     Block_Data_Index_Type)
    is
@@ -524,7 +524,7 @@ is
       end Declare_Value_Off;
       Key_Off := Key_Off + Key_Value_Size_Bytes;
       Key.ID := Key_ID_Type (Unsigned_32_From_Block_Data (Data, Key_Off));
-   end Key_From_Block_Data;
+   end Key_Plaintext_From_Block_Data;
 
    procedure Snapshot_From_Block_Data (
       Snap     : out Snapshot_Type;
@@ -595,10 +595,10 @@ is
          Virtual_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
       Off := Off + 8;
 
-      Key_From_Block_Data (SB.Previous_Key, Data, Off);
+      Key_Plaintext_From_Block_Data (SB.Previous_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
 
-      Key_From_Block_Data (SB.Current_Key, Data, Off);
+      Key_Plaintext_From_Block_Data (SB.Current_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
 
       Snapshots_From_Block_Data (SB.Snapshots, Data, Off);
@@ -750,10 +750,10 @@ is
       end loop For_Nodes;
    end Type_1_Node_Block_From_Block_Data;
 
-   procedure Block_Data_From_Key (
+   procedure Block_Data_From_Key_Plaintext (
       Data     : in out Block_Data_Type;
       Data_Off :        Block_Data_Index_Type;
-      Key      :        Key_Type)
+      Key      :        Key_Plaintext_Type)
    is
       Key_Off : Block_Data_Index_Type := Data_Off;
       Value_Off : Block_Data_Index_Type;
@@ -765,7 +765,7 @@ is
       Key_Off := Key_Off + Key_Value_Size_Bytes;
 
       Block_Data_From_Unsigned_32 (Data, Key_Off, Unsigned_32 (Key.ID));
-   end Block_Data_From_Key;
+   end Block_Data_From_Key_Plaintext;
 
    --
    --  Block_Data_From_Key_Ciphertext
@@ -928,10 +928,10 @@ is
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
 
-      Block_Data_From_Key (Data, Off, SB.Previous_Key);
+      Block_Data_From_Key_Plaintext (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;
 
-      Block_Data_From_Key (Data, Off, SB.Current_Key);
+      Block_Data_From_Key_Plaintext (Data, Off, SB.Current_Key);
       Off := Off + Key_Storage_Size_Bytes;
 
       Block_Data_From_Snapshots (Data, Off, SB.Snapshots);

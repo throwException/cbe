@@ -99,6 +99,14 @@ is
    return Key_Value_Plaintext_Type;
 
    --
+   --  Peek_Generated_Key_Plaintext
+   --
+   function Peek_Generated_Key_Plaintext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Plaintext_Type;
+
+   --
    --  Peek_Generated_Cache_Primitive
    --
    function Peek_Generated_Cache_Primitive (Ctrl : Control_Type)
@@ -108,6 +116,12 @@ is
    --  Peek_Generated_Blk_IO_Primitive
    --
    function Peek_Generated_Blk_IO_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Crypto_Primitive
+   --
+   function Peek_Generated_Crypto_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
 
    --
@@ -234,6 +248,9 @@ private
       Sync_Cache_Pending,
       Sync_Cache_In_Progress,
       Sync_Cache_Completed,
+      Add_Key_At_Crypto_Module_Pending,
+      Add_Key_At_Crypto_Module_In_Progress,
+      Add_Key_At_Crypto_Module_Completed,
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,
@@ -250,7 +267,7 @@ private
       State : Job_State_Type;
       Submitted_Prim : Primitive.Object_Type;
       Generated_Prim : Primitive.Object_Type;
-      Key_Value_Plaintext : Key_Value_Plaintext_Type;
+      Key_Plaintext : Key_Plaintext_Type;
       SB_Ciphertext : Superblock_Ciphertext_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;

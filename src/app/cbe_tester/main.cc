@@ -1528,6 +1528,28 @@ class Cbe::Main
 
 			progress |= _crypto.execute();
 
+			/* add keys */
+			while (true) {
+				Key key;
+				Cbe::Request request = _cbe->crypto_add_key_required(key);
+				if (!request.valid()) {
+					break;
+				}
+				_cbe->crypto_add_key_requested(request);
+				External::Crypto::Key_data data { };
+				Genode::memcpy(
+					data.value, key.value,
+					sizeof(data.value) / sizeof(data.value[0]));
+
+				_crypto.add_key(key.id.value, data);
+				request.success (Cbe::Request::Success::TRUE);
+				if (_verbose_back_end_crypto) {
+					log("    add key: id " , (unsigned)key.id.value);
+				}
+				_cbe->crypto_add_key_completed(request);
+				progress |= true;
+			}
+
 			/* encrypt */
 			while (true) {
 				Crypto_plain_buffer::Index data_index(0);

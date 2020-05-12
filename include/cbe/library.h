@@ -48,6 +48,8 @@ class Cbe::Library : public Cbe::Spark_object<315496>
 		void _client_data_required(Request &);
 		void _supply_client_data(Time::Timestamp const, Request const &, Block_data const &, bool &);
 
+		void _crypto_add_key_required(Request &, Key &) const;
+
 		void _crypto_cipher_data_required(Request &, Crypto_plain_buffer::Index &) const;
 		void _crypto_plain_data_required(Request &, Crypto_cipher_buffer::Index &) const;
 
@@ -323,6 +325,17 @@ class Cbe::Library : public Cbe::Spark_object<315496>
 	 * \param  ids  reference to destination buffer
 	 */
 	void active_snapshot_ids(Active_snapshot_ids &ids) const;
+
+	Request crypto_add_key_required(Key &key) const
+	{
+		Request result { };
+		_crypto_add_key_required(result, key);
+		return result;
+	}
+
+	void crypto_add_key_requested(Request const &req);
+
+	void crypto_add_key_completed(Request const &req);
 
 	/**
 	 * CBE requests encrytion

@@ -49,8 +49,8 @@ is
 
       SB.State                   := Normal;
       SB.Rekeying_VBA            := 0;
-      SB.Current_Key             := Key_Valid (Obj.Key_ID);
-      SB.Previous_Key            := Key_Invalid;
+      SB.Current_Key             := Key_Plaintext_Valid (Obj.Key_ID);
+      SB.Previous_Key            := Key_Plaintext_Invalid;
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
       SB.Last_Secured_Generation := 0;

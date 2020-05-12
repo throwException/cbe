@@ -235,6 +235,28 @@ is
       Progress :    out Boolean);
 
    --
+   --  Crypto_Add_Key_Required
+   --
+   procedure Crypto_Add_Key_Required (
+      Obj :     Object_Type;
+      Req : out Request.Object_Type;
+      Key : out Key_Plaintext_Type);
+
+   --
+   --  Crypto_Add_Key_Requested
+   --
+   procedure Crypto_Add_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        Request.Object_Type);
+
+   --
+   --  Crypto_Add_Key_Completed
+   --
+   procedure Crypto_Add_Key_Completed (
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type);
+
+   --
    --  Determine whether the encryption of plain data is required
    --
    --  \param Req         returns valid request if encryption of plain data is

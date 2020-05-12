@@ -41,9 +41,10 @@ is
       function Invalid_Object
       return Item_Type
       is (
-         State  => Invalid,
-         Prim   => Primitive.Invalid_Object,
-         Key_ID => Key_ID_Type'First);
+         State     => Invalid,
+         Prim      => Primitive.Invalid_Object,
+         Key_ID    => Key_ID_Type'First,
+         Key_Value => (others => 0));
 
       --
       --  Pending_Object
@@ -53,9 +54,23 @@ is
          Key_ID : Key_ID_Type)
       return Item_Type
       is (
-         State  => Pending,
-         Prim   => Prm,
-         Key_ID => Key_ID);
+         State     => Pending,
+         Prim      => Prm,
+         Key_ID    => Key_ID,
+         Key_Value => (others => 0));
+
+      --
+      --  Pending_Object_Key
+      --
+      function Pending_Object_Key (
+         Prm : Primitive.Object_Type;
+         Key : Key_Plaintext_Type)
+      return Item_Type
+      is (
+         State     => Pending,
+         Prim      => Prm,
+         Key_ID    => Key.ID,
+         Key_Value => Key.Value);
 
       --
       --  Completed_Object
@@ -65,9 +80,10 @@ is
          Key_ID : Key_ID_Type)
       return Item_Type
       is (
-         State  => Complete,
-         Prim   => Prm,
-         Key_ID => Key_ID);
+         State     => Complete,
+         Prim      => Prm,
+         Key_ID    => Key_ID,
+         Key_Value => (others => 0));
 
       ----------------------
       --  Read Accessors  --
@@ -90,6 +106,11 @@ is
 
       function Key_ID (Obj : Item_Type) return Key_ID_Type
       is (Obj.Key_ID);
+
+      function Key (Obj : Item_Type) return Key_Plaintext_Type
+      is (
+         ID => Obj.Key_ID,
+         Value => Obj.Key_Value);
 
       -----------------------
       --  Write Accessors  --
@@ -115,6 +136,24 @@ is
    function Primitive_Acceptable (Obj : Object_Type)
    return Boolean
    is (for some Itm of Obj.Items => Item.Invalid (Itm));
+
+   --
+   --  Submit_Primitive_Key
+   --
+   procedure Submit_Primitive_Key (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Plaintext_Type)
+   is
+   begin
+      For_Items : for Item_Idx in Obj.Items'Range loop
+         if Item.Invalid (Obj.Items (Item_Idx)) then
+            Obj.Items (Item_Idx) := Item.Pending_Object_Key (Prim, Key);
+            return;
+         end if;
+      end loop For_Items;
+      raise Program_Error;
+   end Submit_Primitive_Key;
 
    --
    --  Submit_Primitive
@@ -205,6 +244,21 @@ is
       end if;
       return Item.Key_ID (Obj.Items (Item_Index));
    end Peek_Generated_Key_ID;
+
+   --
+   --  Peek_Generated_Key
+   --
+   function Peek_Generated_Key (
+      Obj        : Object_Type;
+      Item_Index : Item_Index_Type)
+   return Key_Plaintext_Type
+   is
+   begin
+      if not Item.Pending (Obj.Items (Item_Index)) then
+         raise Program_Error;
+      end if;
+      return Item.Key (Obj.Items (Item_Index));
+   end Peek_Generated_Key;
 
    --
    --  Peek_Completed_Primitive

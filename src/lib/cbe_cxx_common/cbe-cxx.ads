@@ -39,6 +39,13 @@ is
    type CXX_Superblocks_Type
    is array (Superblocks_Index_Type) of Block_Data_Type;
 
+   type CXX_Key_Value_Type is array (Key_Value_Index_Type) of CXX_UInt8_Type;
+
+   type CXX_Key_Type is record
+      Value : CXX_Key_Value_Type;
+      ID    : CXX_Key_ID_Type;
+   end record;
+
    type CXX_Superblocks_Index_Type is record
       Value : CXX_UInt64_Type;
    end record;
@@ -176,5 +183,11 @@ is
       Free_Tree => CXX_Bool_To_SPARK (Cfg.Free_Tree),
       Meta_Tree => CXX_Bool_To_SPARK (Cfg.Meta_Tree),
       Hashes => CXX_Bool_To_SPARK (Cfg.Hashes));
+
+   --
+   --  CXX_Key_From_SPARK
+   --
+   function CXX_Key_From_SPARK (SPARK_Key : Key_Plaintext_Type)
+   return CXX_Key_Type;
 
 end CBE.CXX;

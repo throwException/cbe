@@ -42,7 +42,14 @@ is
       Evict_Key_ID  : CBE.Key_ID_Type := CBE.Key_ID_Type'Last;
    begin
 
-      For_Each_Key :
+      Check_That_ID_Is_Unique :
+      for Idx in Obj.Keys'Range loop
+         if Obj.Keys (Idx).ID = Key_ID then
+            raise Program_Error;
+         end if;
+      end loop Check_That_ID_Is_Unique;
+
+      Select_Key_To_Evict :
       for Idx in Obj.Keys'Range loop
          if Obj.Keys (Idx).Valid then
             if Obj.Keys (Idx).ID < Evict_Key_ID then
@@ -51,9 +58,9 @@ is
             end if;
          else
             Evict_Key_Idx := Idx;
-            exit For_Each_Key;
+            exit Select_Key_To_Evict;
          end if;
-      end loop For_Each_Key;
+      end loop Select_Key_To_Evict;
 
       Obj.Keys (Evict_Key_Idx) := (
          Data  => Key_Data,

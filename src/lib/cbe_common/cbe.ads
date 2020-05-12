@@ -238,7 +238,7 @@ is
    --  (For now it is not used but the ID field is already referenced
    --  by type 2 nodes.)
    --
-   type Key_Type is record
+   type Key_Plaintext_Type is record
       Value : Key_Value_Plaintext_Type;
       ID    : Key_ID_Type;
    end record;
@@ -262,16 +262,16 @@ is
    is (Key_ID_Type'First);
 
    --
-   --  Key_Invalid
+   --  Key_Plaintext_Invalid
    --
-   function Key_Invalid
-   return Key_Type;
+   function Key_Plaintext_Invalid
+   return Key_Plaintext_Type;
 
    --
-   --  Key_Valid
+   --  Key_Plaintext_Valid
    --
-   function Key_Valid (ID : Key_ID_Type)
-   return Key_Type;
+   function Key_Plaintext_Valid (ID : Key_ID_Type)
+   return Key_Plaintext_Type;
 
    type Superblock_State_Type is (
       Normal,
@@ -310,8 +310,8 @@ is
 
       State                   : Superblock_State_Type;
       Rekeying_VBA            : Virtual_Block_Address_Type;
-      Previous_Key            : Key_Type;
-      Current_Key             : Key_Type;
+      Previous_Key            : Key_Plaintext_Type;
+      Current_Key             : Key_Plaintext_Type;
       Snapshots               : Snapshots_Type;
       Last_Secured_Generation : Generation_Type;
       Curr_Snap               : Snapshots_Index_Type;
@@ -522,8 +522,8 @@ private
       Data     :     Block_Data_Type;
       Data_Off :     Block_Data_Index_Type);
 
-   procedure Key_From_Block_Data (
-      Key      : out Key_Type;
+   procedure Key_Plaintext_From_Block_Data (
+      Key      : out Key_Plaintext_Type;
       Data     :     Block_Data_Type;
       Data_Off :     Block_Data_Index_Type);
 
@@ -582,10 +582,10 @@ private
       Base : Block_Data_Index_Type)
    return Hash_Type;
 
-   procedure Block_Data_From_Key (
+   procedure Block_Data_From_Key_Plaintext (
       Data     : in out Block_Data_Type;
       Data_Off :        Block_Data_Index_Type;
-      Key      :        Key_Type);
+      Key      :        Key_Plaintext_Type);
 
    --
    --  Block_Data_From_Key_Ciphertext

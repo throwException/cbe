@@ -55,6 +55,14 @@ is
       Pre => (Primitive_Acceptable (Obj) and then Primitive.Valid (Prim));
 
    --
+   --  Submit_Primitive_Key
+   --
+   procedure Submit_Primitive_Key (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Plaintext_Type);
+
+   --
    --  Submit_Completed_Primitive
    --
    procedure Submit_Completed_Primitive (
@@ -78,6 +86,14 @@ is
       Obj        : Object_Type;
       Item_Index : Item_Index_Type)
    return Key_ID_Type;
+
+   --
+   --  Peek_Generated_Key
+   --
+   function Peek_Generated_Key (
+      Obj        : Object_Type;
+      Item_Index : Item_Index_Type)
+   return Key_Plaintext_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -152,6 +168,14 @@ private
       return Item_Type;
 
       --
+      --  Pending_Object_Key
+      --
+      function Pending_Object_Key (
+         Prm : Primitive.Object_Type;
+         Key : Key_Plaintext_Type)
+      return Item_Type;
+
+      --
       --  Completed_Object
       --
       function Completed_Object (
@@ -169,6 +193,7 @@ private
       function Complete    (Obj : Item_Type) return Boolean;
       function Prim        (Obj : Item_Type) return Primitive.Object_Type;
       function Key_ID      (Obj : Item_Type) return Key_ID_Type;
+      function Key         (Obj : Item_Type) return Key_Plaintext_Type;
 
       -----------------------
       --  Write Accessors  --
@@ -183,9 +208,10 @@ private
       --  Item_Type
       --
       type Item_Type is record
-         State  : State_Type;
-         Prim   : Primitive.Object_Type;
-         Key_ID : Key_ID_Type;
+         State     : State_Type;
+         Prim      : Primitive.Object_Type;
+         Key_ID    : Key_ID_Type;
+         Key_Value : Key_Value_Plaintext_Type;
       end record;
 
    end Item;
