@@ -1008,6 +1008,27 @@ class Vfs_cbe::Wrapper
 		{
 			bool progress = cry.execute();
 
+			/* add keys */
+			while (true) {
+				Cbe::Key key { };
+				Cbe::Request request = _cbe->crypto_add_key_required(key);
+				if (!request.valid()) {
+					break;
+				}
+				_cbe->crypto_add_key_requested(request);
+				External::Crypto::Key_data data { };
+				memcpy(data.value, key.value, sizeof (data.value));
+
+				_crypto.add_key(key.id.value, data);
+				request.success(Cbe::Request::Success::TRUE);
+
+				if (_verbose) {
+					log("Add key: id " , (unsigned)key.id.value);
+				}
+				_cbe->crypto_add_key_completed(request);
+				progress |= true;
+			}
+
 			/* encrypt */
 			while (true) {
 				Cbe::Crypto_plain_buffer::Index data_index { 0 };
