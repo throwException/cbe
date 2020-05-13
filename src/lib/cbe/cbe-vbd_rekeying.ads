@@ -35,9 +35,9 @@ is
    return Boolean;
 
    --
-   --  Submit_Primitive
+   --  Submit_Primitive_Rekeying
    --
-   procedure Submit_Primitive (
+   procedure Submit_Primitive_Rekeying (
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
@@ -47,6 +47,15 @@ is
       Snapshots_Degree :        Tree_Degree_Type;
       Old_Key_ID       :        Key_ID_Type;
       New_Key_ID       :        Key_ID_Type);
+
+   --
+   --  Submit_Primitive_Resizing
+   --
+   procedure Submit_Primitive_Resizing (
+      Rkg              : in out Rekeying_Type;
+      Prim             :        Primitive.Object_Type;
+      Snapshot         :        Snapshot_Type;
+      Snapshots_Degree :        Tree_Degree_Type);
 
    --
    --  Peek_Completed_Primitive
@@ -245,7 +254,8 @@ private
 
    type Job_Operation_Type is (
       Invalid,
-      Rekey_VBA
+      Rekey_VBA,
+      VBD_Extension_Step
    );
 
    type Job_State_Type is (
@@ -348,6 +358,14 @@ private
       Progress : in out Boolean);
 
    --
+   --  Execute_VBD_Extension_Step
+   --
+   procedure Execute_VBD_Extension_Step (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Progress : in out Boolean);
+
+   --
    --  Child_Idx_For_VBA
    --
    function Child_Idx_For_VBA (
@@ -360,6 +378,15 @@ private
    --  Execute_Rekey_VBA_Read_Inner_Node_Completed
    --
    procedure Execute_Rekey_VBA_Read_Inner_Node_Completed (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Hash     :        Hash_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_VBD_Ext_Step_Read_Inner_Node_Completed
+   --
+   procedure Execute_VBD_Ext_Step_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Hash     :        Hash_Type;

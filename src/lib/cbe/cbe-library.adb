@@ -2167,7 +2167,7 @@ is
             exit Loop_Completed_Prims when not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_VBD_Rkg =>
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA =>
 
                Superblock_Control.Mark_Generated_Prim_Complete_Snapshots (
                   Obj.SB_Ctrl,
@@ -2212,23 +2212,44 @@ is
                not Primitive.Valid (Prim) or else
                not VBD_Rekeying.Primitive_Acceptable (Obj.VBD_Rkg);
 
-            VBD_Rekeying.Submit_Primitive (
-               Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
-               Superblock_Control.Peek_Generated_Last_Secured_Gen (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock),
-               Superblock_Control.Peek_Generated_VBA (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock),
-               Superblock_Control.Peek_Generated_Snapshots (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock),
-               Superblock_Control.Peek_Generated_Snapshots_Degree (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock),
-               Superblock_Control.Peek_Generated_Old_Key_ID (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock),
-               Superblock_Control.Peek_Generated_New_Key_ID (
-                  Obj.SB_Ctrl, Prim, Obj.Superblock));
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA =>
 
-            Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
-            Progress := True;
+               VBD_Rekeying.Submit_Primitive_Rekeying (
+                  Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
+                  Superblock_Control.Peek_Generated_Last_Secured_Gen (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_VBA (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Snapshots (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Snapshots_Degree (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Old_Key_ID (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_New_Key_ID (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock));
+
+               Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step =>
+
+               VBD_Rekeying.Submit_Primitive_Resizing (
+                  Obj.VBD_Rkg, Prim,
+                  Superblock_Control.Peek_Generated_Snapshot (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Snapshots_Degree (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock));
+
+               Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
 
          end Declare_VBD_Rkg_Prim;
       end loop Loop_Generated_VBD_Rkg_Prims;

@@ -250,8 +250,13 @@ is
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Cache);
 
-   function Has_Tag_SB_Ctrl_VBD_Rkg (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg);
+   function Has_Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA);
+
+   function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step);
 
    function Has_Tag_SB_Ctrl_Crypto_Add_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Crypto_Add_Key);

@@ -109,6 +109,7 @@ is
             Hash => (others => Byte_Type'First),
             PBA => Physical_Block_Address_Type'First,
             Nr_Of_Blks => Number_Of_Blocks_Type'First,
+            Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             SB_Ciphertext => Superblock_Ciphertext_Invalid,
             Request_Finished => Boolean'First,
             Snapshots => (others => Snapshot_Invalid));
@@ -349,13 +350,26 @@ is
 
          when Extending_VBD =>
 
-            raise Program_Error;
+            Job.Key_Plaintext := SB.Current_Key;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := VBD_Ext_Step_In_VBD_Pending;
+            Progress := True;
 
          when others =>
 
             raise Program_Error;
 
          end case;
+
+      when VBD_Ext_Step_In_VBD_Completed =>
+
+         raise Program_Error;
 
       when Encrypt_Current_Key_Completed =>
 
@@ -672,7 +686,7 @@ is
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
-            Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg,
+            Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA,
             Blk_Nr => Block_Number_Type (SB.Rekeying_VBA),
             Idx    => Primitive.Index_Type (Job_Idx));
 
@@ -973,7 +987,10 @@ is
          if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
-            when Rekey_VBA_In_VBD_Pending =>
+            when
+               Rekey_VBA_In_VBD_Pending |
+               VBD_Ext_Step_In_VBD_Pending
+            =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
 
@@ -1096,6 +1113,117 @@ is
    end Peek_Generated_VBA;
 
    --
+   --  Peek_Generated_PBA
+   --
+   function Peek_Generated_PBA (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Physical_Block_Address_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
+            then
+               return SB.Resizing_First_PBA;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_PBA;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Number_Of_Blocks_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
+            then
+               return SB.Resizing_Nr_Of_PBAs;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Nr_Of_Blks;
+
+   --
+   --  Peek_Generated_Snapshot
+   --
+   function Peek_Generated_Snapshot (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshot_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
+            then
+               return SB.Snapshots (SB.Curr_Snap);
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Snapshot;
+
+   --
    --  Peek_Generated_Snapshots
    --
    function Peek_Generated_Snapshots (
@@ -1152,6 +1280,16 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
                SB.State = Rekeying
+            then
+               return SB.Degree;
+            else
+               raise Program_Error;
+            end if;
+
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
             then
                return SB.Degree;
             else
@@ -1508,6 +1646,14 @@ is
             end if;
             raise Program_Error;
 
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := VBD_Ext_Step_In_VBD_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -1518,6 +1664,43 @@ is
       raise Program_Error;
 
    end Drop_Generated_Primitive;
+
+   --
+   --  Mark_Generated_Prim_Complete_VBD_Ext
+   --
+   procedure Mark_Generated_Prim_Complete_VBD_Ext (
+      Ctrl         : in out Control_Type;
+      Prim         :        Primitive.Object_Type;
+      Snapshots    :        Snapshots_Type;
+      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when VBD_Ext_Step_In_VBD_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := VBD_Ext_Step_In_VBD_Completed;
+               Ctrl.Jobs (Idx).Snapshots := Snapshots;
+               Ctrl.Jobs (Idx).Nr_Of_Leaves := Nr_Of_Leaves;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_VBD_Ext;
 
    --
    --  Mark_Generated_Prim_Complete_Key_Value_Plaintext

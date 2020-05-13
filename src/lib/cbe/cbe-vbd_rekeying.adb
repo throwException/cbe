@@ -10,6 +10,7 @@ pragma Ada_2012;
 
 with SHA256_4K;
 with Interfaces;
+with CBE.Debug;
 
 use Interfaces;
 
@@ -179,9 +180,48 @@ is
    is (for some Job of Rkg.Jobs => Job.Operation = Invalid);
 
    --
-   --  Submit_Primitive
+   --  Submit_Primitive_Resizing
    --
-   procedure Submit_Primitive (
+   procedure Submit_Primitive_Resizing (
+      Rkg              : in out Rekeying_Type;
+      Prim             :        Primitive.Object_Type;
+      Snapshot         :        Snapshot_Type;
+      Snapshots_Degree :        Tree_Degree_Type)
+   is
+   begin
+
+      Find_Invalid_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         if Rkg.Jobs (Idx).Operation = Invalid then
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step =>
+
+               Rkg.Jobs (Idx).Operation        := VBD_Extension_Step;
+               Rkg.Jobs (Idx).Submitted_Prim   := Prim;
+               Rkg.Jobs (Idx).Snapshots (0)    := Snapshot;
+               Rkg.Jobs (Idx).Snapshots_Degree := Snapshots_Degree;
+               Rkg.Jobs (Idx).State            := Submitted;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end if;
+
+      end loop Find_Invalid_Job;
+      raise Program_Error;
+
+   end Submit_Primitive_Resizing;
+
+   --
+   --  Submit_Primitive_Rekeying
+   --
+   procedure Submit_Primitive_Rekeying (
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
@@ -200,7 +240,7 @@ is
          if Rkg.Jobs (Idx).Operation = Invalid then
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_VBD_Rkg =>
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA =>
 
                Rkg.Jobs (Idx).Operation        := Rekey_VBA;
                Rkg.Jobs (Idx).Submitted_Prim   := Prim;
@@ -225,7 +265,7 @@ is
       end loop Find_Invalid_Job;
       raise Program_Error;
 
-   end Submit_Primitive;
+   end Submit_Primitive_Rekeying;
 
    --
    --  Peek_Completed_Primitive
@@ -311,6 +351,78 @@ is
             and
             Unsigned_64 (Degree_Mask));
    end Child_Idx_For_VBA;
+
+   --
+   --  Execute_VBD_Ext_Step_Read_Inner_Node_Completed
+   --
+   procedure Execute_VBD_Ext_Step_Read_Inner_Node_Completed (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Hash     :        Hash_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      if not Primitive.Success (Job.Generated_Prim) then
+         raise Program_Error;
+      end if;
+
+      if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.T1_Blk_Idx)) /= Hash then
+         raise Program_Error;
+      end if;
+
+      if Job.T1_Blk_Idx > 1 then
+
+         Declare_Child_1 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.T1_Blk_Idx;
+
+            Child_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.T1_Blk_Idx - 1;
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+
+            Child : constant Type_1_Node_Type :=
+               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx);
+         begin
+
+            Job.T1_Blk_Idx := Child_Lvl_Idx;
+            Job.T1_Blks_Old_PBAs (Child_Lvl_Idx) := Child.PBA;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Cache,
+               Blk_Nr => Block_Number_Type (Child.PBA),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Debug.Print_String (
+               "   READ PLVL " &
+               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
+               " CHILD " &
+               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
+               " GEN " &
+               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
+               " CLVL " &
+               Debug.To_String (Debug.Uint64_Type (Child_Lvl_Idx))
+            );
+
+            Job.State := Read_Inner_Node_Pending;
+            Progress := True;
+
+         end Declare_Child_1;
+
+      else
+
+         raise Program_Error;
+
+      end if;
+
+   end Execute_VBD_Ext_Step_Read_Inner_Node_Completed;
 
    --
    --  Execute_Rekey_VBA_Read_Inner_Node_Completed
@@ -635,6 +747,92 @@ is
       end if;
 
    end Discard_Disposable_Snapshots;
+
+   --
+   --  Execute_VBD_Extension_Step
+   --
+   procedure Execute_VBD_Extension_Step (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         Job.Snapshot_Idx := 0;
+         Job.VBA :=
+            Virtual_Block_Address_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs - 1);
+
+         Job.T1_Blk_Idx :=
+            Type_1_Node_Blocks_Index_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Max_Level);
+
+         Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) :=
+            Job.Snapshots (Job.Snapshot_Idx).PBA;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Cache,
+            Blk_Nr => Block_Number_Type (Job.Snapshots (Job.Snapshot_Idx).PBA),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Debug.Print_String (
+            "   READ PLVL " &
+            Debug.To_String (
+               Debug.Uint64_Type (Natural (Job.T1_Blk_Idx) + 1)) &
+            " CHILD " &
+            Debug.To_String (Debug.Uint64_Type (0)) &
+            " PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).PBA)) &
+            " GEN " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Gen)) &
+            " CLVL " &
+            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx))
+         );
+
+         Job.State := Read_Root_Node_Pending;
+         Progress := True;
+
+      when Read_Root_Node_Completed =>
+
+         Execute_VBD_Ext_Step_Read_Inner_Node_Completed (
+            Job, Job_Idx, Job.Snapshots (Job.Snapshot_Idx).Hash, Progress);
+
+      when Read_Inner_Node_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Declare_Child_Idx_1 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.T1_Blk_Idx + 1;
+
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.Snapshots_Degree);
+         begin
+
+            Execute_VBD_Ext_Step_Read_Inner_Node_Completed (
+               Job, Job_Idx, Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash,
+               Progress);
+
+         end Declare_Child_Idx_1;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_VBD_Extension_Step;
 
    --
    --  Execute_Rekey_VBA
@@ -1066,6 +1264,10 @@ is
 
             Execute_Rekey_VBA (Rkg.Jobs (Idx), Idx, Progress);
 
+         when VBD_Extension_Step =>
+
+            Execute_VBD_Extension_Step (Rkg.Jobs (Idx), Idx, Progress);
+
          when Invalid =>
 
             null;
@@ -1087,8 +1289,7 @@ is
       Inspect_Each_Job :
       for Idx in Rkg.Jobs'Range loop
 
-         case Rkg.Jobs (Idx).Operation is
-         when Rekey_VBA =>
+         if Rkg.Jobs (Idx).Operation /= Invalid then
 
             case Rkg.Jobs (Idx).State is
             when Read_Leaf_Node_Pending | Write_Leaf_Node_Pending =>
@@ -1101,11 +1302,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -1123,8 +1320,7 @@ is
       Inspect_Each_Job :
       for Idx in Rkg.Jobs'Range loop
 
-         case Rkg.Jobs (Idx).Operation is
-         when Rekey_VBA =>
+         if Rkg.Jobs (Idx).Operation /= Invalid then
 
             case Rkg.Jobs (Idx).State is
             when
@@ -1142,11 +1338,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -1164,8 +1356,7 @@ is
       Inspect_Each_Job :
       for Idx in Rkg.Jobs'Range loop
 
-         case Rkg.Jobs (Idx).Operation is
-         when Rekey_VBA =>
+         if Rkg.Jobs (Idx).Operation /= Invalid then
 
             case Rkg.Jobs (Idx).State is
             when
@@ -1182,11 +1373,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -1204,8 +1391,7 @@ is
       Inspect_Each_Job :
       for Idx in Rkg.Jobs'Range loop
 
-         case Rkg.Jobs (Idx).Operation is
-         when Rekey_VBA =>
+         if Rkg.Jobs (Idx).Operation /= Invalid then
 
             case Rkg.Jobs (Idx).State is
             when Encrypt_Leaf_Node_Pending | Decrypt_Leaf_Node_Pending =>
@@ -1218,11 +1404,7 @@ is
 
             end case;
 
-         when others =>
-
-            null;
-
-         end case;
+         end if;
 
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
@@ -1241,8 +1423,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1264,11 +1445,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_New_PBAs;
 
@@ -1284,8 +1462,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1307,11 +1484,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Free_Gen;
 
@@ -1327,8 +1501,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1350,11 +1523,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Old_Key_ID;
 
@@ -1370,8 +1540,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1393,11 +1562,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_New_Key_ID;
 
@@ -1413,8 +1579,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1436,11 +1601,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_VBA;
 
@@ -1456,8 +1618,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1481,11 +1642,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Max_Level;
 
@@ -1501,8 +1659,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1524,11 +1681,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_T1_Node_Walk;
 
@@ -1544,8 +1698,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when
@@ -1567,11 +1720,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Nr_Of_Blks;
 
@@ -1642,8 +1792,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when Decrypt_Leaf_Node_Pending =>
@@ -1660,11 +1809,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Cipher_Data;
 
@@ -1680,8 +1826,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when Encrypt_Leaf_Node_Pending =>
@@ -1698,11 +1843,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Plain_Data;
 
@@ -1718,8 +1860,7 @@ is
          Jobs_Index_Type (Primitive.Index (Prim));
    begin
 
-      case Rkg.Jobs (Idx).Operation is
-      when Rekey_VBA =>
+      if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
          when Encrypt_Leaf_Node_Pending =>
@@ -1744,11 +1885,8 @@ is
 
          end case;
 
-      when others =>
-
-         raise Program_Error;
-
-      end case;
+      end if;
+      raise Program_Error;
 
    end Peek_Generated_Crypto_Key_ID;
 

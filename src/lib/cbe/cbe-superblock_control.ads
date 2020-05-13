@@ -142,6 +142,24 @@ is
    return Block_Data_Type;
 
    --
+   --  Peek_Generated_PBA
+   --
+   function Peek_Generated_PBA (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Physical_Block_Address_Type;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Number_Of_Blocks_Type;
+
+   --
    --  Peek_Generated_VBA
    --
    function Peek_Generated_VBA (
@@ -196,11 +214,29 @@ is
    return Key_ID_Type;
 
    --
+   --  Peek_Generated_Snapshot
+   --
+   function Peek_Generated_Snapshot (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshot_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type);
+
+   --
+   --  Mark_Generated_Prim_Complete_VBD_Ext
+   --
+   procedure Mark_Generated_Prim_Complete_VBD_Ext (
+      Ctrl         : in out Control_Type;
+      Prim         :        Primitive.Object_Type;
+      Snapshots    :        Snapshots_Type;
+      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type);
 
    --
    --  Mark_Generated_Prim_Complete_Key_Value_Plaintext
@@ -246,6 +282,9 @@ private
       Rekey_VBA_In_VBD_Pending,
       Rekey_VBA_In_VBD_In_Progress,
       Rekey_VBA_In_VBD_Completed,
+      VBD_Ext_Step_In_VBD_Pending,
+      VBD_Ext_Step_In_VBD_In_Progress,
+      VBD_Ext_Step_In_VBD_Completed,
       Create_Key_Pending,
       Create_Key_In_Progress,
       Create_Key_Completed,
@@ -279,6 +318,7 @@ private
       Generated_Prim : Primitive.Object_Type;
       Key_Plaintext : Key_Plaintext_Type;
       SB_Ciphertext : Superblock_Ciphertext_Type;
+      Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
       Request_Finished : Boolean;
