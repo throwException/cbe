@@ -252,8 +252,6 @@ class Vfs_cbe::Wrapper
 					return Cbe::Superblocks_index(0);
 				}
 
-				Genode::error("bytes: ", bytes, " SB[", i, "]: ", dst);
-
 				if (dst.valid() &&
 				    dst.snapshots[dst.curr_snap].gen >= highest_gen)
 				{
