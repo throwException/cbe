@@ -1915,12 +1915,37 @@ is
                not Primitive.Valid (Prim) or else
                not Superblock_Control.Primitive_Acceptable (Obj.SB_Ctrl);
 
-            Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
-            Pool.Drop_Generated_Primitive (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step =>
 
-            Progress := True;
+               Superblock_Control.Submit_Primitive_PBA_Range (
+                  Obj.SB_Ctrl, Prim,
+                  Pool.Peek_Generated_PBA (Obj.Request_Pool_Obj, Prim),
+                  Pool.Peek_Generated_Nr_Of_Blks (Obj.Request_Pool_Obj, Prim));
+
+               Pool.Drop_Generated_Primitive (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
+               Progress := True;
+
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
+               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey
+            =>
+
+               Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
+               Pool.Drop_Generated_Primitive (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
 
          end Declare_SB_Ctrl_Prim;
 
@@ -2377,13 +2402,16 @@ is
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;
 
-            when Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
+               Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step
+            =>
 
-               Pool.Mark_Generated_Primitive_Complete_Rekeying (
+               Pool.Mark_Generated_Primitive_Complete_Req_Fin (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim),
-                  Superblock_Control.Peek_Completed_Rekeying_Finished (
+                  Superblock_Control.Peek_Completed_Request_Finished (
                      Obj.SB_Ctrl, Prim));
 
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);

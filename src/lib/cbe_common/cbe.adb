@@ -122,6 +122,12 @@ is
       SB.State'Image &
       """ rk_vba=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)) &
+      """ rsz_pba=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
+      """ rsz_pbas=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
+      """ rsz_leafs=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)) &
       """>");
 
    function Superblock_XML_Tag_Invalid
@@ -252,6 +258,9 @@ is
    begin
       Result.State                   := Superblock_State_Type'First;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
+      Result.Resizing_First_PBA      := Physical_Block_Address_Type'First;
+      Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
+      Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Plaintext_Invalid;
       Result.Current_Key             := Key_Plaintext_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
@@ -285,6 +294,9 @@ is
    begin
       Result.State                   := Superblock_State_Type'First;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
+      Result.Resizing_First_PBA      := Physical_Block_Address_Type'First;
+      Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
+      Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Ciphertext_Invalid;
       Result.Current_Key             := Key_Ciphertext_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
@@ -455,6 +467,7 @@ is
       case Data (Off) is
       when 0 => return Normal;
       when 1 => return Rekeying;
+      when 2 => return Extending_VBD;
       when others => raise Program_Error;
       end case;
    end SB_State_From_Block_Data;
@@ -471,6 +484,7 @@ is
       case State is
       when Normal => Data (Off) := 0;
       when Rekeying => Data (Off) := 1;
+      when Extending_VBD => Data (Off) := 2;
       end case;
    end Block_Data_From_SB_State;
 
@@ -600,6 +614,18 @@ is
       SB.Rekeying_VBA :=
          Virtual_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
       Off := Off + 8;
+
+      SB.Resizing_First_PBA :=
+         Physical_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Resizing_Nr_Of_PBAs :=
+         Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Resizing_Nr_Of_Leaves :=
+         Tree_Number_Of_Leafs_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
 
       Key_Plaintext_From_Block_Data (SB.Previous_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
@@ -869,6 +895,18 @@ is
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
 
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_First_PBA));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_32 (
+         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_PBAs));
+      Off := Off + 4;
+
+      Block_Data_From_Unsigned_32 (
+         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_Leaves));
+      Off := Off + 4;
+
       Block_Data_From_Key_Ciphertext (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;
 
@@ -947,6 +985,18 @@ is
       Block_Data_From_Unsigned_64 (
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
+
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_First_PBA));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_32 (
+         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_PBAs));
+      Off := Off + 4;
+
+      Block_Data_From_Unsigned_32 (
+         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_Leaves));
+      Off := Off + 4;
 
       Block_Data_From_Key_Plaintext (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;

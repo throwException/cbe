@@ -637,10 +637,14 @@ namespace Cbe {
 
 		enum class State : uint8_t {
 			NORMAL = 0,
-			REKEYING = 1};
+			REKEYING = 1,
+			EXTENDING_VBD = 2};
 
-		State                 state;
-		Virtual_block_address rekeying_vba;
+		State                  state;
+		Virtual_block_address  rekeying_vba;
+		Physical_block_address resizing_first_pba;
+		Number_of_blocks       resizing_nr_of_pbas;
+		Number_of_blocks       resizing_nr_of_leaves;
 
 		// XXX w/o snapshots about 265 bytes,
 		//     snapshots about 68 bytes each, all in all 3529 bytes
@@ -674,7 +678,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[399];
+		char                   padding[375];
 
 		void print(Genode::Output &out) const
 		{

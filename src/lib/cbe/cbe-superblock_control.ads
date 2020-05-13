@@ -40,15 +40,24 @@ is
       Prim :        Primitive.Object_Type);
 
    --
+   --  Submit_Primitive_PBA_Range
+   --
+   procedure Submit_Primitive_PBA_Range (
+      Ctrl       : in out Control_Type;
+      Prim       :        Primitive.Object_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Ctrl : Control_Type)
    return Primitive.Object_Type;
 
    --
-   --  Peek_Completed_Rekeying_Finished
+   --  Peek_Completed_Request_Finished
    --
-   function Peek_Completed_Rekeying_Finished (
+   function Peek_Completed_Request_Finished (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type)
    return Boolean;
@@ -228,6 +237,7 @@ private
 
    type Job_Operation_Type is (
       Invalid,
+      VBD_Extension_Step,
       Initialize_Rekeying,
       Rekey_VBA);
 
@@ -271,8 +281,10 @@ private
       SB_Ciphertext : Superblock_Ciphertext_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
-      Rekeying_Finished : Boolean;
+      Request_Finished : Boolean;
       Snapshots : Snapshots_Type;
+      PBA : Physical_Block_Address_Type;
+      Nr_Of_Blks : Number_Of_Blocks_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -296,6 +308,17 @@ private
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_VBD_Extension_Step
+   --
+   procedure Execute_VBD_Extension_Step (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
       SB            : in out Superblock_Type;

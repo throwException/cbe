@@ -37,11 +37,7 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
-            when Extend_VBD =>
-
-               raise Program_Error;
-
-            when Rekey =>
+            when Rekey | Extend_VBD =>
 
                Obj.Items (Idx).State := Submitted;
                Obj.Items (Idx).Req   := Req;
@@ -55,7 +51,7 @@ is
                   Req                     => Req,
                   Snap_ID                 => Snap_ID,
                   Prim                    => Primitive.Invalid_Object,
-                  Rekeying_Finished       => Boolean'First,
+                  Request_Finished        => Boolean'First,
                   Nr_Of_Requests_Preponed => 0,
                   Nr_Of_Prims_Completed   => 0);
 
@@ -231,7 +227,11 @@ is
          begin
 
             case Itm.State is
-            when Rekey_Init_Pending | Rekey_VBA_Pending =>
+            when
+               Rekey_Init_Pending |
+               Rekey_VBA_Pending |
+               VBD_Extension_Step_Pending
+            =>
 
                return Itm.Prim;
 
@@ -271,6 +271,66 @@ is
    end Peek_Generated_VBD_Primitive_ID;
 
    --
+   --  Peek_Generated_PBA
+   --
+   function Peek_Generated_PBA (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Physical_Block_Address_Type
+   is
+      Idx : constant Pool_Index_Type :=
+         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
+   begin
+
+      case Obj.Items (Idx).State is
+      when VBD_Extension_Step_Pending =>
+
+         if Primitive.Equal (Prim, Obj.Items (Idx).Prim) then
+            return Physical_Block_Address_Type (
+               Request.Block_Number (Obj.Items (Idx).Req));
+         else
+            raise Program_Error;
+         end if;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_PBA;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Number_Of_Blocks_Type
+   is
+      Idx : constant Pool_Index_Type :=
+         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
+   begin
+
+      case Obj.Items (Idx).State is
+      when VBD_Extension_Step_Pending =>
+
+         if Primitive.Equal (Prim, Obj.Items (Idx).Prim) then
+            return Number_Of_Blocks_Type (
+               Request.Count (Obj.Items (Idx).Req));
+         else
+            raise Program_Error;
+         end if;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Nr_Of_Blks;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -291,12 +351,131 @@ is
          when Rekey_VBA_Pending =>
             Obj.Items (Idx).State := Rekey_VBA_In_Progress;
             return;
+         when VBD_Extension_Step_Pending =>
+            Obj.Items (Idx).State := VBD_Extension_Step_In_Progress;
+            return;
          when others =>
-            null;
+            raise Program_Error;
          end case;
       end if;
       raise Program_Error;
    end Drop_Generated_Primitive;
+
+   --
+   --  Execute_Extend_VBD
+   --
+   procedure Execute_Extend_VBD (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Items (Idx).State is
+      when Submitted =>
+
+         Items (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Items (Idx).State := VBD_Extension_Step_Pending;
+         Progress := True;
+
+      when VBD_Extension_Step_Complete =>
+
+         if not Primitive.Success (Items (Idx).Prim) then
+            raise Program_Error;
+         end if;
+
+         if Items (Idx).Request_Finished then
+
+            Request.Success (Items (Idx).Req, True);
+            Items (Idx).State := Complete;
+            Index_Queue.Dequeue (Indices, Idx);
+            Progress := True;
+
+         else
+
+            Items (Idx).Nr_Of_Requests_Preponed := 0;
+            Items (Idx).State := Prepone_Requests_Pending;
+            Progress := True;
+
+         end if;
+
+      when Prepone_Requests_Pending =>
+
+         Declare_Requests_Preponed :
+         declare
+            Requests_Preponed : Boolean := False;
+         begin
+
+            Try_Prepone_Requests :
+            loop
+
+               exit Try_Prepone_Requests when
+                  Items (Idx).Nr_Of_Requests_Preponed >=
+                     Max_Nr_Of_Requests_Preponed_At_A_Time or else
+                  Index_Queue.Item_Is_Tail (Indices, Idx);
+
+               declare
+                  Next_Idx : constant Pool_Index_Type :=
+                     Index_Queue.Next_Item (Indices, Idx);
+               begin
+
+                  case Request.Operation (Items (Next_Idx).Req) is
+                  when Read | Write | Sync | Discard_Snapshot =>
+
+                     Index_Queue.Move_One_Item_Towards_Tail (Indices, Idx);
+                     Items (Idx).Nr_Of_Requests_Preponed :=
+                        Items (Idx).Nr_Of_Requests_Preponed + 1;
+
+                     Requests_Preponed := True;
+                     Progress := True;
+
+                  when others =>
+
+                     exit Try_Prepone_Requests;
+
+                  end case;
+
+               end;
+
+            end loop Try_Prepone_Requests;
+
+            if not Requests_Preponed then
+
+               Items (Idx).State := Prepone_Requests_Complete;
+               Progress := True;
+
+            end if;
+
+         end Declare_Requests_Preponed;
+
+      when Prepone_Requests_Complete =>
+
+         Items (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Items (Idx).State := VBD_Extension_Step_Pending;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Extend_VBD;
 
    --
    --  Execute_Rekey
@@ -339,7 +518,7 @@ is
             raise Program_Error;
          end if;
 
-         if Items (Idx).Rekeying_Finished then
+         if Items (Idx).Request_Finished then
 
             Request.Success (Items (Idx).Req, True);
             Items (Idx).State := Complete;
@@ -445,6 +624,10 @@ is
 
                Execute_Rekey (Obj.Items, Obj.Indices, Idx, Progress);
 
+            when Extend_VBD =>
+
+               Execute_Extend_VBD (Obj.Items, Obj.Indices, Idx, Progress);
+
             when others =>
 
                null;
@@ -516,13 +699,13 @@ is
    end Mark_Generated_Primitive_Complete;
 
    --
-   --  Mark_Generated_Primitive_Complete_Rekeying
+   --  Mark_Generated_Primitive_Complete_Req_Fin
    --
-   procedure Mark_Generated_Primitive_Complete_Rekeying (
-      Obj               : in out Object_Type;
-      Idx               :        Pool_Index_Type;
-      Success           :        Boolean;
-      Rekeying_Finished :        Boolean)
+   procedure Mark_Generated_Primitive_Complete_Req_Fin (
+      Obj              : in out Object_Type;
+      Idx              :        Pool_Index_Type;
+      Success          :        Boolean;
+      Request_Finished :        Boolean)
    is
    begin
 
@@ -540,7 +723,22 @@ is
 
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Rekey_VBA_Complete;
-            Obj.Items (Idx).Rekeying_Finished := Rekeying_Finished;
+            Obj.Items (Idx).Request_Finished := Request_Finished;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Extend_VBD =>
+
+         case Obj.Items (Idx).State is
+         when VBD_Extension_Step_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := VBD_Extension_Step_Complete;
+            Obj.Items (Idx).Request_Finished := Request_Finished;
 
          when others =>
 
@@ -554,7 +752,7 @@ is
 
       end case;
 
-   end Mark_Generated_Primitive_Complete_Rekeying;
+   end Mark_Generated_Primitive_Complete_Req_Fin;
 
    --
    --  Peek_Completed_Request
@@ -630,7 +828,7 @@ is
       Req                     => Request.Invalid_Object,
       Snap_ID                 => 0,
       Prim                    => Primitive.Invalid_Object,
-      Rekeying_Finished       => Boolean'First,
+      Request_Finished        => Boolean'First,
       Nr_Of_Requests_Preponed => 0,
       Nr_Of_Prims_Completed   => 0);
 

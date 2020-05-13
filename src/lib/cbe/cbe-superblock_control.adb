@@ -107,8 +107,10 @@ is
             Key_Plaintext => Key_Plaintext_Invalid,
             Generation => Generation_Type'First,
             Hash => (others => Byte_Type'First),
+            PBA => Physical_Block_Address_Type'First,
+            Nr_Of_Blks => Number_Of_Blocks_Type'First,
             SB_Ciphertext => Superblock_Ciphertext_Invalid,
-            Rekeying_Finished => Boolean'First,
+            Request_Finished => Boolean'First,
             Snapshots => (others => Snapshot_Invalid));
       end loop Initialize_Each_Job;
    end Initialize_Control;
@@ -119,6 +121,40 @@ is
    function Primitive_Acceptable (Ctrl : Control_Type)
    return Boolean
    is (for some Job of Ctrl.Jobs => Job.Operation = Invalid);
+
+   --
+   --  Submit_Primitive_PBA_Range
+   --
+   procedure Submit_Primitive_PBA_Range (
+      Ctrl       : in out Control_Type;
+      Prim       :        Primitive.Object_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         if Ctrl.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step =>
+
+               Ctrl.Jobs (Idx).Operation := VBD_Extension_Step;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               Ctrl.Jobs (Idx).PBA := First_PBA;
+               Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_PBA_Range;
 
    --
    --  Submit_Primitive
@@ -176,9 +212,9 @@ is
    end Peek_Completed_Primitive;
 
    --
-   --  Peek_Completed_Rekeying_Finished
+   --  Peek_Completed_Request_Finished
    --
-   function Peek_Completed_Rekeying_Finished (
+   function Peek_Completed_Request_Finished (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type)
    return Boolean
@@ -186,15 +222,19 @@ is
    begin
       Find_Corresponding_Job :
       for Idx in Ctrl.Jobs'Range loop
-         if Ctrl.Jobs (Idx).Operation = Rekey_VBA and then
-            Ctrl.Jobs (Idx).State = Completed and then
-            Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
-         then
-            return Ctrl.Jobs (Idx).Rekeying_Finished;
-         end if;
+         case Ctrl.Jobs (Idx).Operation is
+         when Rekey_VBA | VBD_Extension_Step =>
+            if Ctrl.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
+            then
+               return Ctrl.Jobs (Idx).Request_Finished;
+            end if;
+         when others =>
+            raise Program_Error;
+         end case;
       end loop Find_Corresponding_Job;
       raise Program_Error;
-   end Peek_Completed_Rekeying_Finished;
+   end Peek_Completed_Request_Finished;
 
    --
    --  Drop_Completed_Primitive
@@ -270,6 +310,166 @@ is
       SB_Cipher.Meta_Leafs              := SB_Plain.Meta_Leafs;
 
    end Init_SB_Ciphertext_Without_Keys;
+
+   --
+   --  Execute_VBD_Extension_Step
+   --
+   procedure Execute_VBD_Extension_Step (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         case SB.State is
+         when Normal =>
+
+            SB.State := Extending_VBD;
+            SB.Resizing_First_PBA := Job.PBA;
+            SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+            SB.Resizing_Nr_Of_Leaves := 0;
+
+            Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+            Job.Key_Plaintext := SB.Current_Key;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Encrypt_Current_Key_Pending;
+            Progress := True;
+
+         when Extending_VBD =>
+
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Encrypt_Current_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Key_Plaintext := SB.Previous_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Previous_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Cache,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Cache_Pending;
+         Progress := True;
+
+      when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
+            Curr_Gen := Curr_Gen + 1;
+         end if;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.Request_Finished := False;
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_VBD_Extension_Step;
 
    --
    --  Execute_Initialize_Rekeying
@@ -507,11 +707,11 @@ is
                   Virtual_Block_Address_Type (Max_Nr_Of_Leafs - 1)
             then
                SB.Rekeying_VBA := SB.Rekeying_VBA + 1;
-               Job.Rekeying_Finished := False;
+               Job.Request_Finished := False;
             else
                SB.Previous_Key := Key_Plaintext_Invalid;
                SB.State := Normal;
-               Job.Rekeying_Finished := True;
+               Job.Request_Finished := True;
             end if;
 
          end Declare_Max_VBA;
@@ -534,7 +734,7 @@ is
             raise Program_Error;
          end if;
 
-         if Job.Rekeying_Finished then
+         if Job.Request_Finished then
 
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Sync,
@@ -681,6 +881,11 @@ is
          when Rekey_VBA =>
 
             Execute_Rekey_VBA (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
+
+         when VBD_Extension_Step =>
+
+            Execute_VBD_Extension_Step (
                Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
          when Invalid =>

@@ -85,6 +85,22 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_PBA
+   --
+   function Peek_Generated_PBA (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Physical_Block_Address_Type;
+
+   --
+   --  Peek_Generated_Nr_Of_Blks
+   --
+   function Peek_Generated_Nr_Of_Blks (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Number_Of_Blocks_Type;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -100,13 +116,13 @@ is
       Success :        Boolean);
 
    --
-   --  Mark_Generated_Primitive_Complete_Rekeying
+   --  Mark_Generated_Primitive_Complete_Req_Fin
    --
-   procedure Mark_Generated_Primitive_Complete_Rekeying (
-      Obj               : in out Object_Type;
-      Idx               :        Pool_Index_Type;
-      Success           :        Boolean;
-      Rekeying_Finished :        Boolean);
+   procedure Mark_Generated_Primitive_Complete_Req_Fin (
+      Obj              : in out Object_Type;
+      Idx              :        Pool_Index_Type;
+      Success          :        Boolean;
+      Request_Finished :        Boolean);
 
    --
    --  Peek_Completed_Request
@@ -143,6 +159,9 @@ private
       Rekey_Init_Complete,
       Prepone_Requests_Pending,
       Prepone_Requests_Complete,
+      VBD_Extension_Step_Pending,
+      VBD_Extension_Step_In_Progress,
+      VBD_Extension_Step_Complete,
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
@@ -153,7 +172,7 @@ private
       Req                     : Request.Object_Type;
       Snap_ID                 : Snapshot_ID_Type;
       Prim                    : Primitive.Object_Type;
-      Rekeying_Finished       : Boolean;
+      Request_Finished        : Boolean;
       Nr_Of_Requests_Preponed : Number_Of_Requests_Type;
       Nr_Of_Prims_Completed   : Number_Of_Primitives_Type;
    end record;
@@ -186,6 +205,15 @@ private
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Extend_VBD
+   --
+   procedure Execute_Extend_VBD (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

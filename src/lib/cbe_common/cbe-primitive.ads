@@ -50,6 +50,7 @@ is
       Tag_Pool_VBD,
       Tag_Pool_SB_Ctrl_Init_Rekey,
       Tag_Pool_SB_Ctrl_Rekey_VBA,
+      Tag_Pool_SB_Ctrl_VBD_Ext_Step,
       Tag_SB_Ctrl_TA_Create_Key,
       Tag_SB_Ctrl_TA_Secure_SB,
       Tag_SB_Ctrl_TA_Encrypt_Key,
@@ -124,6 +125,7 @@ is
       when Tag_Pool_VBD => "Pool_VBD",
       when Tag_Pool_SB_Ctrl_Init_Rekey => "Pool_SB_Ctrl_Init_Rekey",
       when Tag_Pool_SB_Ctrl_Rekey_VBA => "Pool_SB_Ctrl_Rekey_VBA",
+      when Tag_Pool_SB_Ctrl_VBD_Ext_Step => "Pool_SB_Ctrl_VBD_Ext_Step",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
       when Tag_SB_Ctrl_TA_Secure_SB => "SB_Ctrl_TA_Secure_SB",
       when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
@@ -320,6 +322,10 @@ is
    function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Rekey_VBA (Obj : Object_Type) return Boolean;
+
+   function Has_Tag_Pool_SB_Ctrl_VBD_Ext_Step (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Secure_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
