@@ -83,9 +83,9 @@ append config {
 		<config>
 			<key id="12"/>
 			<virtual-block-device
-				nr_of_levels="4"
+				nr_of_levels="3"
 				nr_of_children="64"
-				nr_of_leafs="4096" />
+				nr_of_leafs="512" />
 
 			<free-tree
 				nr_of_levels="3"
