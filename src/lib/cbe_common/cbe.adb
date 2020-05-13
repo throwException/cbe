@@ -446,8 +446,7 @@ is
    begin
       case Data (Off) is
       when 0 => return Normal;
-      when 1 => return Rekeying_Virtual_Block_Device;
-      when 2 => return Rekeying_Free_Tree;
+      when 1 => return Rekeying;
       when others => raise Program_Error;
       end case;
    end SB_State_From_Block_Data;
@@ -463,8 +462,7 @@ is
    begin
       case State is
       when Normal => Data (Off) := 0;
-      when Rekeying_Virtual_Block_Device => Data (Off) := 1;
-      when Rekeying_Free_Tree => Data (Off) := 2;
+      when Rekeying => Data (Off) := 1;
       end case;
    end Block_Data_From_SB_State;
 

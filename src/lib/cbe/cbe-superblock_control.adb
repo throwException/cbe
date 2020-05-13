@@ -230,7 +230,7 @@ is
          raise Program_Error;
       end if;
 
-      SB.State := Rekeying_Virtual_Block_Device;
+      SB.State := Rekeying;
       SB.Rekeying_VBA := 0;
       SB.Previous_Key := SB.Current_Key;
       SB.Current_Key := (
@@ -462,7 +462,7 @@ is
       case Job.State is
       when Submitted =>
 
-         if SB.State /= Rekeying_Virtual_Block_Device then
+         if SB.State /= Rekeying then
             raise Program_Error;
          end if;
 
@@ -835,7 +835,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
                return SB.Last_Secured_Generation;
             else
@@ -872,7 +872,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
                return SB.Rekeying_VBA;
             else
@@ -909,7 +909,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
                return SB.Snapshots;
             else
@@ -946,7 +946,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
                return SB.Degree;
             else
@@ -983,7 +983,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
 
                return SB.Previous_Key.ID;
@@ -1024,7 +1024,7 @@ is
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Rekeying_Virtual_Block_Device
+               SB.State = Rekeying
             then
 
                return SB.Current_Key.ID;

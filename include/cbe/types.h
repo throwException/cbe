@@ -634,8 +634,7 @@ namespace Cbe {
 
 		enum class State : uint8_t {
 			NORMAL = 0,
-			REKEYING_VIRTUAL_BLOCK_DEVICE = 1,
-			REKEYING_FREE_TREE = 2 };
+			REKEYING = 1};
 
 		State                 state;
 		Virtual_block_address rekeying_vba;

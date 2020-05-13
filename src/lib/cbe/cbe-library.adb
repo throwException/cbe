@@ -1466,10 +1466,7 @@ is
                   VBA              => VBA,
                   VBD_Degree       => Obj.Superblock.Degree,
                   VBD_Highest_VBA  => Max_VBA (Obj),
-                  Rekeying         =>
-                     Obj.Superblock.State = Rekeying_Virtual_Block_Device
-                     or else
-                     Obj.Superblock.State = Rekeying_Free_Tree,
+                  Rekeying         => Obj.Superblock.State = Rekeying,
                   Previous_Key_ID  => Obj.Superblock.Previous_Key.ID,
                   Current_Key_ID   => Obj.Superblock.Current_Key.ID,
                   Rekeying_VBA     => Obj.Superblock.Rekeying_VBA);

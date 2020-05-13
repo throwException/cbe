@@ -276,8 +276,7 @@ is
 
    type Superblock_State_Type is (
       Normal,
-      Rekeying_Virtual_Block_Device,
-      Rekeying_Free_Tree);
+      Rekeying);
 
    --
    --  The CBE::Superblock contains all information of a CBE
