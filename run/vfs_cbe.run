@@ -82,7 +82,8 @@ set config {
 	</start>}
 
 append_if $use_interactively config {
-	<start name="terminal" caps="110">
+	<start name="terminal_service" caps="110">
+		<binary name="terminal"/>
 		<resource name="RAM" quantum="2M"/>
 		<provides><service name="Terminal"/></provides>
 		<route>
@@ -92,7 +93,8 @@ append_if $use_interactively config {
 	</start>}
 
 append_if [expr !$use_interactively] config {
-	<start name="log_terminal" caps="110">
+	<start name="terminal_service" caps="110">
+		<binary name="log_terminal"/>
 		<resource name="RAM" quantum="2M"/>
 		<provides><service name="Terminal"/></provides>
 		<route>
@@ -119,7 +121,8 @@ append_if [expr !$use_block] config {
 
 append config {
 
-	<start name="vfs" caps="120">
+	<start name="vfs_cbe" caps="120">
+		<binary name="vfs"/>
 		<resource name="RAM" quantum="30M"/>
 		<provides><service name="File_system"/></provides>
 		<config>
@@ -130,9 +133,34 @@ append_if $use_block config {
 append_if [expr !$use_block] config {
 				<fs buffer_size="1M" label="fs_backend"/>}
 
+append_if $use_block config {
+				<cbe name="cbe" show_progress="no" block="/block">}
+
+append_if [expr !$use_block] config "<cbe name=\"cbe\" show_progress=\"no\" block=\"/[cbe_image_file]\">"
+
 append config {
-				<tar name="coreutils.tar" />
-				<tar name="bash.tar" />
+					<!-- key smallest id in sync with init run scripts -->
+					<crypto>
+						<key id="12" value="All your base are belong to us ?"/>
+					</crypto>
+				</cbe>
+			</vfs>
+
+			<default-policy root="/" writeable="yes"/>
+		</config>
+		<route>
+			<service name="File_system" label="fs_backend"> <child name="lx_fs"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
+	<start name="vfs" caps="120">
+		<resource name="RAM" quantum="30M"/>
+		<provides><service name="File_system"/></provides>
+		<config>
+			<vfs>
+				<tar name="coreutils.tar"/>
+				<tar name="bash.tar"/>
 
 				<dir name="home"> <ram/> </dir>
 				<dir name="share"> </dir>
@@ -140,19 +168,7 @@ append config {
 				<dir name="dev">
 					<zero/> <null/> <terminal/>
 					<dir name="pipe"> <pipe/> </dir>
-					<inline name="rtc">2018-01-01 00:01</inline>}
-
-append_if $use_block config {
-					<cbe name="cbe" show_progress="no" block="/block">}
-
-append_if [expr !$use_block] config "<cbe name=\"cbe\" show_progress=\"no\" block=\"/[cbe_image_file]\">"
-
-append config {
-						<!-- key smallest id in sync with init run scripts -->
-						<crypto>
-							<key id="12" value="All your base are belong to us ?"/>
-						</crypto>
-					</cbe>
+					<inline name="rtc">2018-01-01 00:01</inline>
 				</dir>
 			</vfs>
 
@@ -160,15 +176,7 @@ append config {
 			<default-policy root="/" writeable="yes"/>
 		</config>
 		<route>
-			<service name="File_system" label="fs_backend"> <child name="lx_fs"/> </service>}
-
-append_if $use_interactively config {
-			<service name="Terminal"> <child name="terminal"/> </service>}
-
-append_if [expr !$use_interactively] config {
-			<service name="Terminal"> <child name="log_terminal"/> </service>}
-
-append config {
+			<service name="Terminal"> <child name="terminal_service"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
 			<any-service> <parent/> </any-service>
 		</route>
@@ -191,7 +199,10 @@ append config {
 			<libc stdin="/dev/terminal" stdout="/dev/terminal"
 			      stderr="/dev/terminal" rtc="/dev/rtc" pipe="/dev/pipe"/>
 			<vfs>
-				<fs/>
+				<fs label="shell"/>
+				<dir name="dev">
+					<fs label="cbe"/>
+				</dir>
 				<rom name=".bashrc" label="vfs_cbe.sh"/>
 			</vfs>
 			<arg value="bash"/>
@@ -200,7 +211,8 @@ append config {
 			<env key="PATH" value="/bin" />
 		</config>
 		<route>
-			<service name="File_system"> <child name="vfs"/> </service>
+			<service name="File_system" label="shell"> <child name="vfs"/> </service>
+			<service name="File_system" label="cbe"> <child name="vfs_cbe"/> </service>
 			<service name="ROM" label_suffix=".lib.so"> <parent/> </service>
 			<service name="ROM" label_last="/bin/bash"> <child name="vfs_rom"/> </service>
 			<service name="ROM" label_prefix="/bin"> <child name="vfs_rom"/> </service>
