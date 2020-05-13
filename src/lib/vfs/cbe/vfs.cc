@@ -42,6 +42,7 @@ namespace Vfs_cbe {
 	struct Local_factory;
 	class  File_system;
 
+	class Backend_file;
 	class Wrapper;
 }
 
@@ -150,17 +151,17 @@ class Vfs_cbe::Wrapper
 			.key_id      = 0, };
 
 		/* configuration options */
-		bool _verbose       { true }; // XXX
-		bool _show_progress { false };
+		bool _verbose       { false };
+		bool _debug         { false };
 
 		using Backend_device_path = Genode::String<32>;
 		Backend_device_path _block_device { "/dev/block" };
 
 		void _read_config(Xml_node config)
 		{
-			_verbose       = config.attribute_value("verbose", _verbose);
-			_show_progress = config.attribute_value("show_progress", _show_progress);
-			_block_device  = config.attribute_value("block", _block_device);
+			_verbose      = config.attribute_value("verbose", _verbose);
+			_debug        = config.attribute_value("debug",   _debug);
+			_block_device = config.attribute_value("block",   _block_device);
 
 			config.with_sub_node ("crypto", [&] (Xml_node const &crypto) {
 
@@ -250,6 +251,10 @@ class Vfs_cbe::Wrapper
 				if (bytes < Cbe::BLOCK_SIZE) {
 					error("complete_read failed, bytes: ", bytes);
 					return Cbe::Superblocks_index(0);
+				}
+
+				if (_debug) {
+					log("sb[", i, "]: ", dst);
 				}
 
 				if (dst.valid() &&
@@ -853,6 +858,9 @@ class Vfs_cbe::Wrapper
 				if (cbe_request.operation() == Cbe::Request::Operation::REKEY) {
 					bool const req_sucess =
 						cbe_request.success() == Cbe::Request::Success::TRUE;
+					if (_verbose) {
+						log("Complete request: backend request (", cbe_request, ")");
+					}
 					_rekey_obj.state = Rekeying::State::IDLE;
 					_rekey_obj.last_result = req_sucess ? Rekeying::Result::SUCCESS
 					                                    : Rekeying::Result::FAILED;
@@ -1081,6 +1089,16 @@ class Vfs_cbe::Wrapper
 			return progress;
 		}
 
+		void _dump_state()
+		{
+			if (_debug) {
+				static uint64_t cnt = 0;
+				log("FE: ", Frontend_request::state_to_string(_frontend_request.state), " ",
+				    "BE: ", Backend_request::state_to_string(_backend_request.state),
+				    " ", ++cnt);
+			}
+		}
+
 		void handle_frontend_request()
 		{
 			while (true) {
@@ -1113,6 +1131,16 @@ class Vfs_cbe::Wrapper
 					}
 				}
 
+				if (!progress) {
+					_dump_state();
+				}
+
+				if (_debug) {
+					log("frontend_progress: ", frontend_progress,
+					    " backend_progress: ", backend_progress,
+					    " crypto_progress: ", crypto_progress);
+				}
+
 				if (!progress) { break; }
 			}
 		}
@@ -1134,6 +1162,10 @@ class Vfs_cbe::Wrapper
 				0, 0, 0,
 				_rekey_obj.key_id,
 				0);
+
+			if (_verbose) {
+				Genode::log("Req: (background req: ", req, ")");
+			}
 
 			_cbe->submit_client_request(req, 0);
 			_rekey_obj.state       = Rekeying::State::IN_PROGRESS;
