@@ -193,8 +193,8 @@ append config {
 		</route>
 	</start>
 
-	<start name="/bin/bash" caps="1000">
-		<resource name="RAM" quantum="30M" />
+	<start name="/bin/bash" caps="3000">
+		<resource name="RAM" quantum="128M" />
 		<config ld_verbose="yes">
 			<libc stdin="/dev/terminal" stdout="/dev/terminal"
 			      stderr="/dev/terminal" rtc="/dev/rtc" pipe="/dev/pipe"/>
@@ -243,5 +243,5 @@ build_boot_image $boot_modules
 if {$use_interactively} {
 	run_genode_until forever
 } else {
-	run_genode_until {.*--- Automated CBE testing finished.*} 60
+	run_genode_until {.*--- Automated CBE testing finished.*} 600
 }
