@@ -54,8 +54,11 @@ is
    procedure Submit_Primitive_Resizing (
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
+      Curr_Gen         :        Generation_Type;
       Snapshot         :        Snapshot_Type;
-      Snapshots_Degree :        Tree_Degree_Type);
+      Snapshots_Degree :        Tree_Degree_Type;
+      First_PBA        :        Physical_Block_Address_Type;
+      Nr_Of_PBAs       :        Number_Of_Blocks_Type);
 
    --
    --  Peek_Completed_Primitive
@@ -337,6 +340,8 @@ private
       VBA              : Virtual_Block_Address_Type;
       T1_Node_Walk     : Type_1_Node_Walk_Type;
       New_PBAs         : Write_Back.New_PBAs_Type;
+      PBA              : Physical_Block_Address_Type;
+      Nr_Of_PBAs       : Number_Of_Blocks_Type;
       Nr_Of_Blks       : Number_Of_Blocks_Type;
       Curr_Gen         : Generation_Type;
       Last_Secured_Gen : Generation_Type;
@@ -429,5 +434,23 @@ private
       Snapshots        : in out Snapshots_Type;
       Curr_Gen         :        Generation_Type;
       Last_Secured_Gen :        Generation_Type);
+
+   --
+   --  Alloc_PBA_From_Resizing_Contingent
+   --
+   procedure Alloc_PBA_From_Resizing_Contingent (
+      First_PBA     :        Physical_Block_Address_Type;
+      Nr_Of_PBAs    : in out Number_Of_Blocks_Type;
+      Allocated_PBA :    out Physical_Block_Address_Type);
+
+   --
+   --  Add_New_Root_Level_To_Snapshot
+   --
+   procedure Add_New_Root_Level_To_Snapshot (
+      Snap       : in out Snapshot_Type;
+      T1_Blks    : in out Type_1_Node_Blocks_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs : in out Number_Of_Blocks_Type;
+      Curr_Gen   :        Generation_Type);
 
 end CBE.VBD_Rekeying;

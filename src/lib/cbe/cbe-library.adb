@@ -2236,10 +2236,14 @@ is
             when Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step =>
 
                VBD_Rekeying.Submit_Primitive_Resizing (
-                  Obj.VBD_Rkg, Prim,
+                  Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
                   Superblock_Control.Peek_Generated_Snapshot (
                      Obj.SB_Ctrl, Prim, Obj.Superblock),
                   Superblock_Control.Peek_Generated_Snapshots_Degree (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_PBA (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Nr_Of_Blks (
                      Obj.SB_Ctrl, Prim, Obj.Superblock));
 
                Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
