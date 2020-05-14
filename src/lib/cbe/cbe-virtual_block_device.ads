@@ -96,14 +96,18 @@ is
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
-      Obj       : in out Object_Type;
-      PBA       :        Physical_Block_Address_Type;
-      Gen       :        Generation_Type;
-      Hash      :        Hash_Type;
-      Max_Level :        Tree_Level_Index_Type;
-      Degree    :        Tree_Degree_Type;
-      Leafs     :        Tree_Number_Of_Leafs_Type;
-      Prim      :        Primitive.Object_Type);
+      Obj             : in out Object_Type;
+      PBA             :        Physical_Block_Address_Type;
+      Gen             :        Generation_Type;
+      Hash            :        Hash_Type;
+      Max_Level       :        Tree_Level_Index_Type;
+      Degree          :        Tree_Degree_Type;
+      Leafs           :        Tree_Number_Of_Leafs_Type;
+      Prim            :        Primitive.Object_Type;
+      Rekeying        :        Boolean;
+      Rekeying_VBA    :        Virtual_Block_Address_Type;
+      Previous_Key_ID :        Key_ID_Type;
+      Current_Key_ID  :        Key_ID_Type);
 
    --
    --  Peek_Completed_Primitive
@@ -116,6 +120,12 @@ is
 
    function Peek_Completed_Generation (Obj : Object_Type)
    return Generation_Type;
+
+   --
+   --  Peek_Completed_Key_ID
+   --
+   function Peek_Completed_Key_ID (Obj : Object_Type)
+   return Key_ID_Type;
 
    --
    --  Drop_Completed_Primitive
@@ -181,6 +191,7 @@ private
       Cache_Prim       : Primitive.Object_Type;
       Cache_Prim_State : Cache_Primitive_State_Type;
       Cache_Prim_Data  : Block_Data_Type;
+      Key_ID           : Key_ID_Type;
    end record;
 
 end CBE.Virtual_Block_Device;

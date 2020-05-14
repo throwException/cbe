@@ -35,7 +35,8 @@ is
          Execute_Progress => False,
          Cache_Prim       => Primitive.Invalid_Object,
          Cache_Prim_State => Invalid,
-         Cache_Prim_Data  => (others => 0));
+         Cache_Prim_Data  => (others => 0),
+         Key_ID           => Key_ID_Type'First);
    end Initialized_Object;
 
    --
@@ -130,18 +131,32 @@ is
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
-      Obj       : in out Object_Type;
-      PBA       :        Physical_Block_Address_Type;
-      Gen       :        Generation_Type;
-      Hash      :        Hash_Type;
-      Max_Level :        Tree_Level_Index_Type;
-      Degree    :        Tree_Degree_Type;
-      Leafs     :        Tree_Number_Of_Leafs_Type;
-      Prim      :        Primitive.Object_Type)
+      Obj             : in out Object_Type;
+      PBA             :        Physical_Block_Address_Type;
+      Gen             :        Generation_Type;
+      Hash            :        Hash_Type;
+      Max_Level       :        Tree_Level_Index_Type;
+      Degree          :        Tree_Degree_Type;
+      Leafs           :        Tree_Number_Of_Leafs_Type;
+      Prim            :        Primitive.Object_Type;
+      Rekeying        :        Boolean;
+      Rekeying_VBA    :        Virtual_Block_Address_Type;
+      Previous_Key_ID :        Key_ID_Type;
+      Current_Key_ID  :        Key_ID_Type)
    is
+      Prim_VBA : constant Virtual_Block_Address_Type :=
+         Virtual_Block_Address_Type (Primitive.Block_Number (Prim));
    begin
       Obj.Trans_Helper :=
          Tree_Helper.Initialized_Object (Degree, Max_Level, Leafs);
+
+      if Rekeying and then
+         Rekeying_VBA <= Prim_VBA
+      then
+         Obj.Key_ID := Previous_Key_ID;
+      else
+         Obj.Key_ID := Current_Key_ID;
+      end if;
 
       Translation.Submit_Primitive (
          Obj.Trans, PBA, Gen, Hash, Obj.Trans_Helper, Prim);
@@ -167,6 +182,13 @@ is
    function Peek_Completed_Generation (Obj : Object_Type)
    return Generation_Type
    is (Translation.Peek_Completed_Generation (Obj.Trans));
+
+   --
+   --  Peek_Completed_Key_ID
+   --
+   function Peek_Completed_Key_ID (Obj : Object_Type)
+   return Key_ID_Type
+   is (Obj.Key_ID);
 
    --
    --  Drop_Completed_Primitive

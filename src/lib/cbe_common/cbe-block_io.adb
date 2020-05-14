@@ -16,7 +16,8 @@ is
        Prim       => Primitive.Invalid_Object,
        Hash_Valid => False,
        Hash       => (others => 0),
-       State      => Unused);
+       State      => Unused,
+       Key_ID     => Key_ID_Invalid);
 
    procedure Initialize_Object (Obj : out Object_Type)
    is
@@ -49,7 +50,8 @@ is
                Prim       => Primitive.Copy_Valid_Object_New_Tag (Prim, Tag),
                Hash_Valid => False,
                Hash       => (others => 0),
-               State      => Pending);
+               State      => Pending,
+               Key_ID     => Key_ID_Type'First);
 
             Obj.Used_Entries := Obj.Used_Entries + 1;
             return;
@@ -59,9 +61,10 @@ is
    end Submit_Primitive;
 
    procedure Submit_Primitive_Decrypt (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type;
-      Hash :        Hash_Type)
+      Obj    : in out Object_Type;
+      Prim   :        Primitive.Object_Type;
+      Hash   :        Hash_Type;
+      Key_ID :        Key_ID_Type)
    is
    begin
       for Idx in Obj.Entries'Range loop
@@ -72,7 +75,8 @@ is
                   Prim, Primitive.Tag_Decrypt),
                Hash_Valid => True,
                Hash       => Hash,
-               State      => Pending);
+               State      => Pending,
+               Key_ID     => Key_ID);
 
             Obj.Used_Entries := Obj.Used_Entries + 1;
             return;
@@ -99,6 +103,7 @@ is
                   Blk_Nr => Primitive.Block_Number (Prim),
                   Idx    => Primitive.Index (Prim)),
                State      => Pending,
+               Key_ID     => Key_ID_Invalid,
                Hash_Valid => False,
                Hash       => (others => 0));
 
@@ -122,6 +127,24 @@ is
 
       return Primitive.Invalid_Object;
    end Peek_Completed_Primitive;
+
+   function Peek_Completed_Key_ID (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type
+   is
+   begin
+      for I in Obj.Entries'Range loop
+         if
+            Obj.Entries (I).State = Complete and then
+            Primitive.Equal (Prim, Obj.Entries (I).Prim)
+         then
+            return Obj.Entries (I).Key_ID;
+         end if;
+      end loop;
+
+      raise Program_Error;
+   end Peek_Completed_Key_ID;
 
    function Peek_Completed_Data_Index (Obj : Object_Type)
    return Data_Index_Type

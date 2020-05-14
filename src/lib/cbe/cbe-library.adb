@@ -895,7 +895,7 @@ is
                   Crypto.Submit_Completed_Primitive (
                      Obj.Crypto_Obj,
                      Prim,
-                     Obj.Superblock.Current_Key.ID,
+                     Virtual_Block_Device.Peek_Completed_Key_ID (Obj.VBD),
                      Data_Idx);
 
                   Crypto_Plain_Buf (Data_Idx) := (others => 0);
@@ -911,7 +911,8 @@ is
 
                Block_IO.Submit_Primitive_Decrypt (
                   Obj.IO_Obj, Prim,
-                  Virtual_Block_Device.Peek_Completed_Hash (Obj.VBD));
+                  Virtual_Block_Device.Peek_Completed_Hash (Obj.VBD),
+                  Virtual_Block_Device.Peek_Completed_Key_ID (Obj.VBD));
 
                Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
                Progress := True;
@@ -1866,7 +1867,12 @@ is
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).Max_Level,
                   Obj.Superblock.Degree,
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).Nr_Of_Leafs,
-                  Prim);
+                  Prim,
+                  Obj.Superblock.State = Rekeying,
+                  Obj.Superblock.Rekeying_VBA,
+                  Obj.Superblock.Previous_Key.ID,
+                  Obj.Superblock.Current_Key.ID
+                  );
 
                Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
@@ -3065,7 +3071,8 @@ is
                               Prim,
                               Block_IO.Peek_Completed_Tag (
                                  Obj.IO_Obj, Prim)),
-                           Obj.Superblock.Current_Key.ID,
+                           Block_IO.Peek_Completed_Key_ID (
+                              Obj.IO_Obj, Prim),
                            Data_Idx);
 
                         Crypto_Cipher_Buf (Data_Idx) := IO_Buf (Index);

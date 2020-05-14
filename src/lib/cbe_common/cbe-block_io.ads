@@ -74,15 +74,24 @@ is
    --        delivered the completed primitive.
    --
    procedure Submit_Primitive_Decrypt (
-      Obj  : in out Object_Type;
-      Prim :        Primitive.Object_Type;
-      Hash :        Hash_Type);
+      Obj    : in out Object_Type;
+      Prim   :        Primitive.Object_Type;
+      Hash   :        Hash_Type;
+      Key_ID :        Key_ID_Type);
 
    --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
+
+   --
+   --  Peek_Completed_Key_ID
+   --
+   function Peek_Completed_Key_ID (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type;
 
    --
    --  Get access to the data of a completed primitive
@@ -197,6 +206,7 @@ private
       Hash       : Hash_Type;
       Hash_Valid : Boolean;
       State      : Entry_State_Type;
+      Key_ID     : Key_ID_Type;
    end record;
 
    type Entries_Type is array (Data_Index_Type'Range) of Entry_Type;
