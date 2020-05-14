@@ -339,6 +339,7 @@ is
 
             Request.Success (Items (Idx).Req, True);
             Items (Idx).State := Complete;
+            Index_Queue.Dequeue (Indices, Idx);
             Progress := True;
 
          else
