@@ -142,6 +142,14 @@ main() {
 		echo "--> Run $i done"
 	done
 
+	echo "--> Read/Compare test"
+	test_read_compare_1 "$data_file" "0"
+	test_read_compare_1 "$data_file" "490"
+	test_read_compare_1 "$data_file" "468"
+	test_read_compare_1 "$data_file" "8"
+	test_read_compare_1 "$data_file" "16"
+	echo "--> Read/Compare test done"
+
 	echo "--- Automated CBE testing finished, shell is yours ---"
 }
 
