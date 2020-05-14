@@ -111,25 +111,33 @@ main() {
 	ls -l $cbe_dir
 
 	for i in $(seq 3); do
-		echo "Run $i:"
+		echo "--> Run $i:"
 		test_write_1 "$data_file"  "0"
 		test_write_1 "$data_file"  "8"
 		test_write_1 "$data_file" "16"
+		test_write_1 "$data_file" "490"
+		test_write_1 "$data_file" "468"
 		test_create_snapshot "$cbe_dir"
 
 		test_read_compare_1 "$data_file" "0"
 		test_read_compare_1 "$data_file" "8"
+		test_read_compare_1 "$data_file" "16"
+		test_read_compare_1 "$data_file" "490"
 
 		test_rekey "$cbe_dir"
 
 		test_read_compare_1 "$data_file" "0"
+		test_rekey_state "$cbe_dir"
+		test_read_compare_1 "$data_file" "490"
+		test_rekey_state "$cbe_dir"
+		test_read_compare_1 "$data_file" "468"
 		test_rekey_state "$cbe_dir"
 		test_read_compare_1 "$data_file" "8"
 		test_rekey_state "$cbe_dir"
 		test_read_compare_1 "$data_file" "16"
 
 		wait_for_rekeying "$cbe_dir"
-		echo "Run $i done"
+		echo "--> Run $i done"
 	done
 
 	echo "--- Automated CBE testing finished, shell is yours ---"
