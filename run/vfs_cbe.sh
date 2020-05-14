@@ -7,10 +7,12 @@ produce_pattern() {
 	local size="$2"
 	[ "$pattern" = "" ] && exit 1
 
-	local N=16384
+	local tmp_file="/tmp/pattern.tmp"
+	local N=12000
 	# prints numbers until N and uses pattern as delimiter and
-	# generates about 85 KiB of data with a 1 byte pattern
-	seq -s "$pattern" $N | dd count=1 bs=$size 2>/dev/null
+	# generates about 60 KiB of data with a 1 byte pattern
+	seq -s "$pattern" $N > $tmp_file
+	dd if=$tmp_file count=1 bs=$size 2>/dev/null
 }
 
 test_write_1() {
@@ -43,10 +45,10 @@ test_read_compare_1() {
 		echo "mismatch for block $offset:"
 		echo "  expected: $sha1_sum"
 		echo -n "  "
-		cat $pattern_file | dd bs=32 count=1 2>/dev/null; echo
+		dd if=$pattern_file bs=32 count=1 2>/dev/null; echo
 		echo "  got: $sha1out_sum"
 		echo -n "  "
-		cat $pattern_file.out | dd bs=32 count=1 2>/dev/null; echo
+		dd if=$pattern_file.out bs=32 count=1 2>/dev/null; echo
 		return 1
 	fi
 }
