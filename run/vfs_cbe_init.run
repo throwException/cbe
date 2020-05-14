@@ -1,5 +1,6 @@
 assert_spec linux
 
+if {[expr ![info exists ::env(CBE_KEEP)]]} {
 exec rm -rf var/libcache/cbe
 exec rm -rf var/libcache/cbe_cxx
 exec rm -rf var/libcache/cbe_common
@@ -12,6 +13,7 @@ exec rm -rf var/libcache/cbe_dump
 exec rm -rf var/libcache/cbe_dump_cxx
 exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
+}
 
 proc cbe_image_file { } {
 	return "vfs_cbe_block.img"
