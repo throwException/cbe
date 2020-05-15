@@ -245,5 +245,5 @@ build_boot_image $boot_modules
 if {$use_interactively} {
 	run_genode_until forever
 } else {
-	run_genode_until {.*--- Automated CBE testing finished.*} 600
+	run_genode_until {.*--- Automated CBE testing finished.*} 1800
 }
