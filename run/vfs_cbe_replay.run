@@ -18,7 +18,7 @@ exec rm -rf var/libcache/external_crypto_cxx
 create_boot_directory
 
 proc cbe_image_file { } {
-	return "vfs_cbe_block.img"
+	return "vfs_cbe_replay.img"
 }
 
 build {
@@ -1013,7 +1013,11 @@ append config {
 			<vfs>
 				<fs label="fs_backend"/>
 				<dir name="dev">
-					<cbe name="cbe" show_progress="no" key_id="23" passphrase="All your base are belong" block="/} [cbe_image_file] {"/>
+					<cbe name="cbe" block="/} [cbe_image_file] {">
+						<crypto>
+							<key id="23" value="Foobar"/>
+						</crypto>
+					</cbe>
 				</dir>
 			</vfs>
 		</config>

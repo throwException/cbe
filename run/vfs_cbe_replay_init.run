@@ -1,7 +1,7 @@
 assert_spec linux
 
 proc cbe_image_file { } {
-	return "vfs_cbe_block.img"
+	return "vfs_cbe_replay.img"
 }
 
 set image_size 3072
