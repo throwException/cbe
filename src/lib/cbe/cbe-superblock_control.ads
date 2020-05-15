@@ -214,15 +214,6 @@ is
    return Key_ID_Type;
 
    --
-   --  Peek_Generated_Snapshot
-   --
-   function Peek_Generated_Snapshot (
-      Ctrl : Control_Type;
-      Prim : Primitive.Object_Type;
-      SB   : Superblock_Type)
-   return Snapshot_Type;
-
-   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (

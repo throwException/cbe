@@ -2239,7 +2239,9 @@ is
 
                VBD_Rekeying.Submit_Primitive_Resizing (
                   Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
-                  Superblock_Control.Peek_Generated_Snapshot (
+                  Superblock_Control.Peek_Generated_Last_Secured_Gen (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Snapshots (
                      Obj.SB_Ctrl, Prim, Obj.Superblock),
                   Superblock_Control.Peek_Generated_Snapshots_Degree (
                      Obj.SB_Ctrl, Prim, Obj.Superblock),

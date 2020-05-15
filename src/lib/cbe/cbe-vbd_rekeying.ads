@@ -55,7 +55,8 @@ is
       Rkg              : in out Rekeying_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
-      Snapshot         :        Snapshot_Type;
+      Last_Secured_Gen :        Generation_Type;
+      Snapshots        :        Snapshots_Type;
       Snapshots_Degree :        Tree_Degree_Type;
       First_PBA        :        Physical_Block_Address_Type;
       Nr_Of_PBAs       :        Number_Of_Blocks_Type);
@@ -464,10 +465,31 @@ private
    --  Add_New_Root_Level_To_Snapshot
    --
    procedure Add_New_Root_Level_To_Snapshot (
-      Snap       : in out Snapshot_Type;
-      T1_Blks    : in out Type_1_Node_Blocks_Type;
-      First_PBA  :        Physical_Block_Address_Type;
-      Nr_Of_PBAs : in out Number_Of_Blocks_Type;
-      Curr_Gen   :        Generation_Type);
+      Snapshots    : in out Snapshots_Type;
+      Snap_Idx     : in out Snapshots_Index_Type;
+      Curr_Gen     :        Generation_Type;
+      Last_Secured :        Generation_Type;
+      T1_Blks      : in out Type_1_Node_Blocks_Type;
+      First_PBA    :        Physical_Block_Address_Type;
+      Nr_Of_PBAs   : in out Number_Of_Blocks_Type);
+
+   --
+   --  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap
+   --
+   function Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
+      Snapshots        : Snapshots_Type;
+      Curr_Gen         : Generation_Type;
+      Last_Secured_Gen : Generation_Type)
+   return Snapshots_Index_Type;
+
+   --
+   --  Set_New_PBAs_For_Write_Back_Of_New_Root_Branch
+   --
+   procedure Set_New_PBAs_For_Write_Back_Of_New_Root_Branch (
+      Snapshot          :     Snapshot_Type;
+      Snapshot_Degree   :     Tree_Degree_Type;
+      VBA               :     Virtual_Block_Address_Type;
+      T1_Blks           :     Type_1_Node_Blocks_Type;
+      New_PBAs          : out Write_Back.New_PBAs_Type);
 
 end CBE.VBD_Rekeying;

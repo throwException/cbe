@@ -1064,6 +1064,16 @@ is
                raise Program_Error;
             end if;
 
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
+            then
+               return SB.Last_Secured_Generation;
+            else
+               raise Program_Error;
+            end if;
+
          when others =>
 
             raise Program_Error;
@@ -1187,43 +1197,6 @@ is
    end Peek_Generated_Nr_Of_Blks;
 
    --
-   --  Peek_Generated_Snapshot
-   --
-   function Peek_Generated_Snapshot (
-      Ctrl : Control_Type;
-      Prim : Primitive.Object_Type;
-      SB   : Superblock_Type)
-   return Snapshot_Type
-   is
-      Idx : constant Jobs_Index_Type :=
-         Jobs_Index_Type (Primitive.Index (Prim));
-   begin
-
-      if Ctrl.Jobs (Idx).Operation /= Invalid then
-
-         case Ctrl.Jobs (Idx).State is
-         when VBD_Ext_Step_In_VBD_Pending =>
-
-            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
-               SB.State = Extending_VBD
-            then
-               return SB.Snapshots (SB.Curr_Snap);
-            else
-               raise Program_Error;
-            end if;
-
-         when others =>
-
-            raise Program_Error;
-
-         end case;
-
-      end if;
-      raise Program_Error;
-
-   end Peek_Generated_Snapshot;
-
-   --
    --  Peek_Generated_Snapshots
    --
    function Peek_Generated_Snapshots (
@@ -1243,6 +1216,16 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
                SB.State = Rekeying
+            then
+               return SB.Snapshots;
+            else
+               raise Program_Error;
+            end if;
+
+         when VBD_Ext_Step_In_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_VBD
             then
                return SB.Snapshots;
             else
