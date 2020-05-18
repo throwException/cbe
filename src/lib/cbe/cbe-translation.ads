@@ -27,15 +27,12 @@ is
    --
    procedure Initialize_Object (
       Obj     : out Object_Type;
-      Helpr   :     Tree_Helper.Object_Type;
       Free_Tr :     Boolean);
 
    --
    --  Return an initialized object of the translation module
    --
-   function Initialized_Object (
-      Helpr   : Tree_Helper.Object_Type;
-      Free_Tr : Boolean)
+   function Initialized_Object (Free_Tr : Boolean)
    return Object_Type;
 
    --
@@ -78,11 +75,12 @@ is
    --  \param Prim      the primitive for the request
    --
    procedure Submit_Primitive (
-      Obj       : in out Object_Type;
-      Root_PBA  :        Physical_Block_Address_Type;
-      Root_Gen  :        Generation_Type;
-      Root_Hash :        Hash_Type;
-      Prim      :        Primitive.Object_Type);
+      Obj        : in out Object_Type;
+      Root_PBA   :        Physical_Block_Address_Type;
+      Root_Gen   :        Generation_Type;
+      Root_Hash  :        Hash_Type;
+      Tree_Helpr :        Tree_Helper.Object_Type;
+      Prim       :        Primitive.Object_Type);
 
    --
    --  Execute

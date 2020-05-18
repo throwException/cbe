@@ -16,32 +16,22 @@ is
    --
    --  Initialize_Object
    --
-   procedure Initialize_Object (
-      Obj       : out Object_Type;
-      Max_Level :     Tree_Level_Index_Type;
-      Degree    :     Tree_Degree_Type;
-      Leafs     :     Tree_Number_Of_Leafs_Type)
+   procedure Initialize_Object (Obj : out Object_Type)
    is
    begin
-      Obj := Initialized_Object (Max_Level, Degree, Leafs);
+      Obj := Initialized_Object;
    end Initialize_Object;
 
    --
    --  Initialized_Object
    --
-   function Initialized_Object (
-      Max_Level : Tree_Level_Index_Type;
-      Degree    : Tree_Degree_Type;
-      Leafs     : Tree_Number_Of_Leafs_Type)
+   function Initialized_Object
    return Object_Type
    is
-      Trans_Helpr : constant Tree_Helper.Object_Type :=
-         Tree_Helper.Initialized_Object (Degree, Max_Level, Leafs);
    begin
       return (
-         Trans_Helper     => Trans_Helpr,
-         Trans            =>
-            Translation.Initialized_Object (Trans_Helpr, False),
+         Trans_Helper     => Tree_Helper.Invalid_Object,
+         Trans            => Translation.Initialized_Object (False),
          Execute_Progress => False,
          Cache_Prim       => Primitive.Invalid_Object,
          Cache_Prim_State => Invalid,
@@ -140,14 +130,21 @@ is
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
-      Obj  : in out Object_Type;
-      PBA  :        Physical_Block_Address_Type;
-      Gen  :        Generation_Type;
-      Hash :        Hash_Type;
-      Prim :        Primitive.Object_Type)
+      Obj       : in out Object_Type;
+      PBA       :        Physical_Block_Address_Type;
+      Gen       :        Generation_Type;
+      Hash      :        Hash_Type;
+      Max_Level :        Tree_Level_Index_Type;
+      Degree    :        Tree_Degree_Type;
+      Leafs     :        Tree_Number_Of_Leafs_Type;
+      Prim      :        Primitive.Object_Type)
    is
    begin
-      Translation.Submit_Primitive (Obj.Trans, PBA, Gen, Hash, Prim);
+      Obj.Trans_Helper :=
+         Tree_Helper.Initialized_Object (Degree, Max_Level, Leafs);
+
+      Translation.Submit_Primitive (
+         Obj.Trans, PBA, Gen, Hash, Obj.Trans_Helper, Prim);
    end Submit_Primitive;
 
    --

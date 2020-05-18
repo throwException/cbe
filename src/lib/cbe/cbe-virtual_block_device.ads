@@ -24,19 +24,12 @@ is
    --
    --  FIXME will not be used anymore when the library module is in spark
    --
-   procedure Initialize_Object (
-      Obj       : out Object_Type;
-      Max_Level :     Tree_Level_Index_Type;
-      Degree    :     Tree_Degree_Type;
-      Leafs     :     Tree_Number_Of_Leafs_Type);
+   procedure Initialize_Object (Obj : out Object_Type);
 
    --
    --  Initialized_Object
    --
-   function Initialized_Object (
-      Max_Level : Tree_Level_Index_Type;
-      Degree    : Tree_Degree_Type;
-      Leafs     : Tree_Number_Of_Leafs_Type)
+   function Initialized_Object
    return Object_Type;
 
    --
@@ -103,11 +96,14 @@ is
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
-      Obj  : in out Object_Type;
-      PBA  :        Physical_Block_Address_Type;
-      Gen  :        Generation_Type;
-      Hash :        Hash_Type;
-      Prim :        Primitive.Object_Type);
+      Obj       : in out Object_Type;
+      PBA       :        Physical_Block_Address_Type;
+      Gen       :        Generation_Type;
+      Hash      :        Hash_Type;
+      Max_Level :        Tree_Level_Index_Type;
+      Degree    :        Tree_Degree_Type;
+      Leafs     :        Tree_Number_Of_Leafs_Type;
+      Prim      :        Primitive.Object_Type);
 
    --
    --  Peek_Completed_Primitive

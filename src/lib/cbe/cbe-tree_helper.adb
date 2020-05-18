@@ -36,6 +36,18 @@ is
    end Initialized_Object;
 
    --
+   --  Invalid_Object
+   --
+   function Invalid_Object
+   return Object_Type
+   is (
+      Degree       => Tree_Degree_Type'First,
+      Max_Level    => Tree_Level_Index_Type'First,
+      Leafs        => Tree_Number_Of_Leafs_Type'First,
+      Degree_Log_2 => Degree_Log_2_Type'First,
+      Degree_Mask  => Degree_Mask_Type'First);
+
+   --
    --  Index
    --
    function Index (

@@ -28,6 +28,12 @@ is
    return Object_Type;
 
    --
+   --  Invalid_Object
+   --
+   function Invalid_Object
+   return Object_Type;
+
+   --
    --  Index
    --
    function Index (

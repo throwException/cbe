@@ -55,19 +55,16 @@ is
    --
    procedure Initialize_Object (
       Obj     : out Object_Type;
-      Helpr   :     Tree_Helper.Object_Type;
       Free_Tr :     Boolean)
    is
    begin
-      Obj := Initialized_Object (Helpr, Free_Tr);
+      Obj := Initialized_Object (Free_Tr);
    end Initialize_Object;
 
    --
    --  Initialized_Object
    --
-   function Initialized_Object (
-      Helpr   : Tree_Helper.Object_Type;
-      Free_Tr : Boolean)
+   function Initialized_Object (Free_Tr : Boolean)
    return Object_Type
    is (
       Walk             => (others => Type_1_Node_Invalid),
@@ -79,7 +76,7 @@ is
       Suspended        => False,
       Execute_Progress => False,
       Free_Tree        => Free_Tr,
-      Helper           => Helpr);
+      Helper           => Tree_Helper.Invalid_Object);
 
    --
    --  Max_Level
@@ -127,15 +124,17 @@ is
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
-      Obj       : in out Object_Type;
-      Root_PBA  :        Physical_Block_Address_Type;
-      Root_Gen  :        Generation_Type;
-      Root_Hash :        Hash_Type;
-      Prim      :        Primitive.Object_Type)
+      Obj        : in out Object_Type;
+      Root_PBA   :        Physical_Block_Address_Type;
+      Root_Gen   :        Generation_Type;
+      Root_Hash  :        Hash_Type;
+      Tree_Helpr :        Tree_Helper.Object_Type;
+      Prim       :        Primitive.Object_Type)
    is
    begin
-      Obj.Data  := Data_Initialized_Object;
-      Obj.Level := Tree_Helper.Max_Level (Obj.Helper);
+      Obj.Helper := Tree_Helpr;
+      Obj.Data   := Data_Initialized_Object;
+      Obj.Level  := Tree_Helper.Max_Level (Obj.Helper);
 
       for Index in Obj.Walk'Range loop
          Obj.Walk (Index) := Type_1_Node_Invalid;

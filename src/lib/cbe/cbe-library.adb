@@ -24,13 +24,6 @@ is
       SBs     :     Superblocks_Type;
       Curr_SB :     Superblocks_Index_Type)
    is
-      Curr_Snap : constant Snapshots_Index_Type := SBs (Curr_SB).Curr_Snap;
-      Degree : constant Tree_Degree_Type := SBs (Curr_SB).Degree;
-      Max_Level : constant Tree_Level_Index_Type :=
-         SBs (Curr_SB).Snapshots (Curr_Snap).Max_Level;
-
-      Leafs : constant Tree_Number_Of_Leafs_Type :=
-         SBs (Curr_SB).Snapshots (Curr_Snap).Nr_Of_Leafs;
    begin
 
       Obj.Handle_Failed_FT_Prims := False;
@@ -46,19 +39,18 @@ is
       Obj.Request_Pool_Obj := Pool.Initialized_Object;
       Obj.Crypto_Obj       := Crypto.Initialized_Object;
 
-      Obj.IO_Obj                  := Block_IO.Initialized_Object;
+      Obj.IO_Obj := Block_IO.Initialized_Object;
 
       Cache.Initialize (Obj.Cache_Obj);
-      Obj.Cache_Jobs_Data := (others => (others => 0));
+
+      Obj.Cache_Jobs_Data  := (others => (others => 0));
       Obj.Cache_Slots_Data := (others => (others => 0));
       Obj.Cache_Sync_State := Inactive;
+      Obj.Trans_Data       := (others => (others => 0));
+      Obj.VBD              := Virtual_Block_Device.Initialized_Object;
+      Obj.Write_Back_Obj   := Write_Back.Initialized_Object;
+      Obj.Write_Back_Data  := (others => (others => 0));
 
-      Obj.Trans_Data              := (others => (others => 0));
-      Obj.VBD                     :=
-         Virtual_Block_Device.Initialized_Object (Max_Level, Degree, Leafs);
-
-      Obj.Write_Back_Obj          := Write_Back.Initialized_Object;
-      Obj.Write_Back_Data         := (others => (others => 0));
       Sync_Superblock.Initialize_Object (Obj.Sync_SB_Obj);
 
       if SBs (Curr_SB).Free_Max_Level < Free_Tree_Min_Max_Level then
@@ -1871,6 +1863,9 @@ is
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).PBA,
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).Gen,
                   Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
+                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Max_Level,
+                  Obj.Superblock.Degree,
+                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Nr_Of_Leafs,
                   Prim);
 
                Pool.Drop_Generated_Primitive (
