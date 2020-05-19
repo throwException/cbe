@@ -461,7 +461,7 @@ is
       Handled := False;
 
       Loop_Level_0_Nodes :
-      for I in 0 .. Obj.Tree_Geom.Edges loop
+      for I in 0 .. Obj.Tree_Geom.Edges - 1 loop
          TMP_T2_Entry := Obj.Level_1_Node.Entries (Natural (I));
 
          if TMP_T2_Entry /= Type_2_Node_Invalid
