@@ -1998,7 +1998,7 @@ is
                VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
                Obj.Superblock.Degree,
                Max_VBA (Obj),
-               True,
+               Obj.Superblock.State = Rekeying,
                VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_New_Key_ID (Obj.VBD_Rkg, Prim),
                VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim));
