@@ -406,7 +406,8 @@ is
 
          else
 
-            raise Program_Error;
+            SB.State := Normal;
+            Job.Request_Finished := True;
 
          end if;
 
@@ -524,7 +525,6 @@ is
 
          SB.Last_Secured_Generation := Job.Generation;
          Primitive.Success (Job.Submitted_Prim, True);
-         Job.Request_Finished := False;
          Job.State := Completed;
          Progress := True;
 

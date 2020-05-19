@@ -520,7 +520,7 @@ is
          0 => (
             PBA  => Snapshots (Snap_Idx).PBA,
             Gen  => Snapshots (Snap_Idx).Gen,
-            Hash => (others => 0)),
+            Hash => Snapshots (Snap_Idx).Hash),
 
          others => Type_1_Node_Invalid);
 
