@@ -1146,4 +1146,34 @@ is
       end case;
    end Prim_Op_From_Req_Op;
 
+   --
+   --  Newest_Snapshot_Idx
+   --
+   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
+   return Snapshots_Index_Type
+   is
+      Newest_Snap_Idx : Snapshots_Index_Type := Snapshots_Index_Type'First;
+      Newest_Snap_Idx_Valid : Boolean := False;
+   begin
+
+      For_Each_Snap_Idx :
+      for Snap_Idx in Snapshots'Range loop
+
+         if Snapshots (Snap_Idx).Valid and then
+            (not Newest_Snap_Idx_Valid or else
+             Snapshots (Snap_Idx).Gen > Snapshots (Newest_Snap_Idx).Gen)
+         then
+            Newest_Snap_Idx := Snap_Idx;
+            Newest_Snap_Idx_Valid := True;
+         end if;
+
+      end loop For_Each_Snap_Idx;
+
+      if Newest_Snap_Idx_Valid then
+         return Newest_Snap_Idx;
+      end if;
+      raise Program_Error;
+
+   end Newest_Snapshot_Idx;
+
 end CBE;

@@ -2179,6 +2179,20 @@ is
                VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
                Progress := True;
 
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_VBD_Ext (
+                  Obj.SB_Ctrl,
+                  Prim,
+                  VBD_Rekeying.Peek_Completed_Snapshots (Obj.VBD_Rkg, Prim),
+                  VBD_Rekeying.Peek_Completed_PBA (Obj.VBD_Rkg, Prim),
+                  VBD_Rekeying.Peek_Completed_Nr_Of_PBAs (Obj.VBD_Rkg, Prim),
+                  VBD_Rekeying.Peek_Completed_Nr_Of_Leaves (
+                     Obj.VBD_Rkg, Prim));
+
+               VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
             when others =>
 
                raise Program_Error;

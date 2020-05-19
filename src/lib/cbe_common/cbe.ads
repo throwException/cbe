@@ -531,6 +531,12 @@ is
       type T is (<>);
    function Advance_Index (I : T) return T;
 
+   --
+   --  Newest_Snapshot_Idx
+   --
+   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
+   return Snapshots_Index_Type;
+
 private
 
    procedure Snapshot_From_Block_Data (

@@ -348,9 +348,19 @@ is
             Job.State := Encrypt_Current_Key_Pending;
             Progress := True;
 
+            Debug.Print_String (
+               "VBD EXT INIT PBA " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
+               " NR_OF_PBAS " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
+               " NR_OF_LEAVES " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)) &
+               " ");
+
          when Extending_VBD =>
 
-            Job.Key_Plaintext := SB.Current_Key;
+            Job.PBA := SB.Resizing_First_PBA;
+            Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
                Succ   => False,
@@ -361,6 +371,15 @@ is
             Job.State := VBD_Ext_Step_In_VBD_Pending;
             Progress := True;
 
+            Debug.Print_String (
+               "VBD EXT STEP PBA " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
+               " NR_OF_PBAS " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
+               " NR_OF_LEAVES " &
+               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)) &
+               " ");
+
          when others =>
 
             raise Program_Error;
@@ -369,7 +388,39 @@ is
 
       when VBD_Ext_Step_In_VBD_Completed =>
 
-         raise Program_Error;
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Snapshots := Job.Snapshots;
+         SB.Curr_Snap := Newest_Snapshot_Idx (Job.Snapshots);
+
+         if Job.Nr_Of_Blks > 0 then
+
+            SB.Resizing_First_PBA := Job.PBA;
+            SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+            SB.Resizing_Nr_Of_Leaves :=
+               SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
+
+            Job.Request_Finished := False;
+
+         else
+
+            raise Program_Error;
+
+         end if;
+
+         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Job.Key_Plaintext := SB.Current_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Current_Key_Pending;
+         Progress := True;
 
       when Encrypt_Current_Key_Completed =>
 
@@ -1655,6 +1706,8 @@ is
       Ctrl         : in out Control_Type;
       Prim         :        Primitive.Object_Type;
       Snapshots    :        Snapshots_Type;
+      First_PBA    :        Physical_Block_Address_Type;
+      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
       Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type)
    is
       Idx : constant Jobs_Index_Type :=
@@ -1668,6 +1721,8 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := VBD_Ext_Step_In_VBD_Completed;
                Ctrl.Jobs (Idx).Snapshots := Snapshots;
+               Ctrl.Jobs (Idx).PBA := First_PBA;
+               Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
                Ctrl.Jobs (Idx).Nr_Of_Leaves := Nr_Of_Leaves;
                Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;

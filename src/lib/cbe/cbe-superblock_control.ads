@@ -227,6 +227,8 @@ is
       Ctrl         : in out Control_Type;
       Prim         :        Primitive.Object_Type;
       Snapshots    :        Snapshots_Type;
+      First_PBA    :        Physical_Block_Address_Type;
+      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
       Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type);
 
    --

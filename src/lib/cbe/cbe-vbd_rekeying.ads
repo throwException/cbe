@@ -76,6 +76,30 @@ is
    return Snapshots_Type;
 
    --
+   --  Peek_Completed_Nr_Of_Leaves
+   --
+   function Peek_Completed_Nr_Of_Leaves (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Tree_Number_Of_Leafs_Type;
+
+   --
+   --  Peek_Completed_PBA
+   --
+   function Peek_Completed_PBA (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Physical_Block_Address_Type;
+
+   --
+   --  Peek_Completed_Nr_Of_PBAs
+   --
+   function Peek_Completed_Nr_Of_PBAs (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Number_Of_Blocks_Type;
+
+   --
    --  Drop_Completed_Primitive
    --
    procedure Drop_Completed_Primitive (
@@ -344,6 +368,7 @@ private
       PBA              : Physical_Block_Address_Type;
       Nr_Of_PBAs       : Number_Of_Blocks_Type;
       Nr_Of_Blks       : Number_Of_Blocks_Type;
+      Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
       Curr_Gen         : Generation_Type;
       Last_Secured_Gen : Generation_Type;
       Free_Gen         : Generation_Type;
@@ -403,12 +428,6 @@ private
    --
    function  Log_2 (Value : Interfaces.Unsigned_32)
    return Interfaces.Unsigned_32;
-
-   --
-   --  Newest_Snapshot_Idx
-   --
-   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
-   return Snapshots_Index_Type;
 
    --
    --  Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying

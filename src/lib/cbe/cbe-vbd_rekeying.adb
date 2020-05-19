@@ -168,6 +168,7 @@ is
             PBA => Physical_Block_Address_Type'First,
             Nr_Of_PBAs => Number_Of_Blocks_Type'First,
             Nr_Of_Blks => Number_Of_Blocks_Type'First,
+            Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             Curr_Gen => Generation_Type'First,
             Last_Secured_Gen => Generation_Type'First,
             Free_Gen => Generation_Type'First);
@@ -304,17 +305,128 @@ is
    return Snapshots_Type
    is
    begin
+
       Find_Corresponding_Job :
       for Idx in Rkg.Jobs'Range loop
-         if Rkg.Jobs (Idx).Operation /= Invalid and then
-            Rkg.Jobs (Idx).State = Completed and then
-            Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
-         then
-            return Rkg.Jobs (Idx).Snapshots;
-         end if;
+
+         case Rkg.Jobs (Idx).Operation is
+         when Rekey_VBA | VBD_Extension_Step =>
+
+            if Rkg.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+            then
+               return Rkg.Jobs (Idx).Snapshots;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
       end loop Find_Corresponding_Job;
       raise Program_Error;
+
    end Peek_Completed_Snapshots;
+
+   --
+   --  Peek_Completed_Nr_Of_Leaves
+   --
+   function Peek_Completed_Nr_Of_Leaves (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Tree_Number_Of_Leafs_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when VBD_Extension_Step =>
+
+            if Rkg.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+            then
+               return Rkg.Jobs (Idx).Nr_Of_Leaves;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Nr_Of_Leaves;
+
+   --
+   --  Peek_Completed_PBA
+   --
+   function Peek_Completed_PBA (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Physical_Block_Address_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when VBD_Extension_Step =>
+
+            if Rkg.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+            then
+               return Rkg.Jobs (Idx).PBA;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_PBA;
+
+   --
+   --  Peek_Completed_Nr_Of_PBAs
+   --
+   function Peek_Completed_Nr_Of_PBAs (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type)
+   return Number_Of_Blocks_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when VBD_Extension_Step =>
+
+            if Rkg.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+            then
+               return Rkg.Jobs (Idx).Nr_Of_PBAs;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Nr_Of_PBAs;
 
    --
    --  Drop_Completed_Primitive
@@ -324,8 +436,10 @@ is
       Prim :        Primitive.Object_Type)
    is
    begin
+
       Find_Corresponding_Job :
       for Idx in Rkg.Jobs'Range loop
+
          if Rkg.Jobs (Idx).Operation /= Invalid and then
             Rkg.Jobs (Idx).State = Completed and then
             Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
@@ -333,8 +447,10 @@ is
             Rkg.Jobs (Idx).Operation := Invalid;
             return;
          end if;
+
       end loop Find_Corresponding_Job;
       raise Program_Error;
+
    end Drop_Completed_Primitive;
 
    --
@@ -412,6 +528,11 @@ is
          Snap_Idx :=
             Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
                Snapshots, Curr_Gen, Last_Secured);
+
+         Debug.Print_String (
+            "   NEW SNAP " &
+            Debug.To_String (Debug.Uint64_Type (
+               Snap_Idx)));
       end if;
 
       Alloc_PBA_From_Resizing_Contingent (First_PBA, Nr_Of_PBAs, New_Snap_PBA);
@@ -434,7 +555,10 @@ is
          Debug.To_String (Debug.Uint64_Type (Snapshots (Snap_Idx).PBA)) &
          " GEN " &
          Debug.To_String (Debug.Uint64_Type (Snapshots (Snap_Idx).Gen)) &
-         " MAXLVL " &
+         " LEAVES " &
+         Debug.To_String (Debug.Uint64_Type (
+            Snapshots (Snap_Idx).Nr_Of_Leafs)) &
+         " MAX_LVL " &
          Debug.To_String (Debug.Uint64_Type (Snapshots (Snap_Idx).Max_Level)) &
          " ");
 
@@ -570,6 +694,17 @@ is
 
             end if;
 
+            if Found_Lvl_Idx > 1 then
+
+               Reset_All_Lvls_Below_Lvl_With_Unused_Child :
+               for Lvl_Idx in 1 .. Found_Lvl_Idx - 1 loop
+
+                  Job.T1_Blks (Lvl_Idx) := (others => Type_1_Node_Invalid);
+
+               end loop Reset_All_Lvls_Below_Lvl_With_Unused_Child;
+
+            end if;
+
             Add_New_Branch_To_Snap_Using_PBA_Contingent :
             for Lvl_Idx in reverse 1 .. Found_Lvl_Idx loop
 
@@ -647,8 +782,7 @@ is
                               Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
                            " HASH");
 
-                        Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs :=
-                           Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs + 1;
+                        Job.Nr_Of_Leaves := Job.Nr_Of_Leaves + 1;
 
                         if Job.Nr_Of_PBAs = 0 then
                            raise Program_Error;
@@ -662,17 +796,7 @@ is
 
             end loop Add_New_Branch_To_Snap_Using_PBA_Contingent;
 
-            Debug.Print_String (
-               "   UPDATE SNAP " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.Snapshot_Idx)) &
-               "NR_OF_LEAVES " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs)) &
-               " ");
-
-            Job.VBA := Virtual_Block_Address_Type (
-               Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs - 1);
+            Job.VBA := Job.VBA + 1;
 
             if Unused_Child_Found then
 
@@ -701,6 +825,23 @@ is
                   VBA             => Job.VBA,
                   T1_Blks         => Job.T1_Blks,
                   New_PBAs        => Job.New_PBAs);
+
+               Debug.Print_String (
+                  "   PBAS" &
+                  " ");
+
+               for Lvl_Idx in reverse Tree_Level_Index_Type loop
+
+                  Debug.Print_String (
+                     "      LVL " &
+                     Debug.To_String (Debug.Uint64_Type (
+                        Lvl_Idx)) &
+                     "      NEW " &
+                     Debug.To_String (Debug.Uint64_Type (
+                        Job.New_PBAs (Lvl_Idx))) &
+                     " ");
+
+               end loop;
 
                Job.State := Write_Leaf_Node_Completed;
                Progress := True;
@@ -870,36 +1011,6 @@ is
       end if;
 
    end Execute_Rekey_VBA_Read_Inner_Node_Completed;
-
-   --
-   --  Newest_Snapshot_Idx
-   --
-   function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
-   return Snapshots_Index_Type
-   is
-      Newest_Snap_Idx : Snapshots_Index_Type := Snapshots_Index_Type'First;
-      Newest_Snap_Idx_Valid : Boolean := False;
-   begin
-
-      For_Each_Snap_Idx :
-      for Snap_Idx in Snapshots'Range loop
-
-         if Snapshots (Snap_Idx).Valid and then
-            (not Newest_Snap_Idx_Valid or else
-             Snapshots (Snap_Idx).Gen > Snapshots (Newest_Snap_Idx).Gen)
-         then
-            Newest_Snap_Idx := Snap_Idx;
-            Newest_Snap_Idx_Valid := True;
-         end if;
-
-      end loop For_Each_Snap_Idx;
-
-      if Newest_Snap_Idx_Valid then
-         return Newest_Snap_Idx;
-      end if;
-      raise Program_Error;
-
-   end Newest_Snapshot_Idx;
 
    --
    --  Set_New_PBAs_For_Write_Back_Of_New_Root_Branch
@@ -1220,6 +1331,7 @@ is
       case Job.State is
       when Submitted =>
 
+         Job.Nr_Of_Leaves := 0;
          Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
          Job.VBA :=
             Virtual_Block_Address_Type (
@@ -1251,6 +1363,12 @@ is
             " GEN " &
             Debug.To_String (Debug.Uint64_Type (
                Job.Snapshots (Job.Snapshot_Idx).Gen)) &
+            " LEAVES " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs)) &
+            " MAX_LVL " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Max_Level)) &
             " ");
 
          Job.State := Read_Root_Node_Pending;
@@ -1285,6 +1403,26 @@ is
 
       when Alloc_PBAs_At_Lowest_Inner_Lvl_Completed =>
 
+         Debug.Print_String (
+            "   PBAS ALLOCATED" &
+            " ");
+
+         for Lvl_Idx in reverse Tree_Level_Index_Type loop
+
+            Debug.Print_String (
+               "      LVL " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Lvl_Idx)) &
+               "      NEW " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.New_PBAs (Lvl_Idx))) &
+               "      OLD " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.T1_Node_Walk (Lvl_Idx).PBA)) &
+               " ");
+
+         end loop;
+
          if Primitive.Success (Job.Generated_Prim) then
 
             Job.State := Write_Leaf_Node_Completed;
@@ -1305,23 +1443,6 @@ is
          if not Primitive.Success (Job.Generated_Prim) then
             raise Program_Error;
          end if;
-
-         Debug.Print_String (
-            "   NEW PBAS" &
-            " ");
-
-         for Lvl_Idx in reverse Tree_Level_Index_Type loop
-
-            Debug.Print_String (
-               "      LVL " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Lvl_Idx)) &
-               "      PBA " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.New_PBAs (Lvl_Idx))) &
-               " ");
-
-         end loop;
 
          Declare_Child_Idx_13 :
          declare
@@ -1441,11 +1562,31 @@ is
 
             Child_PBA : constant Physical_Block_Address_Type :=
                Job.New_PBAs (Child_Lvl_Idx);
+
+            Old_Snap_Idx : constant Snapshots_Index_Type := Job.Snapshot_Idx;
          begin
 
-            Job.Snapshots (Job.Snapshot_Idx).PBA := Child_PBA;
-            Job.Snapshots (Job.Snapshot_Idx).Hash :=
-               Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx));
+            if Job.Snapshots (Job.Snapshot_Idx).Gen < Job.Curr_Gen then
+               Job.Snapshot_Idx :=
+                  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
+                     Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
+
+               Debug.Print_String (
+                  "   NEW SNAP " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Snapshot_Idx)));
+            end if;
+
+            Job.Snapshots (Job.Snapshot_Idx) := (
+               PBA => Child_PBA,
+               Gen => Job.Curr_Gen,
+               Hash => Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx)),
+               Nr_Of_Leafs =>
+                  Job.Snapshots (Old_Snap_Idx).Nr_Of_Leafs + Job.Nr_Of_Leaves,
+               Max_Level => Job.Snapshots (Old_Snap_Idx).Max_Level,
+               Valid => True,
+               ID => 0,
+               Keep => False);
 
             Debug.Print_String (
                "   UPDATE SNAP " &
@@ -1453,13 +1594,23 @@ is
                   Job.Snapshot_Idx)) &
                " PBA " &
                Debug.To_String (Debug.Uint64_Type (
-                  Child_PBA)) &
-               " HASH " &
-               " ");
+                  Job.Snapshots (Job.Snapshot_Idx).PBA)) &
+               " GEN " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).Gen)) &
+               " LEAVES " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs)) &
+               " MAX_LVL " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).Max_Level)) &
+               " HASH");
 
          end Declare_Child_Idx_7;
 
-         raise Program_Error;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
+         Progress := True;
 
       when others =>
 
