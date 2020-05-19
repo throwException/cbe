@@ -878,8 +878,12 @@ class Vfs_cbe::Wrapper
 
 				if (_helper_read_request.in_progress()) {
 					_helper_read_request.state = Helper_request::State::COMPLETE;
+					_helper_read_request.cbe_request.success(
+						cbe_request.success());
 				} else if (_helper_write_request.in_progress()) {
 					_helper_write_request.state = Helper_request::State::COMPLETE;
+					_helper_write_request.cbe_request.success(
+						cbe_request.success());
 				} else {
 					frontend_request.state = ST::COMPLETE;
 					frontend_request.cbe_request.success(cbe_request.success());
@@ -902,6 +906,8 @@ class Vfs_cbe::Wrapper
 
 					_helper_read_request.state = Helper_request::State::NONE;
 					frontend_request.state = ST::COMPLETE;
+					frontend_request.cbe_request.success(
+						_helper_read_request.cbe_request.success());
 
 					if (_verbose) {
 						Genode::log("Complete unaligned READ request: ",
