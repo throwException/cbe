@@ -101,7 +101,6 @@ private
 
    procedure Execute_Leaf_Child (
       Progress     : in out Boolean;
-      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
@@ -109,12 +108,12 @@ private
       Child_Lvl    :        Block_Data_Type;
       Child_State  : in out Child_State_Type;
       Nr_Of_Leafs  : in out Tree_Number_Of_Leafs_Type;
+      Max_Lvl_Idx  :        Tree_Level_Index_Type;
       Lvl_Idx      :        Type_1_Level_Index_Type;
       Child_Idx    :        Type_1_Node_Block_Index_Type);
 
    procedure Execute_Inner_T1_Child (
       Progress     : in out Boolean;
-      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
@@ -122,6 +121,7 @@ private
       Child_Lvl    : in out Type_1_Level_Type;
       Child_State  : in out Child_State_Type;
       Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type;
+      Max_Lvl_Idx  :        Tree_Level_Index_Type;
       Lvl_Idx      :        Type_1_Level_Index_Type;
       Child_Idx    :        Type_1_Node_Block_Index_Type);
 
@@ -132,5 +132,17 @@ private
    function Max_T1_Child_Idx (Obj : Object_Type)
    return Type_1_Node_Block_Index_Type
    is (Type_1_Node_Block_Index_Type (Obj.Max_Child_Idx));
+
+   function Nr_Of_Tabs (
+      Lvl_Idx     : Type_1_Level_Index_Type;
+      Max_Lvl_Idx : Tree_Level_Index_Type)
+   return Integer;
+
+   procedure Print_Child (
+      Max_Lvl_Idx : Tree_Level_Index_Type;
+      Lvl_Idx     : Type_1_Level_Index_Type;
+      Child_Idx   : Type_1_Node_Block_Index_Type;
+      Child       : Type_1_Node_Type;
+      Info_Str    : String);
 
 end CBE.VBD_Check;

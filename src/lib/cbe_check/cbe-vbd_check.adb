@@ -11,6 +11,8 @@ pragma Ada_2012;
 with SHA256_4K;
 with CBE.Debug;
 
+pragma Unreferenced (CBE.Debug);
+
 package body CBE.VBD_Check
 with SPARK_Mode
 is
@@ -174,16 +176,57 @@ is
          raise Program_Error;
       end if;
 
-      Debug.Print_String (
-         "[vbd_check] ==========================================");
-
       Initialize_Object (Obj);
 
    end Drop_Completed_Primitive;
 
+   function Nr_Of_Tabs (
+      Lvl_Idx     : Type_1_Level_Index_Type;
+      Max_Lvl_Idx : Tree_Level_Index_Type)
+   return Integer
+   is (
+      Integer (Max_Lvl_Idx) + 1 - Integer (Lvl_Idx));
+
+   procedure Print_Child (
+      Max_Lvl_Idx : Tree_Level_Index_Type;
+      Lvl_Idx     : Type_1_Level_Index_Type;
+      Child_Idx   : Type_1_Node_Block_Index_Type;
+      Child       : Type_1_Node_Type;
+      Info_Str    : String)
+   is
+   begin
+
+      pragma Debug (
+         Debug.Print_String_Buffered ("[vbd_check] "));
+
+      for Idx in 1 .. Nr_Of_Tabs (Lvl_Idx, Max_Lvl_Idx) loop
+
+         pragma Debug (
+            Debug.Print_String_Buffered (Debug.Tabulator));
+
+      end loop;
+
+      pragma Debug (
+         Debug.Print_String_Buffered (
+            " lvl " &
+            Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+            " child " &
+            Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+            " pba " &
+            Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
+            " gen " &
+            Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
+            Info_Str &
+            Debug.Line_Feed));
+
+      pragma Unreferenced (Child_Idx);
+      pragma Unreferenced (Child);
+      pragma Unreferenced (Info_Str);
+
+   end Print_Child;
+
    procedure Execute_Leaf_Child (
       Progress     : in out Boolean;
-      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
@@ -191,6 +234,7 @@ is
       Child_Lvl    :        Block_Data_Type;
       Child_State  : in out Child_State_Type;
       Nr_Of_Leafs  : in out Tree_Number_Of_Leafs_Type;
+      Max_Lvl_Idx  :        Tree_Level_Index_Type;
       Lvl_Idx      :        Type_1_Level_Index_Type;
       Child_Idx    :        Type_1_Node_Block_Index_Type)
    is
@@ -202,6 +246,9 @@ is
 
             if Child /= Type_1_Node_Invalid then
 
+               Print_Child (
+                  Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " expected invalid");
+
                raise Program_Error;
 
             else
@@ -209,20 +256,9 @@ is
                Child_State := Done;
                Progress := True;
 
-               Debug.Print_String (
-                  "[vbd_check] ra " &
-                  Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-                  " rg " &
-                  Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-                  " tl " &
-                  Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                  " ci " &
-                  Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                  " ca " &
-                  Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-                  " cg " &
-                  Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-                  " unused");
+               Print_Child (
+                  Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " unused");
+
             end if;
 
          elsif not Primitive.Valid (Prim) then
@@ -264,20 +300,8 @@ is
             Child_State := Done;
             Progress := True;
 
-            Debug.Print_String (
-               "[vbd_check] ra " &
-               Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-               " rg " &
-               Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-               " tl " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-               " ci " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " ca " &
-               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-               " cg " &
-               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-               " uninitialized");
+            Print_Child (
+               Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " uninitialized");
 
          elsif Hash_Of_Block_Data (Child_Lvl) = Child.Hash then
 
@@ -285,37 +309,13 @@ is
             Child_State := Done;
             Progress := True;
 
-            Debug.Print_String (
-               "[vbd_check] ra " &
-               Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-               " rg " &
-               Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-               " tl " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-               " ci " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " ca " &
-               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-               " cg " &
-               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-               " hash match");
+            Print_Child (
+               Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " hash match");
 
          else
 
-            Debug.Print_String (
-               "[vbd_check] ra " &
-               Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-               " rg " &
-               Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-               " tl " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-               " ci " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " ca " &
-               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-               " cg " &
-               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-               " hash mismatch");
+            Print_Child (
+               Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " hash mismatch");
 
             raise Program_Error;
 
@@ -327,7 +327,6 @@ is
 
    procedure Execute_Inner_T1_Child (
       Progress     : in out Boolean;
-      Root         :        Type_1_Node_Type;
       Prim         : in out Primitive.Object_Type;
       Prim_Dropped : in out Boolean;
       Lvl_To_Read  : in out Tree_Level_Index_Type;
@@ -335,6 +334,7 @@ is
       Child_Lvl    : in out Type_1_Level_Type;
       Child_State  : in out Child_State_Type;
       Nr_Of_Leafs  :        Tree_Number_Of_Leafs_Type;
+      Max_Lvl_Idx  :        Tree_Level_Index_Type;
       Lvl_Idx      :        Type_1_Level_Index_Type;
       Child_Idx    :        Type_1_Node_Block_Index_Type)
    is
@@ -349,18 +349,13 @@ is
                Child_State := Done;
                Progress := True;
 
-               Debug.Print_String (
-                  "[vbd_check] rpba " &
-                  Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-                  " rg " &
-                  Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-                  " lv " &
-                  Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                  " ch " &
-                  Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                  " unused");
+               Print_Child (
+                  Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " unused");
 
             else
+
+               Print_Child (
+                  Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " expected valid");
 
                raise Program_Error;
 
@@ -410,40 +405,13 @@ is
             Child_State := Done;
             Progress := True;
 
-            Debug.Print_String (
-               "[vbd_check] ra " &
-               Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-               " rg " &
-               Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-               " tl " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-               " ci " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " ca " &
-               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-               " cg " &
-               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-               " hash match");
-
-            Debug.Print_String (
-               "[vbd_check] ------------------------------------------");
+            Print_Child (
+               Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " hash match");
 
          else
 
-            Debug.Print_String (
-               "[vbd_check] ra " &
-               Debug.To_String (Debug.Uint64_Type (Root.PBA)) &
-               " rg " &
-               Debug.To_String (Debug.Uint64_Type (Root.Gen)) &
-               " tl " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-               " ci " &
-               Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-               " ca " &
-               Debug.To_String (Debug.Uint64_Type (Child.PBA)) &
-               " cg " &
-               Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
-               " hash mismatch");
+            Print_Child (
+               Max_Lvl_Idx, Lvl_Idx, Child_Idx, Child, " hash mismatch");
 
             raise Program_Error;
 
@@ -476,7 +444,6 @@ is
                if Lvl_Idx = Type_1_Level_Index_Type'First then
                   Execute_Leaf_Child (
                      Obj.Execute_Progress,
-                     Obj.Root,
                      Obj.Gen_Prim,
                      Obj.Gen_Prim_Dropped,
                      Obj.Lvl_To_Read,
@@ -484,12 +451,12 @@ is
                      Obj.Leaf_Lvl,
                      Obj.T1_Lvls (Lvl_Idx).Children_State (Child_Idx),
                      Obj.Nr_Of_Leafs,
+                     Obj.Max_Lvl_Idx,
                      Lvl_Idx,
                      Child_Idx);
                else
                   Execute_Inner_T1_Child (
                      Obj.Execute_Progress,
-                     Obj.Root,
                      Obj.Gen_Prim,
                      Obj.Gen_Prim_Dropped,
                      Obj.Lvl_To_Read,
@@ -497,6 +464,7 @@ is
                      Obj.T1_Lvls (Lvl_Idx - 1),
                      Obj.T1_Lvls (Lvl_Idx).Children_State (Child_Idx),
                      Obj.Nr_Of_Leafs,
+                     Obj.Max_Lvl_Idx,
                      Lvl_Idx,
                      Child_Idx);
                end if;
@@ -511,7 +479,6 @@ is
       if Obj.Root_State /= Done then
          Execute_Inner_T1_Child (
             Obj.Execute_Progress,
-            Obj.Root,
             Obj.Gen_Prim,
             Obj.Gen_Prim_Dropped,
             Obj.Lvl_To_Read,
@@ -519,6 +486,7 @@ is
             Obj.T1_Lvls (Max_T1_Lvl_Idx (Obj)),
             Obj.Root_State,
             Obj.Nr_Of_Leafs,
+            Obj.Max_Lvl_Idx,
             Obj.Max_Lvl_Idx + 1,
             Type_1_Node_Block_Index_Type'First);
          return;
