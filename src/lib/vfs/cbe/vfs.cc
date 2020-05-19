@@ -1426,8 +1426,8 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 
 			Stat_result result = Single_file_system::stat(path, out);
 
-			/* setting a size is not strictly correct, but ... */
-			out.size = 0;
+			/* max_vba range is from 0 ... N - 1 */
+			out.size = (_w.cbe().max_vba() + 1) * Cbe::BLOCK_SIZE;
 			return result;
 		}
 
