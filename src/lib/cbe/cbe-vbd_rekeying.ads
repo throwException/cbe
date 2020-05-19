@@ -448,9 +448,9 @@ private
       Prim              :    out Primitive.Object_Type);
 
    --
-   --  Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Resizing
    --
-   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Resizing (
       Curr_Gen          :     Generation_Type;
       Snapshot          :     Snapshot_Type;
       Snapshot_Degree   :     Tree_Degree_Type;

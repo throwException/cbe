@@ -685,10 +685,7 @@ is
                   Job.PBA,
                   Job.Nr_Of_PBAs);
 
-               if Job.Nr_Of_PBAs = 0 then
-                  raise Program_Error;
-               end if;
-
+               Job.T1_Blk_Idx := Job.Snapshots (Job.Snapshot_Idx).Max_Level;
                Found_Lvl_Idx := Job.Snapshots (Job.Snapshot_Idx).Max_Level;
                Found_Child_Idx := 1;
 
@@ -705,61 +702,22 @@ is
 
             end if;
 
-            Add_New_Branch_To_Snap_Using_PBA_Contingent :
-            for Lvl_Idx in reverse 1 .. Found_Lvl_Idx loop
+            if Job.Nr_Of_PBAs > 0 then
 
-               if Lvl_Idx > 1 then
+               Add_New_Branch_To_Snap_Using_PBA_Contingent :
+               for Lvl_Idx in reverse 1 .. Found_Lvl_Idx loop
 
-                  Declare_Child_Idx :
-                  declare
-                     Child_Idx : constant Type_1_Node_Block_Index_Type := (
-                        if Lvl_Idx = Found_Lvl_Idx
-                        then Found_Child_Idx
-                        else 0);
-                  begin
+                  if Lvl_Idx > 1 then
 
-                     Alloc_PBA_From_Resizing_Contingent (
-                        Job.PBA, Job.Nr_Of_PBAs,
-                        Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA);
-
-                     Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen := 0;
-
-                     Debug.Print_String (
-                        "   UPDATE LVL " &
-                        Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                        " CHILD " &
-                        Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                        " PBA " &
-                        Debug.To_String (Debug.Uint64_Type (
-                           Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA)) &
-                        " GEN " &
-                        Debug.To_String (Debug.Uint64_Type (
-                           Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
-                        " ");
-
-                     if Job.Nr_Of_PBAs = 0 then
-                        raise Program_Error;
-                     end if;
-
-                  end Declare_Child_Idx;
-
-               else
-
-                  Declare_First_Child_Idx :
-                  declare
-                     First_Child_Idx :
-                        constant Type_1_Node_Block_Index_Type := (
+                     Declare_Child_Idx :
+                     declare
+                        Child_Idx : constant Type_1_Node_Block_Index_Type := (
                            if Lvl_Idx = Found_Lvl_Idx
                            then Found_Child_Idx
                            else 0);
 
-                     Child_PBA : Physical_Block_Address_Type;
-                  begin
-
-                     for Child_Idx in First_Child_Idx ..
-                            Type_1_Node_Block_Index_Type (
-                               Job.Snapshots_Degree - 1)
-                     loop
+                        Child_PBA : Physical_Block_Address_Type;
+                     begin
 
                         Alloc_PBA_From_Resizing_Contingent (
                            Job.PBA, Job.Nr_Of_PBAs, Child_PBA);
@@ -768,6 +726,8 @@ is
                            PBA => Child_PBA,
                            Gen => 0,
                            Hash => (others => 0));
+
+                        Job.T1_Blk_Idx := Lvl_Idx;
 
                         Debug.Print_String (
                            "   UPDATE LVL " &
@@ -780,27 +740,74 @@ is
                            " GEN " &
                            Debug.To_String (Debug.Uint64_Type (
                               Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
-                           " HASH");
+                           " ");
 
-                        Job.Nr_Of_Leaves := Job.Nr_Of_Leaves + 1;
+                        exit Add_New_Branch_To_Snap_Using_PBA_Contingent when
+                           Job.Nr_Of_PBAs = 0;
 
-                        if Job.Nr_Of_PBAs = 0 then
-                           raise Program_Error;
-                        end if;
+                     end Declare_Child_Idx;
 
-                     end loop;
+                  else
 
-                  end Declare_First_Child_Idx;
+                     Declare_First_Child_Idx :
+                     declare
+                        First_Child_Idx :
+                           constant Type_1_Node_Block_Index_Type := (
+                              if Lvl_Idx = Found_Lvl_Idx
+                              then Found_Child_Idx
+                              else 0);
 
-               end if;
+                        Child_PBA : Physical_Block_Address_Type;
+                     begin
 
-            end loop Add_New_Branch_To_Snap_Using_PBA_Contingent;
+                        for Child_Idx in First_Child_Idx ..
+                               Type_1_Node_Block_Index_Type (
+                                  Job.Snapshots_Degree - 1)
+                        loop
+
+                           Alloc_PBA_From_Resizing_Contingent (
+                              Job.PBA, Job.Nr_Of_PBAs, Child_PBA);
+
+                           Job.T1_Blks (Lvl_Idx) (Child_Idx) := (
+                              PBA => Child_PBA,
+                              Gen => 0,
+                              Hash => (others => 0));
+
+                           Job.T1_Blk_Idx := Lvl_Idx;
+
+                           Debug.Print_String (
+                              "   UPDATE LVL " &
+                              Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+                              " CHILD " &
+                              Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+                              " PBA " &
+                              Debug.To_String (Debug.Uint64_Type (
+                                 Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA)) &
+                              " GEN " &
+                              Debug.To_String (Debug.Uint64_Type (
+                                 Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
+                              " HASH");
+
+                           Job.Nr_Of_Leaves := Job.Nr_Of_Leaves + 1;
+
+                           exit Add_New_Branch_To_Snap_Using_PBA_Contingent
+                              when Job.Nr_Of_PBAs = 0;
+
+                        end loop;
+
+                     end Declare_First_Child_Idx;
+
+                  end if;
+
+               end loop Add_New_Branch_To_Snap_Using_PBA_Contingent;
+
+            end if;
 
             Job.VBA := Job.VBA + 1;
 
             if Unused_Child_Found then
 
-               Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+               Set_Args_For_Alloc_Of_New_PBAs_For_Resizing (
                   Curr_Gen          => Job.Curr_Gen,
                   Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
                   Snapshot_Degree   => Job.Snapshots_Degree,
@@ -843,8 +850,34 @@ is
 
                end loop;
 
-               Job.State := Write_Leaf_Node_Completed;
-               Progress := True;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Write,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_VBD_Rkg_Cache,
+                  Blk_Nr =>
+                     Block_Number_Type (Job.New_PBAs (Job.T1_Blk_Idx)),
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Debug.Print_String (
+                  "   WRITE LVL " &
+                  Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+                  " PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.New_PBAs (Job.T1_Blk_Idx))) &
+                  " ");
+
+               if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level
+               then
+
+                  Job.State := Write_Inner_Node_Pending;
+                  Progress := True;
+
+               else
+
+                  Job.State := Write_Root_Node_Pending;
+                  Progress := True;
+
+               end if;
 
             end if;
 
@@ -1054,9 +1087,9 @@ is
    end Set_New_PBAs_For_Write_Back_Of_New_Root_Branch;
 
    --
-   --  Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Resizing
    --
-   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Resizing (
       Curr_Gen          :     Generation_Type;
       Snapshot          :     Snapshot_Type;
       Snapshot_Degree   :     Tree_Degree_Type;
@@ -1115,6 +1148,21 @@ is
 
             else
 
+               --
+               --  FIXME
+               --
+               --  This is done only because the Free Tree module would
+               --  otherwise get stuck. It is normal that the lowest
+               --  levels have PBA 0 when creating the new branch
+               --  stopped at an inner node because of a depleted PBA
+               --  contingent. As soon as the strange behavior in the Free
+               --  Tree module has been fixed, the whole 'if' statement can be
+               --  removed.
+               --
+               if T1_Walk (Lvl_Idx).PBA = 0 then
+                  T1_Walk (Lvl_Idx).PBA := Physical_Block_Address_Type'Last;
+               end if;
+
                New_PBAs (Lvl_Idx) := T1_Walk (Lvl_Idx).PBA;
 
             end if;
@@ -1130,7 +1178,7 @@ is
          Blk_Nr => Block_Number_Type'First,
          Idx    => Prim_Idx);
 
-   end Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying;
+   end Set_Args_For_Alloc_Of_New_PBAs_For_Resizing;
 
    --
    --  Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying
@@ -1425,8 +1473,32 @@ is
 
          if Primitive.Success (Job.Generated_Prim) then
 
-            Job.State := Write_Leaf_Node_Completed;
-            Progress := True;
+            Debug.Print_String (
+               "   WRITE LVL " &
+               Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+               " PBA " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.New_PBAs (Job.T1_Blk_Idx))) &
+               " ");
+
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Write,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Cache,
+               Blk_Nr => Block_Number_Type (Job.New_PBAs (Job.T1_Blk_Idx)),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level then
+
+               Job.State := Write_Inner_Node_Pending;
+               Progress := True;
+
+            else
+
+               Job.State := Write_Root_Node_Pending;
+               Progress := True;
+
+            end if;
 
          else
 
@@ -1437,40 +1509,6 @@ is
             Progress := True;
 
          end if;
-
-      when Write_Leaf_Node_Completed =>
-
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
-         end if;
-
-         Declare_Child_Idx_13 :
-         declare
-            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type := 1;
-            Parent_PBA : constant Physical_Block_Address_Type :=
-               Job.New_PBAs (Parent_Lvl_Idx);
-         begin
-
-            Debug.Print_String (
-               "   WRITE LVL " &
-               Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Parent_PBA)) &
-               " ");
-
-            Job.T1_Blk_Idx := Parent_Lvl_Idx;
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Write,
-               Succ   => False,
-               Tg     => Primitive.Tag_VBD_Rkg_Cache,
-               Blk_Nr => Block_Number_Type (Parent_PBA),
-               Idx    => Primitive.Index_Type (Job_Idx));
-
-            Job.State := Write_Inner_Node_Pending;
-            Progress := True;
-
-         end Declare_Child_Idx_13;
 
       when Write_Inner_Node_Completed =>
 
