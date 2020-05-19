@@ -331,6 +331,8 @@ is
          case SB.State is
          when Normal =>
 
+            Job.Request_Finished := False;
+
             SB.State := Extending_VBD;
             SB.Resizing_First_PBA := Job.PBA;
             SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
@@ -401,8 +403,6 @@ is
             SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
             SB.Resizing_Nr_Of_Leaves :=
                SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
-
-            Job.Request_Finished := False;
 
          else
 
