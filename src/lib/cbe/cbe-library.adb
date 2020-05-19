@@ -514,7 +514,8 @@ is
 
          case Primitive.Tag (Prim) is
          when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks |
-              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks
+              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks |
+              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
          =>
 
             null;
@@ -1002,7 +1003,8 @@ is
 
             case Primitive.Tag (Prim) is
             when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks |
-                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks
+                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks |
+                 Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
             =>
 
                VBD_Rekeying.Mark_Generated_Prim_Completed_New_PBAs (

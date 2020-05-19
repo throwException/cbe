@@ -280,17 +280,17 @@ private
       Decrypt_Leaf_Node_In_Progress,
       Decrypt_Leaf_Node_Completed,
 
-      Alloc_PBAs_For_All_Lvls_Pending,
-      Alloc_PBAs_For_All_Lvls_In_Progress,
-      Alloc_PBAs_For_All_Lvls_Completed,
+      Alloc_PBAs_At_Leaf_Lvl_Pending,
+      Alloc_PBAs_At_Leaf_Lvl_In_Progress,
+      Alloc_PBAs_At_Leaf_Lvl_Completed,
 
-      Alloc_PBAs_For_All_Inner_Lvls_Pending,
-      Alloc_PBAs_For_All_Inner_Lvls_In_Progress,
-      Alloc_PBAs_For_All_Inner_Lvls_Completed,
+      Alloc_PBAs_At_Lowest_Inner_Lvl_Pending,
+      Alloc_PBAs_At_Lowest_Inner_Lvl_In_Progress,
+      Alloc_PBAs_At_Lowest_Inner_Lvl_Completed,
 
-      Alloc_PBAs_For_Some_Inner_Lvls_Pending,
-      Alloc_PBAs_For_Some_Inner_Lvls_In_Progress,
-      Alloc_PBAs_For_Some_Inner_Lvls_Completed,
+      Alloc_PBAs_At_Higher_Inner_Lvl_Pending,
+      Alloc_PBAs_At_Higher_Inner_Lvl_In_Progress,
+      Alloc_PBAs_At_Higher_Inner_Lvl_Completed,
 
       Encrypt_Leaf_Node_Pending,
       Encrypt_Leaf_Node_In_Progress,
@@ -410,9 +410,9 @@ private
    return Snapshots_Index_Type;
 
    --
-   --  Set_Args_For_Alloc_Of_New_PBAs
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying
    --
-   procedure Set_Args_For_Alloc_Of_New_PBAs (
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
       For_Curr_Gen_Blks :        Boolean;
       Curr_Gen          :        Generation_Type;
       Snapshot          :        Snapshot_Type;
@@ -426,6 +426,23 @@ private
       Nr_Of_Blks        :    out Number_Of_Blocks_Type;
       Free_Gen          :    out Generation_Type;
       Prim              :    out Primitive.Object_Type);
+
+   --
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying
+   --
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+      Curr_Gen          :     Generation_Type;
+      Snapshot          :     Snapshot_Type;
+      Snapshot_Degree   :     Tree_Degree_Type;
+      VBA               :     Virtual_Block_Address_Type;
+      Min_Lvl_Idx       :     Tree_Level_Index_Type;
+      Prim_Idx          :     Primitive.Index_Type;
+      T1_Blks           :     Type_1_Node_Blocks_Type;
+      T1_Walk           : out Type_1_Node_Walk_Type;
+      New_PBAs          : out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks        : out Number_Of_Blocks_Type;
+      Free_Gen          : out Generation_Type;
+      Prim              : out Primitive.Object_Type);
 
    --
    --  Discard_Disposable_Snapshots

@@ -962,7 +962,10 @@ is
                   end if;
 
                   case Tag is
-                  when Primitive.Tag_Pool_VBD =>
+                  when
+                     Primitive.Tag_Pool_VBD |
+                     Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
+                  =>
 
                      New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
 

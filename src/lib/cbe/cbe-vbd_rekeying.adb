@@ -548,43 +548,124 @@ is
             Add_New_Branch_To_Snap_Using_PBA_Contingent :
             for Lvl_Idx in reverse 1 .. Found_Lvl_Idx loop
 
-               Declare_Child_Idx :
-               declare
-                  Child_Idx : constant Type_1_Node_Block_Index_Type := (
-                     if Lvl_Idx = Found_Lvl_Idx
-                     then Found_Child_Idx
-                     else 0);
-               begin
+               if Lvl_Idx > 1 then
 
-                  Alloc_PBA_From_Resizing_Contingent (
-                     Job.PBA, Job.Nr_Of_PBAs,
-                     Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA);
+                  Declare_Child_Idx :
+                  declare
+                     Child_Idx : constant Type_1_Node_Block_Index_Type := (
+                        if Lvl_Idx = Found_Lvl_Idx
+                        then Found_Child_Idx
+                        else 0);
+                  begin
 
-                  Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen :=
-                     Job.Curr_Gen;
+                     Alloc_PBA_From_Resizing_Contingent (
+                        Job.PBA, Job.Nr_Of_PBAs,
+                        Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA);
 
-                  Debug.Print_String (
-                     "   UPDATE LVL " &
-                     Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                     " CHILD " &
-                     Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                     " PBA " &
-                     Debug.To_String (Debug.Uint64_Type (
-                        Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA)) &
-                     " GEN " &
-                     Debug.To_String (Debug.Uint64_Type (
-                        Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
-                     " ");
+                     Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen := 0;
 
-                  if Job.Nr_Of_PBAs = 0 then
-                     raise Program_Error;
-                  end if;
+                     Debug.Print_String (
+                        "   UPDATE LVL " &
+                        Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+                        " CHILD " &
+                        Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+                        " PBA " &
+                        Debug.To_String (Debug.Uint64_Type (
+                           Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA)) &
+                        " GEN " &
+                        Debug.To_String (Debug.Uint64_Type (
+                           Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
+                        " ");
 
-               end Declare_Child_Idx;
+                     if Job.Nr_Of_PBAs = 0 then
+                        raise Program_Error;
+                     end if;
+
+                  end Declare_Child_Idx;
+
+               else
+
+                  Declare_First_Child_Idx :
+                  declare
+                     First_Child_Idx :
+                        constant Type_1_Node_Block_Index_Type := (
+                           if Lvl_Idx = Found_Lvl_Idx
+                           then Found_Child_Idx
+                           else 0);
+                  begin
+
+                     for Child_Idx in First_Child_Idx ..
+                            Type_1_Node_Block_Index_Type (
+                               Job.Snapshots_Degree - 1)
+                     loop
+
+                        Alloc_PBA_From_Resizing_Contingent (
+                           Job.PBA, Job.Nr_Of_PBAs,
+                           Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA);
+
+                        Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen := 0;
+
+                        Debug.Print_String (
+                           "   UPDATE LVL " &
+                           Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+                           " CHILD " &
+                           Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+                           " PBA " &
+                           Debug.To_String (Debug.Uint64_Type (
+                              Job.T1_Blks (Lvl_Idx) (Child_Idx).PBA)) &
+                           " GEN " &
+                           Debug.To_String (Debug.Uint64_Type (
+                              Job.T1_Blks (Lvl_Idx) (Child_Idx).Gen)) &
+                           " ");
+
+                        Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs :=
+                           Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs + 1;
+
+                        if Job.Nr_Of_PBAs = 0 then
+                           raise Program_Error;
+                        end if;
+
+                     end loop;
+
+                  end Declare_First_Child_Idx;
+
+               end if;
 
             end loop Add_New_Branch_To_Snap_Using_PBA_Contingent;
 
-            raise Program_Error;
+            Debug.Print_String (
+               "   UPDATE SNAP LEAVES  " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs)) &
+               " ");
+
+            Job.VBA := Virtual_Block_Address_Type (
+               Job.Snapshots (Job.Snapshot_Idx).Nr_Of_Leafs - 1);
+
+            if Unused_Child_Found then
+
+               Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+                  Curr_Gen          => Job.Curr_Gen,
+                  Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
+                  Snapshot_Degree   => Job.Snapshots_Degree,
+                  VBA               => Job.VBA,
+                  Min_Lvl_Idx       => Found_Lvl_Idx,
+                  Prim_Idx          => Primitive.Index_Type (Job_Idx),
+                  T1_Blks           => Job.T1_Blks,
+                  T1_Walk           => Job.T1_Node_Walk,
+                  New_PBAs          => Job.New_PBAs,
+                  Nr_Of_Blks        => Job.Nr_Of_Blks,
+                  Free_Gen          => Job.Free_Gen,
+                  Prim              => Job.Generated_Prim);
+
+               Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
+               Progress := True;
+
+            else
+
+               raise Program_Error;
+
+            end if;
 
          end Declare_Results_Of_Search_For_Unused_Child;
 
@@ -635,7 +716,7 @@ is
 
                Job.T1_Blk_Idx := Child_Lvl_Idx;
 
-               Set_Args_For_Alloc_Of_New_PBAs (
+               Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
                   Curr_Gen          => Job.Curr_Gen,
                   Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
@@ -650,7 +731,7 @@ is
                   Free_Gen          => Job.Free_Gen,
                   Prim              => Job.Generated_Prim);
 
-               Job.State := Alloc_PBAs_For_Some_Inner_Lvls_Pending;
+               Job.State := Alloc_PBAs_At_Higher_Inner_Lvl_Pending;
                Progress := True;
 
             else
@@ -690,7 +771,7 @@ is
                Job.Data_Blk_Old_PBA = Child.PBA
             then
 
-               Set_Args_For_Alloc_Of_New_PBAs (
+               Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
                   Curr_Gen          => Job.Curr_Gen,
                   Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
@@ -705,12 +786,12 @@ is
                   Free_Gen          => Job.Free_Gen,
                   Prim              => Job.Generated_Prim);
 
-               Job.State := Alloc_PBAs_For_All_Inner_Lvls_Pending;
+               Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
                Progress := True;
 
             elsif Child.Gen = 0 then
 
-               Set_Args_For_Alloc_Of_New_PBAs (
+               Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
                   Curr_Gen          => Job.Curr_Gen,
                   Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
@@ -725,7 +806,7 @@ is
                   Free_Gen          => Job.Free_Gen,
                   Prim              => Job.Generated_Prim);
 
-               Job.State := Alloc_PBAs_For_All_Inner_Lvls_Pending;
+               Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
                Progress := True;
 
             else
@@ -781,9 +862,88 @@ is
    end Newest_Snapshot_Idx;
 
    --
-   --  Set_Args_For_Alloc_Of_New_PBAs
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying
    --
-   procedure Set_Args_For_Alloc_Of_New_PBAs (
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying (
+      Curr_Gen          :     Generation_Type;
+      Snapshot          :     Snapshot_Type;
+      Snapshot_Degree   :     Tree_Degree_Type;
+      VBA               :     Virtual_Block_Address_Type;
+      Min_Lvl_Idx       :     Tree_Level_Index_Type;
+      Prim_Idx          :     Primitive.Index_Type;
+      T1_Blks           :     Type_1_Node_Blocks_Type;
+      T1_Walk           : out Type_1_Node_Walk_Type;
+      New_PBAs          : out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks        : out Number_Of_Blocks_Type;
+      Free_Gen          : out Generation_Type;
+      Prim              : out Primitive.Object_Type)
+   is
+   begin
+
+      if Min_Lvl_Idx > Snapshot.Max_Level then
+         raise Program_Error;
+      end if;
+
+      Nr_Of_Blks := 0;
+      Free_Gen := Curr_Gen;
+
+      For_Each_Lvl :
+      for Lvl_Idx in Tree_Level_Index_Type loop
+
+         if Lvl_Idx > Snapshot.Max_Level then
+
+            T1_Walk (Lvl_Idx) := Type_1_Node_Invalid;
+            New_PBAs (Lvl_Idx) := Physical_Block_Address_Type'First;
+
+         elsif Lvl_Idx = Snapshot.Max_Level then
+
+            Nr_Of_Blks := Nr_Of_Blks + 1;
+            New_PBAs (Lvl_Idx) := 0;
+            T1_Walk (Lvl_Idx) := (
+               PBA => Snapshot.PBA,
+               Gen => Snapshot.Gen,
+               Hash => Snapshot.Hash);
+
+         else
+
+            Declare_Child_Idx :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+            begin
+
+               T1_Walk (Lvl_Idx) := T1_Blks (Lvl_Idx + 1) (Child_Idx);
+
+            end Declare_Child_Idx;
+
+            if Lvl_Idx >= Min_Lvl_Idx then
+
+               Nr_Of_Blks := Nr_Of_Blks + 1;
+               New_PBAs (Lvl_Idx) := 0;
+
+            else
+
+               New_PBAs (Lvl_Idx) := T1_Walk (Lvl_Idx).PBA;
+
+            end if;
+
+         end if;
+
+      end loop For_Each_Lvl;
+
+      Prim := Primitive.Valid_Object_No_Pool_Idx (
+         Op     => Primitive_Operation_Type'First,
+         Succ   => False,
+         Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg,
+         Blk_Nr => Block_Number_Type'First,
+         Idx    => Prim_Idx);
+
+   end Set_Args_For_Alloc_Of_New_PBAs_For_Non_Rekeying;
+
+   --
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying
+   --
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
       For_Curr_Gen_Blks :        Boolean;
       Curr_Gen          :        Generation_Type;
       Snapshot          :        Snapshot_Type;
@@ -883,7 +1043,7 @@ is
 
       end if;
 
-   end Set_Args_For_Alloc_Of_New_PBAs;
+   end Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying;
 
    --
    --  Discard_Disposable_Snapshots
@@ -988,6 +1148,30 @@ is
                Progress);
 
          end Declare_Child_Idx_1;
+
+      when Alloc_PBAs_At_Lowest_Inner_Lvl_Completed =>
+
+         Debug.Print_String (
+            "   ALLOC PBAS RESULT " &
+            " ");
+
+         for Lvl_Idx in reverse Tree_Level_Index_Type loop
+
+            Debug.Print_String (
+               "      LVL " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Lvl_Idx)) &
+               "      NEW " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.New_PBAs (Lvl_Idx))) &
+               "      OLD " &
+               Debug.To_String (Debug.Uint64_Type (
+                  Job.T1_Node_Walk (Lvl_Idx).PBA)) &
+               " ");
+
+         end loop;
+
+         raise Program_Error;
 
       when others =>
 
@@ -1096,7 +1280,7 @@ is
             raise Program_Error;
          end if;
 
-         Set_Args_For_Alloc_Of_New_PBAs (
+         Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
             For_Curr_Gen_Blks => Job.First_Snapshot,
             Curr_Gen          => Job.Curr_Gen,
             Snapshot          => Job.Snapshots (Job.Snapshot_Idx),
@@ -1111,10 +1295,10 @@ is
             Free_Gen          => Job.Free_Gen,
             Prim              => Job.Generated_Prim);
 
-         Job.State := Alloc_PBAs_For_All_Lvls_Pending;
+         Job.State := Alloc_PBAs_At_Leaf_Lvl_Pending;
          Progress := True;
 
-      when Alloc_PBAs_For_All_Inner_Lvls_Completed =>
+      when Alloc_PBAs_At_Lowest_Inner_Lvl_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
 
@@ -1126,12 +1310,12 @@ is
             Discard_Disposable_Snapshots (
                Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
 
-            Job.State := Alloc_PBAs_For_All_Inner_Lvls_Pending;
+            Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
             Progress := True;
 
          end if;
 
-      when Alloc_PBAs_For_All_Lvls_Completed =>
+      when Alloc_PBAs_At_Leaf_Lvl_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
 
@@ -1150,7 +1334,7 @@ is
             Discard_Disposable_Snapshots (
                Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
 
-            Job.State := Alloc_PBAs_For_All_Lvls_Pending;
+            Job.State := Alloc_PBAs_At_Leaf_Lvl_Pending;
             Progress := True;
 
          end if;
@@ -1385,7 +1569,7 @@ is
 
          end Declare_New_Snap_Idx;
 
-      when Alloc_PBAs_For_Some_Inner_Lvls_Completed =>
+      when Alloc_PBAs_At_Higher_Inner_Lvl_Completed =>
 
          if Primitive.Success (Job.Generated_Prim) then
 
@@ -1397,7 +1581,7 @@ is
             Discard_Disposable_Snapshots (
                Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
 
-            Job.State := Alloc_PBAs_For_Some_Inner_Lvls_Pending;
+            Job.State := Alloc_PBAs_At_Higher_Inner_Lvl_Pending;
             Progress := True;
 
          end if;
@@ -1523,9 +1707,9 @@ is
 
             case Rkg.Jobs (Idx).State is
             when
-               Alloc_PBAs_For_All_Lvls_Pending |
-               Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-               Alloc_PBAs_For_All_Inner_Lvls_Pending
+               Alloc_PBAs_At_Leaf_Lvl_Pending |
+               Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+               Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
             =>
 
                return Rkg.Jobs (Idx).Generated_Prim;
@@ -1590,9 +1774,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1629,9 +1813,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1668,9 +1852,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1707,9 +1891,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1746,9 +1930,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1785,9 +1969,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1826,9 +2010,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -1865,9 +2049,9 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Alloc_PBAs_For_All_Lvls_Pending |
-            Alloc_PBAs_For_Some_Inner_Lvls_Pending |
-            Alloc_PBAs_For_All_Inner_Lvls_Pending
+            Alloc_PBAs_At_Leaf_Lvl_Pending |
+            Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
+            Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
          =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
@@ -2129,32 +2313,32 @@ is
             Rkg.Jobs (Idx).State := Decrypt_Leaf_Node_In_Progress;
             return;
 
-         when Alloc_PBAs_For_All_Lvls_Pending =>
+         when Alloc_PBAs_At_Leaf_Lvl_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Alloc_PBAs_For_All_Lvls_In_Progress;
+            Rkg.Jobs (Idx).State := Alloc_PBAs_At_Leaf_Lvl_In_Progress;
             return;
 
-         when Alloc_PBAs_For_Some_Inner_Lvls_Pending =>
+         when Alloc_PBAs_At_Higher_Inner_Lvl_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Alloc_PBAs_For_Some_Inner_Lvls_In_Progress;
+            Rkg.Jobs (Idx).State := Alloc_PBAs_At_Higher_Inner_Lvl_In_Progress;
             return;
 
-         when Alloc_PBAs_For_All_Inner_Lvls_Pending =>
+         when Alloc_PBAs_At_Lowest_Inner_Lvl_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
             Rkg.Jobs (Idx).State :=
-               Alloc_PBAs_For_All_Inner_Lvls_In_Progress;
+               Alloc_PBAs_At_Lowest_Inner_Lvl_In_Progress;
 
             return;
 
@@ -2383,35 +2567,35 @@ is
       if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
-         when Alloc_PBAs_For_All_Lvls_In_Progress =>
+         when Alloc_PBAs_At_Leaf_Lvl_In_Progress =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Alloc_PBAs_For_All_Lvls_Completed;
+            Rkg.Jobs (Idx).State := Alloc_PBAs_At_Leaf_Lvl_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             Rkg.Jobs (Idx).New_PBAs := New_PBAs;
             return;
 
-         when Alloc_PBAs_For_Some_Inner_Lvls_In_Progress =>
+         when Alloc_PBAs_At_Higher_Inner_Lvl_In_Progress =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Alloc_PBAs_For_Some_Inner_Lvls_Completed;
+            Rkg.Jobs (Idx).State := Alloc_PBAs_At_Higher_Inner_Lvl_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             Rkg.Jobs (Idx).New_PBAs := New_PBAs;
             return;
 
-         when Alloc_PBAs_For_All_Inner_Lvls_In_Progress =>
+         when Alloc_PBAs_At_Lowest_Inner_Lvl_In_Progress =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Alloc_PBAs_For_All_Inner_Lvls_Completed;
+            Rkg.Jobs (Idx).State := Alloc_PBAs_At_Lowest_Inner_Lvl_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             Rkg.Jobs (Idx).New_PBAs := New_PBAs;
             return;
