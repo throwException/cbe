@@ -1197,11 +1197,6 @@ class Cbe::Main
 
 				Cbe::Virtual_block_address const vba = request.operation.block_number;
 
-				if (vba > _cbe->max_vba()) {
-					warning("reject request with out-of-range virtual block address ", vba);
-					return Block_session_component::Response::REJECTED;
-				}
-
 				if (!request.operation.valid()) {
 					warning("reject invalid request for virtual block address ", vba);
 					return Block_session_component::Response::REJECTED;

@@ -1850,35 +1850,55 @@ is
                   else Snap_Slot_For_ID (Obj, Generation_Type (Snap_ID)));
             begin
 
-               case Primitive.Operation (Prim) is
-               when Read =>
-                  Obj.Handle_Failed_FT_Prims := False;
-               when Write =>
-                  Obj.Handle_Failed_FT_Prims := True;
-               when others =>
-                  raise Program_Error;
-               end case;
+               if Primitive.Block_Number (Prim) >
+                     Block_Number_Type (
+                        Obj.Superblock.Snapshots (Snap_Slot_Idx)
+                           .Nr_Of_Leafs - 1)
+               then
 
-               Virtual_Block_Device.Submit_Primitive (
-                  Obj.VBD,
-                  Obj.Superblock.Snapshots (Snap_Slot_Idx).PBA,
-                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Gen,
-                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
-                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Max_Level,
-                  Obj.Superblock.Degree,
-                  Obj.Superblock.Snapshots (Snap_Slot_Idx).Nr_Of_Leafs,
-                  Prim,
-                  Obj.Superblock.State = Rekeying,
-                  Obj.Superblock.Rekeying_VBA,
-                  Obj.Superblock.Previous_Key.ID,
-                  Obj.Superblock.Current_Key.ID
-                  );
+                  Pool.Drop_Generated_Primitive (
+                     Obj.Request_Pool_Obj,
+                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
-               Pool.Drop_Generated_Primitive (
-                  Obj.Request_Pool_Obj,
-                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+                  Pool.Mark_Generated_Primitive_Complete (
+                     Obj.Request_Pool_Obj,
+                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+                     False);
 
-               Progress := True;
+                  Progress := True;
+
+               else
+
+                  case Primitive.Operation (Prim) is
+                  when Read =>
+                     Obj.Handle_Failed_FT_Prims := False;
+                  when Write =>
+                     Obj.Handle_Failed_FT_Prims := True;
+                  when others =>
+                     raise Program_Error;
+                  end case;
+
+                  Virtual_Block_Device.Submit_Primitive (
+                     Obj.VBD,
+                     Obj.Superblock.Snapshots (Snap_Slot_Idx).PBA,
+                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Gen,
+                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
+                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Max_Level,
+                     Obj.Superblock.Degree,
+                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Nr_Of_Leafs,
+                     Prim,
+                     Obj.Superblock.State = Rekeying,
+                     Obj.Superblock.Rekeying_VBA,
+                     Obj.Superblock.Previous_Key.ID,
+                     Obj.Superblock.Current_Key.ID);
+
+                  Pool.Drop_Generated_Primitive (
+                     Obj.Request_Pool_Obj,
+                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
+                  Progress := True;
+
+               end if;
 
             end Declare_Snap_Slot_Idx;
 
