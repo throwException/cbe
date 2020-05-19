@@ -103,31 +103,73 @@ append config {
 					<key id="12" />
 
 					<virtual-block-device
-						nr_of_levels="4"
-						nr_of_children="64"
-						nr_of_leafs="200" />
+						nr_of_levels="3"
+						nr_of_children="16"
+						nr_of_leafs="256" />
 
 					<free-tree
 						nr_of_levels="4"
-						nr_of_children="64"
-						nr_of_leafs="200" />
+						nr_of_children="16"
+						nr_of_leafs="4096" />
 				</initialize>
 
 				<replay verbose="yes" bulk="no">
+
 					<request type="write" lba="1"  count="1"/>
-					<create-snapshot id="1" quarantine="yes"/>
-					<request type="write" lba="65"  count="1"/>
-					<create-snapshot id="2" quarantine="yes"/>
-					<request type="write" lba="129" count="1"/>
-					<create-snapshot id="3" quarantine="yes"/>
-					<request type="write" lba="1" count="1"/>
-					<request type="write" lba="0" count="1"/>
-					<rekey key_id="13"/>
-					<request type="write" lba="0" count="3"/>
-					<request type="write" lba="1" count="1"/>
-					<request type="write" lba="5" count="2"/>
-					<request type="write" lba="9" count="1"/>
+					<extend-vbd nr_of_phys_blocks="1000" />
+					<request type="write" lba="1000"  count="1"/>
+					<extend-vbd nr_of_phys_blocks="1000" />
+					<request type="write" lba="2000"  count="1"/>
+
+<!--
+
+					<request type="read" lba="4053" count="25"/>
+					<request type="write" lba="4053" count="25"/>
+
+					<extend-vbd nr_of_phys_blocks="10" />
+
+					<request type="read" lba="4073" count="7"/>
+					<request type="write" lba="4073" count="7"/>
+
+					<extend-vbd nr_of_phys_blocks="1" />
+
+					<request type="read" lba="4073" count="8"/>
+					<request type="write" lba="4073" count="8"/>
+
+					<extend-vbd nr_of_phys_blocks="1" />
+
+					<request type="read" lba="4073" count="9"/>
+					<request type="write" lba="4073" count="9"/>
+
+					<extend-vbd nr_of_phys_blocks="14" />
+
+					<request type="read" lba="4073" count="23"/>
+					<request type="write" lba="4073" count="23"/>
+
+					<extend-vbd nr_of_phys_blocks="1" />
+
+					<request type="read" lba="4095" count="1"/>
+					<request type="write" lba="4095" count="1"/>
+
+					<extend-vbd nr_of_phys_blocks="2" />
+
+					<request type="read" lba="4073" count="23"/>
+					<request type="write" lba="4073" count="23"/>
+
+					<extend-vbd nr_of_phys_blocks="1" />
+
+					<request type="read" lba="4073" count="23"/>
+					<request type="write" lba="4073" count="23"/>
+
+					<extend-vbd nr_of_phys_blocks="2000" />
+
+					<request type="read" lba="5971" count="1"/>
+					<request type="write" lba="5971" count="1"/>
+-->
+
 				</replay>
+
+				<check/>
 
 			</tests>
 
