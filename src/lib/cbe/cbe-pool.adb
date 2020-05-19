@@ -37,6 +37,10 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
+            when Extend_VBD =>
+
+               raise Program_Error;
+
             when Rekey =>
 
                Obj.Items (Idx).State := Submitted;
@@ -470,6 +474,10 @@ is
       end if;
 
       case Request.Operation (Obj.Items (Idx).Req) is
+      when Extend_VBD =>
+
+         raise Program_Error;
+
       when Rekey =>
 
          case Obj.Items (Idx).State is
@@ -540,7 +548,7 @@ is
 
          end case;
 
-      when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+      when others =>
 
          raise Program_Error;
 
@@ -609,7 +617,7 @@ is
       case Request.Operation (Itm.Req) is
       when Read | Write =>
          Number_Of_Primitives_Type (Request.Count (Itm.Req)),
-      when Sync | Create_Snapshot | Discard_Snapshot | Rekey =>
+      when Sync | Create_Snapshot | Discard_Snapshot | Rekey | Extend_VBD =>
          1);
 
    --

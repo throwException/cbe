@@ -126,7 +126,8 @@ is
       when Sync             => 3,
       when Create_Snapshot  => 4,
       when Discard_Snapshot => 5,
-      when Rekey            => 6);
+      when Rekey            => 6,
+      when Extend_VBD       => 7);
 
    function CXX_Request_Valid_To_SPARK (
       Req : CXX_Request_Type;

@@ -85,6 +85,21 @@ struct Rekey
 };
 
 
+struct Extend_vbd
+{
+	uint64_t first_phys_block;
+	uint32_t nr_of_phys_blocks;
+
+	Extend_vbd(
+		uint64_t first_phys_block,
+		uint32_t nr_of_phys_blocks)
+	:
+		first_phys_block { first_phys_block },
+		nr_of_phys_blocks { nr_of_phys_blocks }
+	{ }
+};
+
+
 struct Cbe::Block_session_component
 {
 	enum class Response { ACCEPTED, REJECTED, RETRY };
@@ -120,6 +135,7 @@ struct Cbe::Block_session_component
 			CREATE_SNAPSHOT,
 			DISCARD_SNAPSHOT,
 			REKEY,
+			EXTEND_VBD,
 			INITIALIZE,
 			CHECK,
 			DUMP
@@ -130,6 +146,7 @@ struct Cbe::Block_session_component
 		Constructible<Create_snapshot>         create_snapshot  { };
 		Constructible<Discard_snapshot>        discard_snapshot { };
 		Constructible<Rekey>                   rekey            { };
+		Constructible<Extend_vbd>              extend_vbd       { };
 		Constructible<Cbe_init::Configuration> initialize       { };
 		Constructible<Cbe_dump::Configuration> dump             { };
 
@@ -150,6 +167,9 @@ struct Cbe::Block_session_component
 			}
 			if (other.rekey.constructed()) {
 				rekey.construct(*other.rekey);
+			}
+			if (other.extend_vbd.constructed()) {
+				extend_vbd.construct(*other.extend_vbd);
 			}
 			if (other.initialize.constructed()) {
 				initialize.construct(*other.initialize);
@@ -286,6 +306,30 @@ struct Cbe::Block_session_component
 		}
 	}
 
+	void _read_extend_vbd_node(Xml_node const &node)
+	{
+		struct Bad_extend_vbd_node : Exception { };
+		try {
+			uint64_t first_phys_block { 0 };
+			uint32_t nr_of_phys_blocks { 0 };
+			if (!node.attribute("first_phys_block").value(first_phys_block)) {
+				error("extend-vbd node has bad first_phys_block attribute");
+				throw Bad_extend_vbd_node();
+			}
+			if (!node.attribute("nr_of_phys_blocks").value(nr_of_phys_blocks)) {
+				error("extend-vbd node has bad nr_of_phys_blocks attribute");
+				throw Bad_extend_vbd_node();
+			}
+			Test &test = *new (_alloc) Test;
+			test.type = Test::EXTEND_VBD;
+			test.extend_vbd.construct(first_phys_block, nr_of_phys_blocks);
+			_test_queue.enqueue(test);
+		} catch (Xml_node::Nonexistent_attribute) {
+			error("extend-vbd node misses attribute");
+			throw Bad_extend_vbd_node();
+		}
+	}
+
 	void _read_replay_node (Xml_node const &node)
 	{
 		struct Bad_replay_sub_node : Exception { };
@@ -300,6 +344,8 @@ struct Cbe::Block_session_component
 					_read_discard_snapshot_node(sub_node);
 				} else if (sub_node.has_type("rekey")) {
 					_read_rekey_node(sub_node);
+				} else if (sub_node.has_type("extend-vbd")) {
+					_read_extend_vbd_node(sub_node);
 				} else {
 					error("replay sub-node has bad type");
 					throw Bad_replay_sub_node();
@@ -621,6 +667,60 @@ struct Cbe::Block_session_component
 		_test_in_progress.destruct();
 	}
 
+	template <typename FN>
+	void with_extend_vbd(FN const &fn)
+	{
+		if (_test_in_progress.constructed()) {
+			return;
+		}
+		bool head_available { false };
+		bool head_has_correct_type { false };
+		_test_queue.head([&] (Test &test) {
+			head_available = true;
+			if (test.type == Test::EXTEND_VBD) {
+				head_has_correct_type = true;
+			}
+		});
+		if (!head_available) {
+			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
+			if (_nr_of_failed_tests > 0) {
+				_env.parent().exit(-1);
+			} else {
+				_env.parent().exit(0);
+			}
+		}
+		if (!head_has_correct_type) {
+			return;
+		}
+		_test_queue.dequeue([&] (Test &test) {
+			_test_in_progress.construct(test);
+			destroy(_alloc, &test);
+		});
+		log("extend-vbd started: first_phys_block ",
+		    _test_in_progress->extend_vbd->first_phys_block,
+		    " nr_of_phys_blocks ",
+		    _test_in_progress->extend_vbd->nr_of_phys_blocks);
+
+		fn(*_test_in_progress->extend_vbd);
+	}
+
+	void extend_vbd_done(bool success)
+	{
+		if (success) {
+			log("extend_vbd succeeded: first_phys_block ",
+			    _test_in_progress->extend_vbd->first_phys_block,
+			    " nr_of_phys_blocks ",
+			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
+		} else {
+			_nr_of_failed_tests++;
+			log("extend_vbd failed: first_phys_block ",
+			    _test_in_progress->extend_vbd->first_phys_block,
+			    " nr_of_phys_blocks ",
+			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
+		}
+		_test_in_progress.destruct();
+	}
+
 	bool cbe_request_next() const
 	{
 		bool result = false;
@@ -629,6 +729,7 @@ struct Cbe::Block_session_component
 			result |= test.type == Test::CREATE_SNAPSHOT;
 			result |= test.type == Test::DISCARD_SNAPSHOT;
 			result |= test.type == Test::REKEY;
+			result |= test.type == Test::EXTEND_VBD;
 		});
 		return result;
 	}
@@ -846,6 +947,8 @@ class Cbe::Main
 		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
 		bool                                    _rekey                   { false };
 		Rekey                                   _rekey_obj               { 0 };
+		bool                                    _extend_vbd              { false };
+		Extend_vbd                              _extend_vbd_obj          { 0, 0 };
 
 		void _execute_cbe_check (bool &progress)
 		{
@@ -1218,7 +1321,7 @@ class Cbe::Main
 			 * Acknowledge finished Block session requests.
 			 */
 
-			if (!_rekey) {
+			if (!_rekey && !_extend_vbd) {
 
 				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
 
@@ -1340,6 +1443,62 @@ class Cbe::Main
 
 					_rekey_obj = { 0 };
 					_rekey = false;
+					_cbe->drop_completed_client_request(req);
+
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
+					}
+					progress |= true;
+				}
+			}
+
+			if (!_extend_vbd) {
+				_block_session->with_extend_vbd([&] (Extend_vbd const extend_vbd) {
+
+					struct Extend_vbd_request_not_acceptable { };
+					if (!_cbe->client_request_acceptable()) {
+						throw Extend_vbd_request_not_acceptable();
+					}
+
+					Cbe::Request req(
+						Cbe::Request::Operation::EXTEND_VBD,
+						Cbe::Request::Success::FALSE,
+						extend_vbd.first_phys_block,
+						0,
+						extend_vbd.nr_of_phys_blocks,
+						0,
+						0);
+
+					_cbe->submit_client_request(req, 0);
+					_extend_vbd_obj = {
+						extend_vbd.first_phys_block,
+						extend_vbd.nr_of_phys_blocks
+					};
+					_extend_vbd = true;
+					progress |= true;
+				});
+			}
+
+			if (_extend_vbd) {
+
+				Cbe::Request const &req = _cbe->peek_completed_client_request();
+				if (req.valid()) {
+
+					struct Unexpected_request : Genode::Exception { };
+					if (req.operation() != Cbe::Request::Operation::EXTEND_VBD ||
+					    req.block_number() != _extend_vbd_obj.first_phys_block ||
+					    req.count() != _extend_vbd_obj.nr_of_phys_blocks)
+					{
+						throw Unexpected_request();
+					}
+					_block_session->extend_vbd_done(
+						req.success() ==
+							Cbe::Request::Success::TRUE ? true : false);
+
+					_extend_vbd_obj = { 0, 0 };
+					_extend_vbd = false;
 					_cbe->drop_completed_client_request(req);
 
 					if (_block_session->cbe_request_next()) {

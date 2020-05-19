@@ -138,7 +138,8 @@ namespace Cbe {
 				SYNC = 3,
 				CREATE_SNAPSHOT = 4,
 				DISCARD_SNAPSHOT = 5,
-				REKEY = 6
+				REKEY = 6,
+				EXTEND_VBD = 7
 			};
 
 			enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
@@ -193,6 +194,7 @@ namespace Cbe {
 				case Operation::CREATE_SNAPSHOT : return true;
 				case Operation::DISCARD_SNAPSHOT: return true;
 				case Operation::REKEY           : return true;
+				case Operation::EXTEND_VBD      : return true;
 				}
 				return false;
 			}
@@ -209,6 +211,7 @@ namespace Cbe {
 			bool create_snapshot()  const { return _operation == Operation::CREATE_SNAPSHOT; }
 			bool discard_snapshot() const { return _operation == Operation::DISCARD_SNAPSHOT; }
 			bool rekey()            const { return _operation == Operation::REKEY; }
+			bool extend_vbd()       const { return _operation == Operation::EXTEND_VBD; }
 
 			Operation        operation()    const { return _operation; }
 			Success          success()      const { return _success; }
@@ -828,6 +831,7 @@ char const *to_string(Cbe::Request::Operation op)
 	case Cbe::Request::Operation::CREATE_SNAPSHOT: return "create_snapshot";
 	case Cbe::Request::Operation::DISCARD_SNAPSHOT: return "discard_snapshot";
 	case Cbe::Request::Operation::REKEY: return "rekey";
+	case Cbe::Request::Operation::EXTEND_VBD: return "extend_vbd";
 	}
 	throw Unknown_operation_type();
 }
@@ -881,6 +885,7 @@ namespace Cbe {
 			case Cbe::Request::Operation::CREATE_SNAPSHOT:  throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::DISCARD_SNAPSHOT: throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::REKEY:            throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::EXTEND_VBD:       throw Operation_type_not_convertable();
 			}
 			return Block::Operation::Type::INVALID;
 		};

@@ -88,7 +88,13 @@ is
    type Key_ID_Type is range 0 .. 2**32 - 1;
 
    type Request_Operation_Type is (
-      Read, Write, Sync, Create_Snapshot, Discard_Snapshot, Rekey);
+      Read,
+      Write,
+      Sync,
+      Create_Snapshot,
+      Discard_Snapshot,
+      Rekey,
+      Extend_VBD);
 
    type Primitive_Operation_Type is (Read, Write, Sync);
 
