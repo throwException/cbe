@@ -481,16 +481,16 @@ private
       Allocated_PBA :    out Physical_Block_Address_Type);
 
    --
-   --  Add_New_Root_Level_To_Snapshot
+   --  Add_New_Root_Lvl_To_Snap_Using_PBA_Contingent
    --
-   procedure Add_New_Root_Level_To_Snapshot (
-      Snapshots    : in out Snapshots_Type;
-      Snap_Idx     : in out Snapshots_Index_Type;
-      Curr_Gen     :        Generation_Type;
-      Last_Secured :        Generation_Type;
-      T1_Blks      : in out Type_1_Node_Blocks_Type;
-      First_PBA    :        Physical_Block_Address_Type;
-      Nr_Of_PBAs   : in out Number_Of_Blocks_Type);
+   procedure Add_New_Root_Lvl_To_Snap_Using_PBA_Contingent (
+      Snapshots        : in out Snapshots_Type;
+      Snap_Idx         : in out Snapshots_Index_Type;
+      Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type;
+      T1_Blks          : in out Type_1_Node_Blocks_Type;
+      First_PBA        :        Physical_Block_Address_Type;
+      Nr_Of_PBAs       : in out Number_Of_Blocks_Type);
 
    --
    --  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap
@@ -510,5 +510,30 @@ private
       VBA               :     Virtual_Block_Address_Type;
       T1_Blks           :     Type_1_Node_Blocks_Type;
       New_PBAs          : out Write_Back.New_PBAs_Type);
+
+   --
+   --  Add_New_Branch_To_Snap_Using_PBA_Contingent
+   --
+   procedure Add_New_Branch_To_Snap_Using_PBA_Contingent (
+      Mount_Point_Lvl_Idx   :        Type_1_Node_Blocks_Index_Type;
+      Mount_Point_Child_Idx :        Type_1_Node_Block_Index_Type;
+      Snapshots_Degree      :        Tree_Degree_Type;
+      First_PBA             :        Physical_Block_Address_Type;
+      Nr_Of_PBAs            : in out Number_Of_Blocks_Type;
+      T1_Blks               : in out Type_1_Node_Blocks_Type;
+      Stopped_At_Lvl_Idx    :    out Type_1_Node_Blocks_Index_Type;
+      Nr_Of_Leaves          :    out Tree_Number_Of_Leafs_Type);
+
+   --
+   --  Set_Args_For_Write_Back_Of_T1_Lvl
+   --
+   procedure Set_Args_For_Write_Back_Of_T1_Lvl (
+      Max_Lvl_Idx :     Tree_Level_Index_Type;
+      T1_Lvl_Idx  :     Type_1_Node_Blocks_Index_Type;
+      PBA         :     Physical_Block_Address_Type;
+      Prim_Idx    :     Primitive.Index_Type;
+      Job_State   : out Job_State_Type;
+      Progress    : out Boolean;
+      Prim        : out Primitive.Object_Type);
 
 end CBE.VBD_Rekeying;
