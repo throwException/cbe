@@ -681,19 +681,26 @@ namespace Cbe {
 
 		void print(Genode::Output &out) const
 		{
-			Genode::print(out, "Superblock: ",
-			              "last_secured_generation: ", last_secured_generation, " "
+			Genode::print(out,
+			              "last_sec_gen: ", last_secured_generation, " "
 			              "curr_snap: ", curr_snap, " "
-			              "dregree: ", degree, " "
-			              "free_gen: ", free_gen, " "
-			              "free_number: ", free_number, " "
-			              "free_degree: ", free_degree, " "
-			              "free_leaves: ", free_leaves, " "
-			              "meta_height: ", meta_height, " "
-			              "meta_gen: ",    meta_gen, " "
-			              "meta_number: ", meta_number, " "
-			              "meta_degree: ", meta_degree, " "
-			              "meta_leaves: ", meta_leaves);
+			              "snap: (gen: ", snapshots[curr_snap].gen, " "
+			              "root: ",       snapshots[curr_snap].pba, " "
+			              "height: ",     snapshots[curr_snap].height, " "
+			              "dregree: ",    degree, " "
+			              "leaves: ",     snapshots[curr_snap].leaves, ") ",
+			              "FT: (",
+			              free_gen, ", ",
+			              free_number, ", ",
+			              free_height, ", ",
+			              free_degree, ", ",
+			              free_leaves, ") ",
+			              "MT: (",
+			              meta_gen, ", ",
+			              meta_number, ", ",
+			              meta_height, ", ",
+			              meta_degree, ", ",
+			              meta_leaves, ")");
 		}
 
 		/**
