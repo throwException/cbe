@@ -159,9 +159,7 @@ is
 
             if Superblock_Valid (Obj.SB_Slot) then
 
-               if Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Valid
-                  and then Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Gen /= 0
-               then
+               if Obj.SB_Slot.Snapshots (Obj.Snap_Idx).Valid then
 
                   Obj.SB_Slot_State := VBD_Check_Started;
                   Obj.Generated_Prim :=
