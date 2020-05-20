@@ -119,8 +119,8 @@ private
    type Anchor_Type is record
       Jobs : Jobs_Type;
       Next_Key_Value_Plaintext_Byte : Modulo_Byte_Type;
-      Next_Key_Value_Ciphertext_Byte : Modulo_Byte_Type;
       Secured_SB_Hash : Hash_Type;
+      Private_Key : Key_Value_Plaintext_Type;
    end record;
 
    --

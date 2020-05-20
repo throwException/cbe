@@ -30,8 +30,9 @@ is
 
       end loop Initialize_Each_Job;
 
-      Anchor.Next_Key_Value_Plaintext_Byte := 65;
-      Anchor.Next_Key_Value_Ciphertext_Byte := 97;
+      Anchor.Private_Key := (others => Byte_Type (42));
+
+      Anchor.Next_Key_Value_Plaintext_Byte := 23;
       Anchor.Secured_SB_Hash := (others => Byte_Type'First);
 
    end Initialize_Anchor;
@@ -261,13 +262,16 @@ is
       case Anchor.Jobs (Idx).State is
       when Submitted =>
 
-         Anchor.Jobs (Idx).Key_Value_Ciphertext := (
-            others => Byte_Type (Anchor.Next_Key_Value_Ciphertext_Byte));
+         for Jdx in 0 .. Key_Value_Plaintext_Type'Last loop
+            Anchor.Jobs (Idx).Key_Value_Ciphertext (Jdx) :=
+               Byte_Type (
+               Modulo_Byte_Type (Anchor.Private_Key (Jdx))
+                  xor Modulo_Byte_Type (
+                     Anchor.Jobs (Idx).Key_Value_Plaintext (Jdx)));
+         end loop;
 
          Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
          Anchor.Jobs (Idx).State := Completed;
-         Anchor.Next_Key_Value_Ciphertext_Byte :=
-            Anchor.Next_Key_Value_Ciphertext_Byte + 1;
 
          Progress := True;
 
