@@ -37,9 +37,9 @@ is
       Obj        : Object_Type;
       First_PBA  : Physical_Block_Address_Type;
       Nr_Of_PBAs : Number_Of_Blocks_Type)
-   return Superblock_Type
+   return Superblock_Ciphertext_Type
    is
-      SB : Superblock_Type;
+      SB : Superblock_Ciphertext_Type;
    begin
       For_Snapshots :
       for Idx in Snapshots_Index_Type loop
@@ -54,8 +54,9 @@ is
       SB.Rekeying_VBA            := 0;
       SB.Resizing_Nr_Of_PBAs     := 0;
       SB.Resizing_Nr_Of_Leaves   := 0;
-      SB.Current_Key             := Key_Plaintext_Valid (Obj.Key_ID);
-      SB.Previous_Key            := Key_Plaintext_Invalid;
+      SB.Current_Key             := (
+         Value => Obj.Key_Cipher, ID => Obj.Key_ID);
+      SB.Previous_Key            := Key_Ciphertext_Invalid;
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
       SB.First_PBA               := First_PBA;
@@ -84,7 +85,9 @@ is
       Obj.Execute_Progress := False;
       Obj.SB_Slot_State := Init;
       Obj.SB_Slot_Idx := Superblocks_Index_Type'First;
-      Obj.SB_Slot := Superblock_Invalid;
+      Obj.SB_Slot := Superblock_Ciphertext_Invalid;
+      Obj.Key_Plain := (others => Byte_Type'First);
+      Obj.Key_Cipher := (others => Byte_Type'First);
       Obj.VBD := Type_1_Node_Invalid;
       Obj.VBD_Max_Lvl_Idx := Tree_Level_Index_Type'First;
       Obj.VBD_Degree := Tree_Degree_Type'First;
@@ -204,7 +207,7 @@ is
 
          else
 
-            Obj.SB_Slot := Superblock_Invalid;
+            Obj.SB_Slot := Superblock_Ciphertext_Invalid;
             Obj.SB_Slot_State := Write_Request_Started;
             Obj.Generated_Prim :=
                Primitive.Valid_Object_No_Pool_Idx (
@@ -255,6 +258,40 @@ is
 
       when MT_Request_Done =>
 
+         Obj.Generated_Prim :=
+            Primitive.Valid_Object_No_Pool_Idx (
+               Primitive_Operation_Type'First, False,
+               Primitive.Tag_SB_Init_TA_Create_Key,
+               Block_Number_Type'First, 0);
+
+         Obj.SB_Slot_State := TA_Request_Create_Key_Started;
+         Obj.Execute_Progress := True;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta create key started started"));
+
+      when TA_Request_Create_Key_Done =>
+
+         Obj.Generated_Prim :=
+            Primitive.Valid_Object_No_Pool_Idx (
+               Primitive_Operation_Type'First, False,
+               Primitive.Tag_SB_Init_TA_Encrypt_Key,
+               Block_Number_Type'First, 0);
+
+         Obj.SB_Slot_State := TA_Request_Encrypt_Key_Started;
+         Obj.Execute_Progress := True;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta encrypt key started"));
+
+      when TA_Request_Encrypt_Key_Done =>
+
          Obj.SB_Slot := Valid_SB_Slot (Obj, First_PBA, Nr_Of_PBAs);
          Obj.Generated_Prim :=
             Primitive.Valid_Object_No_Pool_Idx (
@@ -268,7 +305,7 @@ is
             Debug.Print_String (
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-               ", write started"));
+               ", ta encrypt key done"));
 
       when Write_Request_Done =>
 
@@ -317,6 +354,8 @@ is
       when VBD_Request_Started => Obj.Generated_Prim,
       when FT_Request_Started => Obj.Generated_Prim,
       when MT_Request_Started => Obj.Generated_Prim,
+      when TA_Request_Create_Key_Started => Obj.Generated_Prim,
+      when TA_Request_Encrypt_Key_Started => Obj.Generated_Prim,
       when others => Primitive.Invalid_Object);
 
    function Peek_Generated_Data (
@@ -332,7 +371,7 @@ is
          if not Primitive.Equal (Obj.Generated_Prim, Prim) then
             raise Program_Error;
          end if;
-         Block_Data_From_Superblock (Data, Obj.SB_Slot);
+         Block_Data_From_Superblock_Ciphertext (Data, Obj.SB_Slot);
          return Data;
 
       when others =>
@@ -447,6 +486,28 @@ is
       end case;
    end Peek_Generated_Nr_Of_Leafs;
 
+   function Peek_Generated_Key_Value_Plaintext (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Value_Plaintext_Type
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when TA_Request_Encrypt_Key_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+
+         return Obj.Key_Plain;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Peek_Generated_Key_Value_Plaintext;
+
    procedure Drop_Generated_Primitive (
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type)
@@ -504,6 +565,32 @@ is
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", vbd dropped"));
+
+      when TA_Request_Create_Key_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := TA_Request_Create_Key_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta create key dropped"));
+
+      when TA_Request_Encrypt_Key_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := TA_Request_Encrypt_Key_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta encrypt key dropped"));
 
       when others =>
 
@@ -635,5 +722,61 @@ is
 
       end case;
    end Mark_Generated_MT_Init_Primitive_Complete;
+
+   procedure Mark_Generated_TA_CK_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Plaintext_Type)
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when TA_Request_Create_Key_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.Key_Plain     := Key;
+         Obj.SB_Slot_State := TA_Request_Create_Key_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta create key done"));
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Mark_Generated_TA_CK_Primitive_Complete;
+
+   procedure Mark_Generated_TA_EK_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Ciphertext_Type)
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when TA_Request_Encrypt_Key_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.Key_Cipher    := Key;
+         Obj.SB_Slot_State := TA_Request_Encrypt_Key_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta encrypt key done"));
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Mark_Generated_TA_EK_Primitive_Complete;
 
 end CBE.Superblock_Initializer;

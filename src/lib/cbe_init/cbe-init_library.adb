@@ -26,6 +26,7 @@ is
       Obj.Client_Req := Request.Invalid_Object;
       Obj.Client_Req_Complete := False;
       Obj.Execute_Progress := False;
+      Trust_Anchor.Initialize_Anchor (Obj.TA);
    end Initialize_Object;
 
    function Client_Request_Acceptable (Obj : Object_Type)
@@ -194,6 +195,35 @@ is
                         Obj.SB_Init, Prim),
                      Superblock_Initializer.Peek_Generated_Nr_Of_Leafs (
                         Obj.SB_Init, Prim));
+
+                  Superblock_Initializer.Drop_Generated_Primitive (
+                     Obj.SB_Init, Prim);
+
+                  Obj.Execute_Progress := True;
+
+               end if;
+
+            elsif Primitive.Has_Tag_SB_Init_TA_Create_Key (Prim) then
+
+               if Trust_Anchor.Primitive_Acceptable (Obj.TA) then
+
+                  Trust_Anchor.Submit_Primitive (Obj.TA, Prim);
+
+                  Superblock_Initializer.Drop_Generated_Primitive (
+                     Obj.SB_Init, Prim);
+
+                  Obj.Execute_Progress := True;
+
+               end if;
+
+            elsif Primitive.Has_Tag_SB_Init_TA_Encrypt_Key (Prim) then
+
+               if Trust_Anchor.Primitive_Acceptable (Obj.TA) then
+
+                  Trust_Anchor.Submit_Primitive_Key_Value_Plaintext (
+                     Obj.TA, Prim,
+                     Superblock_Initializer.Peek_Generated_Key_Value_Plaintext
+                        (Obj.SB_Init, Prim));
 
                   Superblock_Initializer.Drop_Generated_Primitive (
                      Obj.SB_Init, Prim);
@@ -531,6 +561,47 @@ is
       end loop Loop_Completed_Prims;
    end Execute_Block_IO;
 
+   procedure Execute_TA (Obj : in out Object_Type)
+   is
+   begin
+      Trust_Anchor.Execute (Obj.TA, Obj.Execute_Progress);
+      Loop_Completed_TA_Prims :
+      loop
+         Declare_TA_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Trust_Anchor.Peek_Completed_Primitive (Obj.TA);
+         begin
+            exit Loop_Completed_TA_Prims when not Primitive.Valid (Prim);
+
+            if Primitive.Has_Tag_SB_Init_TA_Create_Key (Prim) then
+
+               Superblock_Initializer.Mark_Generated_TA_CK_Primitive_Complete
+                  (Obj.SB_Init, Prim,
+                   Trust_Anchor.Peek_Completed_Key_Value_Plaintext (
+                      Obj.TA, Prim));
+
+            elsif Primitive.Has_Tag_SB_Init_TA_Encrypt_Key (Prim) then
+
+               Superblock_Initializer.Mark_Generated_TA_EK_Primitive_Complete
+                  (Obj.SB_Init, Prim,
+                   Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
+                      Obj.TA, Prim));
+
+            else
+
+               raise Program_Error;
+
+            end if;
+
+            Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+
+         end Declare_TA_Prim;
+         Obj.Execute_Progress := True;
+
+      end loop Loop_Completed_TA_Prims;
+   end Execute_TA;
+
    procedure Execute (
       Obj        : in out Object_Type;
       Blk_IO_Buf : in out Block_IO.Data_Type)
@@ -550,6 +621,7 @@ is
       Execute_Free_Tree_Initializer (Obj, Blk_IO_Buf);
       Execute_Block_Allocator (Obj);
       Execute_Block_IO (Obj);
+      Execute_TA (Obj);
    end Execute;
 
    function Execute_Progress (Obj : Object_Type)

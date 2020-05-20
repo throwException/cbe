@@ -78,6 +78,11 @@ is
       Prim : Primitive.Object_Type)
    return Tree_Number_Of_Leafs_Type;
 
+   function Peek_Generated_Key_Value_Plaintext (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Value_Plaintext_Type;
+
    procedure Mark_Generated_Blk_IO_Primitive_Complete (
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type);
@@ -97,6 +102,16 @@ is
       Prim :        Primitive.Object_Type;
       MT   :        Type_1_Node_Type);
 
+   procedure Mark_Generated_TA_CK_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Plaintext_Type);
+
+   procedure Mark_Generated_TA_EK_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type;
+      Key  :        Key_Value_Ciphertext_Type);
+
 private
 
    function Valid_Snap_Slot (Obj : Object_Type)
@@ -106,7 +121,7 @@ private
       Obj        : Object_Type;
       First_PBA  : Physical_Block_Address_Type;
       Nr_Of_PBAs : Number_Of_Blocks_Type)
-   return Superblock_Type;
+   return Superblock_Ciphertext_Type;
 
    type SB_Slot_State_Type is (
       Init,
@@ -119,6 +134,12 @@ private
       MT_Request_Started,
       MT_Request_Dropped,
       MT_Request_Done,
+      TA_Request_Create_Key_Started,
+      TA_Request_Create_Key_Dropped,
+      TA_Request_Create_Key_Done,
+      TA_Request_Encrypt_Key_Started,
+      TA_Request_Encrypt_Key_Dropped,
+      TA_Request_Encrypt_Key_Done,
       Write_Request_Started,
       Write_Request_Dropped,
       Write_Request_Done,
@@ -128,8 +149,10 @@ private
       Execute_Progress : Boolean;
       SB_Slot_State    : SB_Slot_State_Type;
       SB_Slot_Idx      : Superblocks_Index_Type;
-      SB_Slot          : Superblock_Type;
+      SB_Slot          : Superblock_Ciphertext_Type;
       Key_ID           : Key_ID_Type;
+      Key_Plain        : Key_Value_Plaintext_Type;
+      Key_Cipher       : Key_Value_Ciphertext_Type;
       VBD              : Type_1_Node_Type;
       VBD_Max_Lvl_Idx  : Tree_Level_Index_Type;
       VBD_Degree       : Tree_Degree_Type;

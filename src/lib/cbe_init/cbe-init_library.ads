@@ -14,6 +14,7 @@ with CBE.Free_Tree_Initializer;
 with CBE.Block_Allocator;
 with CBE.Block_IO;
 with CBE.Request;
+with CBE.Trust_Anchor;
 
 package CBE.Init_Library
 with SPARK_Mode
@@ -77,6 +78,7 @@ private
       Client_Req          : Request.Object_Type;
       Client_Req_Complete : Boolean;
       Execute_Progress    : Boolean;
+      TA                  : Trust_Anchor.Anchor_Type;
    end record;
 
    procedure Execute_Superblock_Initializer (
@@ -96,5 +98,7 @@ private
    procedure Execute_Block_Allocator (Obj : in out Object_Type);
 
    procedure Execute_Block_IO (Obj : in out Object_Type);
+
+   procedure Execute_TA (Obj : in out Object_Type);
 
 end CBE.Init_Library;
