@@ -642,7 +642,6 @@ namespace Cbe {
 
 		State                  state;
 		Virtual_block_address  rekeying_vba;
-		Physical_block_address resizing_first_pba;
 		Number_of_blocks       resizing_nr_of_pbas;
 		Number_of_blocks       resizing_nr_of_leaves;
 
@@ -678,7 +677,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[375];
+		char                   padding[383];
 
 		void print(Genode::Output &out) const
 		{

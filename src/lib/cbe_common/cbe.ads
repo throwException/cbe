@@ -321,7 +321,6 @@ is
 
       State                   : Superblock_State_Type;
       Rekeying_VBA            : Virtual_Block_Address_Type;
-      Resizing_First_PBA      : Physical_Block_Address_Type;
       Resizing_Nr_Of_PBAs     : Number_Of_Blocks_Type;
       Resizing_Nr_Of_Leaves   : Tree_Number_Of_Leafs_Type;
       Previous_Key            : Key_Plaintext_Type;
@@ -349,7 +348,6 @@ is
    type Superblock_Ciphertext_Type is record
       State                   : Superblock_State_Type;
       Rekeying_VBA            : Virtual_Block_Address_Type;
-      Resizing_First_PBA      : Physical_Block_Address_Type;
       Resizing_Nr_Of_PBAs     : Number_Of_Blocks_Type;
       Resizing_Nr_Of_Leaves   : Tree_Number_Of_Leafs_Type;
       Previous_Key            : Key_Ciphertext_Type;

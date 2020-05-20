@@ -52,7 +52,6 @@ is
 
       SB.State                   := Normal;
       SB.Rekeying_VBA            := 0;
-      SB.Resizing_First_PBA      := 0;
       SB.Resizing_Nr_Of_PBAs     := 0;
       SB.Resizing_Nr_Of_Leaves   := 0;
       SB.Current_Key             := Key_Plaintext_Valid (Obj.Key_ID);

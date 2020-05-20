@@ -122,8 +122,6 @@ is
       SB.State'Image &
       """ rk_vba=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)) &
-      """ rsz_pba=""" &
-      Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
       """ rsz_pbas=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
       """ rsz_leafs=""" &
@@ -258,7 +256,6 @@ is
    begin
       Result.State                   := Superblock_State_Type'First;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
-      Result.Resizing_First_PBA      := Physical_Block_Address_Type'First;
       Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
       Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Plaintext_Invalid;
@@ -294,7 +291,6 @@ is
    begin
       Result.State                   := Superblock_State_Type'First;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
-      Result.Resizing_First_PBA      := Physical_Block_Address_Type'First;
       Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
       Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Ciphertext_Invalid;
@@ -615,10 +611,6 @@ is
          Virtual_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
       Off := Off + 8;
 
-      SB.Resizing_First_PBA :=
-         Physical_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
-      Off := Off + 8;
-
       SB.Resizing_Nr_Of_PBAs :=
          Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
       Off := Off + 4;
@@ -895,10 +887,6 @@ is
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
 
-      Block_Data_From_Unsigned_64 (
-         Data, Off, Unsigned_64 (SB.Resizing_First_PBA));
-      Off := Off + 8;
-
       Block_Data_From_Unsigned_32 (
          Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_PBAs));
       Off := Off + 4;
@@ -984,10 +972,6 @@ is
 
       Block_Data_From_Unsigned_64 (
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
-      Off := Off + 8;
-
-      Block_Data_From_Unsigned_64 (
-         Data, Off, Unsigned_64 (SB.Resizing_First_PBA));
       Off := Off + 8;
 
       Block_Data_From_Unsigned_32 (
