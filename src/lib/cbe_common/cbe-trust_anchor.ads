@@ -44,6 +44,14 @@ is
       Key    :        Key_Value_Plaintext_Type);
 
    --
+   --  Submit_Primitive_Key_Value_Ciphertext
+   --
+   procedure Submit_Primitive_Key_Value_Ciphertext (
+      Anchor : in out Anchor_Type;
+      Prim   :        Primitive.Object_Type;
+      Key    :        Key_Value_Ciphertext_Type);
+
+   --
    --  Submit_Primitive_Hash
    --
    procedure Submit_Primitive_Hash (
@@ -97,7 +105,8 @@ private
       Invalid,
       Create_Key,
       Secure_Superblock,
-      Encrypt_Key);
+      Encrypt_Key,
+      Decrypt_Key);
 
    type Job_State_Type is (
       Submitted,
@@ -143,6 +152,14 @@ private
    --  Execute_Encrypt_Key
    --
    procedure Execute_Encrypt_Key (
+      Anchor   : in out Anchor_Type;
+      Idx      :        Jobs_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Decrypt_Key
+   --
+   procedure Execute_Decrypt_Key (
       Anchor   : in out Anchor_Type;
       Idx      :        Jobs_Index_Type;
       Progress : in out Boolean);

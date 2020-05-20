@@ -54,6 +54,7 @@ is
       Tag_SB_Ctrl_TA_Create_Key,
       Tag_SB_Ctrl_TA_Secure_SB,
       Tag_SB_Ctrl_TA_Encrypt_Key,
+      Tag_SB_Ctrl_TA_Decrypt_Key,
       Tag_SB_Ctrl_Cache,
       Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA,
       Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step,
@@ -131,6 +132,7 @@ is
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
       when Tag_SB_Ctrl_TA_Secure_SB => "SB_Ctrl_TA_Secure_SB",
       when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
+      when Tag_SB_Ctrl_TA_Decrypt_Key => "SB_Ctrl_TA_Decrypt_Key",
       when Tag_SB_Ctrl_Cache => "SB_Ctrl_Cache",
       when Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA => "SB_Ctrl_VBD_Rkg_Rekey_VBA",
       when Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step => "SB_Ctrl_VBD_Rkg_VBD_Ext_Step",
@@ -333,6 +335,7 @@ is
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Secure_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_TA_Decrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean;
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA (Obj : Object_Type)

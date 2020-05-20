@@ -247,6 +247,9 @@ is
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_TA_Encrypt_Key);
 
+   function Has_Tag_SB_Ctrl_TA_Decrypt_Key (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_TA_Decrypt_Key);
+
    function Has_Tag_SB_Ctrl_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Cache);
 
