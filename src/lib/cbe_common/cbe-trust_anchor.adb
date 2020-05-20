@@ -56,7 +56,9 @@ is
       for Idx in Anchor.Jobs'Range loop
          if Anchor.Jobs (Idx).Operation = Invalid then
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_TA_Create_Key =>
+            when Primitive.Tag_SB_Ctrl_TA_Create_Key
+               | Primitive.Tag_SB_Init_TA_Create_Key
+            =>
 
                Anchor.Jobs (Idx).Operation := Create_Key;
                Anchor.Jobs (Idx).State := Submitted;
@@ -119,7 +121,8 @@ is
       for Idx in Anchor.Jobs'Range loop
          if Anchor.Jobs (Idx).Operation = Invalid then
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key =>
+            when Primitive.Tag_SB_Ctrl_TA_Encrypt_Key
+               | Primitive.Tag_SB_Init_TA_Encrypt_Key =>
 
                Anchor.Jobs (Idx).Operation := Encrypt_Key;
                Anchor.Jobs (Idx).State := Submitted;

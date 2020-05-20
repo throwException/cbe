@@ -22,6 +22,8 @@ is
       Tag_SB_Init_FT_Init,
       Tag_SB_Init_MT_Init,
       Tag_SB_Init_Blk_IO,
+      Tag_SB_Init_TA_Create_Key,
+      Tag_SB_Init_TA_Encrypt_Key,
       Tag_VBD_Init_Blk_Alloc,
       Tag_VBD_Init_Blk_IO,
       Tag_FT_Init_Blk_Alloc,
@@ -100,6 +102,8 @@ is
       when Tag_SB_Init_FT_Init => "SB_Init_FT_Init",
       when Tag_SB_Init_MT_Init => "SB_Init_MT_Init",
       when Tag_SB_Init_Blk_IO => "SB_Init_Blk_IO",
+      when Tag_SB_Init_TA_Create_Key => "SB_Init_TA_Create_Key",
+      when Tag_SB_Init_TA_Encrypt_Key => "SB_Init_TA_Encrypt_Key",
       when Tag_VBD_Init_Blk_Alloc => "VBD_Init_Blk_Alloc",
       when Tag_VBD_Init_Blk_IO => "VBD_Init_Blk_IO",
       when Tag_FT_Init_Blk_Alloc => "FT_Init_Blk_Alloc",
@@ -300,6 +304,8 @@ is
    function Has_Tag_SB_Init_FT_Init (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Init_MT_Init (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Init_Blk_IO (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Init_TA_Create_Key (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Init_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Init_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Init_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Init_Blk_Alloc (Obj : Object_Type) return Boolean;

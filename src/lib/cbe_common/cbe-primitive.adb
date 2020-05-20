@@ -150,6 +150,12 @@ is
    function Has_Tag_SB_Init_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Init_Blk_IO);
 
+   function Has_Tag_SB_Init_TA_Create_Key (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_TA_Create_Key);
+
+   function Has_Tag_SB_Init_TA_Encrypt_Key (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Init_TA_Encrypt_Key);
+
    function Has_Tag_VBD_Init_Blk_Alloc (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Init_Blk_Alloc);
 
