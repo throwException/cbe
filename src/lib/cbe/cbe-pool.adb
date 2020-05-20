@@ -37,7 +37,7 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
-            when Rekey | Extend_VBD =>
+            when Rekey | Extend_VBD | Extend_FT =>
 
                Obj.Items (Idx).State := Submitted;
                Obj.Items (Idx).Req   := Req;
@@ -598,6 +598,10 @@ is
 
                Execute_Extend_VBD (Obj.Items, Obj.Indices, Idx, Progress);
 
+            when Extend_FT =>
+
+               raise Program_Error;
+
             when others =>
 
                null;
@@ -627,7 +631,7 @@ is
       end if;
 
       case Request.Operation (Obj.Items (Idx).Req) is
-      when Extend_VBD =>
+      when Extend_VBD | Extend_FT =>
 
          raise Program_Error;
 
@@ -785,7 +789,14 @@ is
       case Request.Operation (Itm.Req) is
       when Read | Write =>
          Number_Of_Primitives_Type (Request.Count (Itm.Req)),
-      when Sync | Create_Snapshot | Discard_Snapshot | Rekey | Extend_VBD =>
+      when
+         Sync |
+         Create_Snapshot |
+         Discard_Snapshot |
+         Rekey |
+         Extend_VBD |
+         Extend_FT
+      =>
          1);
 
    --

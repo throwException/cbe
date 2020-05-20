@@ -292,7 +292,7 @@ is
    begin
 
       case Request.Operation (Req) is
-      when Read | Write | Rekey | Extend_VBD =>
+      when Read | Write | Rekey | Extend_VBD | Extend_FT =>
 
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
@@ -317,7 +317,7 @@ is
 
       case Request.Operation (Req) is
 
-      when Read | Write | Sync | Rekey | Extend_VBD =>
+      when Read | Write | Sync | Rekey | Extend_VBD | Extend_FT =>
          return Req;
 
       when Create_Snapshot | Discard_Snapshot =>

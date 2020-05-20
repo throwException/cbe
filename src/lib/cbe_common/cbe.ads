@@ -94,7 +94,8 @@ is
       Create_Snapshot,
       Discard_Snapshot,
       Rekey,
-      Extend_VBD);
+      Extend_VBD,
+      Extend_FT);
 
    type Primitive_Operation_Type is (Read, Write, Sync);
 

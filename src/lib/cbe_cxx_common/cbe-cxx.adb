@@ -70,6 +70,7 @@ is
       when 5 => return CXX_Request_Valid_To_SPARK (Input, Discard_Snapshot);
       when 6 => return CXX_Request_Valid_To_SPARK (Input, Rekey);
       when 7 => return CXX_Request_Valid_To_SPARK (Input, Extend_VBD);
+      when 8 => return CXX_Request_Valid_To_SPARK (Input, Extend_FT);
       when others => raise Program_Error;
       end case;
    end CXX_Request_To_SPARK;
