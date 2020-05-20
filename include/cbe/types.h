@@ -657,6 +657,8 @@ namespace Cbe {
 		Generation             last_secured_generation;
 		Snapshot_index         curr_snap;
 		Degree                 degree;
+		Physical_block_address first_pba;
+		uint32_t               nr_of_pbas;
 		Generation             free_gen;
 		Physical_block_address free_number;
 		Hash                   free_hash;
@@ -669,7 +671,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[415];
+		char                   padding[403];
 
 		void print(Genode::Output &out) const
 		{

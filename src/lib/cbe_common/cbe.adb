@@ -114,6 +114,10 @@ is
       Debug.To_String (Debug.Uint64_Type (SB.Curr_Snap)) &
       """ degr=""" &
       Debug.To_String (Debug.Uint64_Type (SB.Degree)) &
+      """ first_pba=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.First_PBA)) &
+      """ nr_of_pbas=""" &
+      Debug.To_String (Debug.Uint64_Type (SB.Nr_Of_PBAs)) &
       """ state=""" &
       SB.State'Image &
       """ rk_vba=""" &
@@ -254,6 +258,8 @@ is
       Result.Last_Secured_Generation := Generation_Type'Last;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
       Result.Degree                  := Tree_Degree_Type'First;
+      Result.First_PBA               := Physical_Block_Address_Type'First;
+      Result.Nr_Of_PBAs              := Number_Of_Blocks_Type'First;
       Result.Free_Number             := Physical_Block_Address_Type'First;
       Result.Free_Hash               := (others => Byte_Type'First);
       Result.Free_Max_Level          := Tree_Level_Index_Type'First;
@@ -285,6 +291,8 @@ is
       Result.Last_Secured_Generation := Generation_Type'Last;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
       Result.Degree                  := Tree_Degree_Type'First;
+      Result.First_PBA               := Physical_Block_Address_Type'First;
+      Result.Nr_Of_PBAs              := Number_Of_Blocks_Type'First;
       Result.Free_Number             := Physical_Block_Address_Type'First;
       Result.Free_Hash               := (others => Byte_Type'First);
       Result.Free_Max_Level          := Tree_Level_Index_Type'First;
@@ -614,6 +622,14 @@ is
          Tree_Degree_Type (Unsigned_32_From_Block_Data (Data, Off));
       Off := Off + 4;
 
+      SB.First_PBA :=
+         Physical_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Nr_Of_PBAs :=
+         Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
       SB.Free_Gen :=
          Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
       Off := Off + 8;
@@ -872,6 +888,12 @@ is
       Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Degree));
       Off := Off + 4;
 
+      Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.First_PBA));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Nr_Of_PBAs));
+      Off := Off + 4;
+
       Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Free_Gen));
       Off := Off + 8;
 
@@ -943,6 +965,12 @@ is
       Off := Off + 4;
 
       Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Degree));
+      Off := Off + 4;
+
+      Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.First_PBA));
+      Off := Off + 8;
+
+      Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Nr_Of_PBAs));
       Off := Off + 4;
 
       Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Free_Gen));

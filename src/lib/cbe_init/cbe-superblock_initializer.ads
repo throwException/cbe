@@ -43,7 +43,10 @@ is
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type);
 
-   procedure Execute (Obj : in out Object_Type);
+   procedure Execute (
+      Obj        : in out Object_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    function Execute_Progress (Obj : Object_Type)
    return Boolean;
@@ -99,7 +102,10 @@ private
    function Valid_Snap_Slot (Obj : Object_Type)
    return Snapshot_Type;
 
-   function Valid_SB_Slot (Obj : Object_Type)
+   function Valid_SB_Slot (
+      Obj        : Object_Type;
+      First_PBA  : Physical_Block_Address_Type;
+      Nr_Of_PBAs : Number_Of_Blocks_Type)
    return Superblock_Type;
 
    type SB_Slot_State_Type is (

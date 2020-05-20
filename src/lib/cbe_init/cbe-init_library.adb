@@ -90,14 +90,16 @@ is
 
    procedure Execute_Superblock_Initializer (
       Obj        : in out Object_Type;
-      Blk_IO_Buf : in out Block_IO.Data_Type)
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type)
    is
    begin
 
       --
       --  Poke state machine of superblock initialization
       --
-      Superblock_Initializer.Execute (Obj.SB_Init);
+      Superblock_Initializer.Execute (Obj.SB_Init, First_PBA, Nr_Of_PBAs);
       if Superblock_Initializer.Execute_Progress (Obj.SB_Init) then
          Obj.Execute_Progress := True;
       end if;
@@ -535,7 +537,15 @@ is
    is
    begin
       Obj.Execute_Progress := False;
-      Execute_Superblock_Initializer (Obj, Blk_IO_Buf);
+
+      Execute_Superblock_Initializer (
+         Obj, Blk_IO_Buf,
+         Physical_Block_Address_Type (
+            Block_Allocator.Peek_First_Blk (Obj.Blk_Alloc) -
+               Nr_Of_Superblock_Slots),
+         Block_Allocator.Peek_Nr_Of_Blks (Obj.Blk_Alloc) +
+            Nr_Of_Superblock_Slots);
+
       Execute_VBD_Initializer (Obj, Blk_IO_Buf);
       Execute_Free_Tree_Initializer (Obj, Blk_IO_Buf);
       Execute_Block_Allocator (Obj);

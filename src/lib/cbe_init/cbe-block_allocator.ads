@@ -18,8 +18,8 @@ is
    type Object_Type is private;
 
    procedure Initialize_Object (
-      Obj        : out Object_Type;
-      First_Addr :     Block_Number_Type);
+      Obj       : out Object_Type;
+      First_Blk :     Block_Number_Type);
 
    function Primitive_Acceptable (Obj : Object_Type)
    return Boolean;
@@ -30,6 +30,12 @@ is
 
    function Peek_Completed_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
+
+   function Peek_First_Blk (Obj : Object_Type)
+   return Block_Number_Type;
+
+   function Peek_Nr_Of_Blks (Obj : Object_Type)
+   return Number_Of_Blocks_Type;
 
    procedure Drop_Completed_Primitive (
       Obj  : in out Object_Type;
@@ -43,7 +49,8 @@ is
 private
 
    type Object_Type is record
-      Curr_Addr        : Block_Number_Type;
+      First_Blk        : Block_Number_Type;
+      Nr_Of_Blks       : Number_Of_Blocks_Type;
       Prim             : Primitive.Object_Type;
       Execute_Progress : Boolean;
    end record;

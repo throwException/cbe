@@ -12,11 +12,12 @@ package body CBE.Block_Allocator
 with SPARK_Mode
 is
    procedure Initialize_Object (
-      Obj        : out Object_Type;
-      First_Addr :     Block_Number_Type)
+      Obj       : out Object_Type;
+      First_Blk :     Block_Number_Type)
    is
    begin
-      Obj.Curr_Addr        := First_Addr;
+      Obj.First_Blk        := First_Blk;
+      Obj.Nr_Of_Blks       := 0;
       Obj.Prim             := Primitive.Invalid_Object;
       Obj.Execute_Progress := False;
    end Initialize_Object;
@@ -42,21 +43,30 @@ is
    is
    begin
       Obj.Execute_Progress := False;
-      if Obj.Curr_Addr = Block_Number_Type'Last or else
+      if Obj.Nr_Of_Blks = Number_Of_Blocks_Type'Last or else
          not Primitive.Valid (Obj.Prim) or else
          Primitive.Success (Obj.Prim)
       then
          return;
       end if;
       Obj.Prim := Primitive.Copy_Valid_Object_New_Succ_Blk_Nr (
-         Obj.Prim, True, Obj.Curr_Addr);
-      Obj.Curr_Addr := Obj.Curr_Addr + 1;
+         Obj.Prim, True, Obj.First_Blk + Block_Number_Type (Obj.Nr_Of_Blks));
+
+      Obj.Nr_Of_Blks := Obj.Nr_Of_Blks + 1;
       Obj.Execute_Progress := True;
    end Execute;
 
    function Execute_Progress (Obj : Object_Type)
    return Boolean
    is (Obj.Execute_Progress);
+
+   function Peek_First_Blk (Obj : Object_Type)
+   return Block_Number_Type
+   is (Obj.First_Blk);
+
+   function Peek_Nr_Of_Blks (Obj : Object_Type)
+   return Number_Of_Blocks_Type
+   is (Obj.Nr_Of_Blks);
 
    function Peek_Completed_Primitive (Obj : Object_Type)
    return Primitive.Object_Type

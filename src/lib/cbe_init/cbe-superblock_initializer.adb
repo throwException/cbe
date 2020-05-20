@@ -33,7 +33,10 @@ is
 
    end Valid_Snap_Slot;
 
-   function Valid_SB_Slot (Obj : Object_Type)
+   function Valid_SB_Slot (
+      Obj        : Object_Type;
+      First_PBA  : Physical_Block_Address_Type;
+      Nr_Of_PBAs : Number_Of_Blocks_Type)
    return Superblock_Type
    is
       SB : Superblock_Type;
@@ -53,6 +56,8 @@ is
       SB.Previous_Key            := Key_Plaintext_Invalid;
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
+      SB.First_PBA               := First_PBA;
+      SB.Nr_Of_PBAs              := Nr_Of_PBAs;
       SB.Last_Secured_Generation := 0;
       SB.Free_Gen                := 0;
       SB.Free_Number             := Obj.FT.PBA;
@@ -165,7 +170,10 @@ is
 
    end Drop_Completed_Primitive;
 
-   procedure Execute (Obj : in out Object_Type)
+   procedure Execute (
+      Obj        : in out Object_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type)
    is
    begin
       Obj.Execute_Progress := False;
@@ -245,7 +253,7 @@ is
 
       when MT_Request_Done =>
 
-         Obj.SB_Slot := Valid_SB_Slot (Obj);
+         Obj.SB_Slot := Valid_SB_Slot (Obj, First_PBA, Nr_Of_PBAs);
          Obj.Generated_Prim :=
             Primitive.Valid_Object_No_Pool_Idx (
                Write, False, Primitive.Tag_SB_Init_Blk_IO,

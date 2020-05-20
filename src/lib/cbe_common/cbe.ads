@@ -320,6 +320,8 @@ is
       Last_Secured_Generation : Generation_Type;
       Curr_Snap               : Snapshots_Index_Type;
       Degree                  : Tree_Degree_Type;
+      First_PBA               : Physical_Block_Address_Type;
+      Nr_Of_PBAs              : Number_Of_Blocks_Type;
       Free_Gen                : Generation_Type;
       Free_Number             : Physical_Block_Address_Type;
       Free_Hash               : Hash_Type;
@@ -343,6 +345,8 @@ is
       Last_Secured_Generation : Generation_Type;
       Curr_Snap               : Snapshots_Index_Type;
       Degree                  : Tree_Degree_Type;
+      First_PBA               : Physical_Block_Address_Type;
+      Nr_Of_PBAs              : Number_Of_Blocks_Type;
       Free_Gen                : Generation_Type;
       Free_Number             : Physical_Block_Address_Type;
       Free_Hash               : Hash_Type;

@@ -81,7 +81,9 @@ private
 
    procedure Execute_Superblock_Initializer (
       Obj        : in out Object_Type;
-      Blk_IO_Buf : in out Block_IO.Data_Type);
+      Blk_IO_Buf : in out Block_IO.Data_Type;
+      First_PBA  :        Physical_Block_Address_Type;
+      Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    procedure Execute_VBD_Initializer (
       Obj        : in out Object_Type;
