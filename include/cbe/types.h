@@ -641,7 +641,8 @@ namespace Cbe {
 		enum class State : uint8_t {
 			NORMAL = 0,
 			REKEYING = 1,
-			EXTENDING_VBD = 2};
+			EXTENDING_VBD = 2,
+			EXTENDING_FT = 3};
 
 		State                  state;
 		Virtual_block_address  rekeying_vba;

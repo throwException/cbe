@@ -244,6 +244,10 @@ is
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_VBD_Ext_Step);
 
+   function Has_Tag_Pool_SB_Ctrl_FT_Ext_Step (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_FT_Ext_Step);
+
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_TA_Create_Key);
 
@@ -266,6 +270,10 @@ is
    function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step);
+
+   function Has_Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step);
 
    function Has_Tag_SB_Ctrl_Crypto_Add_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Crypto_Add_Key);

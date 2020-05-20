@@ -53,6 +53,7 @@ is
       Tag_Pool_SB_Ctrl_Init_Rekey,
       Tag_Pool_SB_Ctrl_Rekey_VBA,
       Tag_Pool_SB_Ctrl_VBD_Ext_Step,
+      Tag_Pool_SB_Ctrl_FT_Ext_Step,
       Tag_SB_Ctrl_TA_Create_Key,
       Tag_SB_Ctrl_TA_Secure_SB,
       Tag_SB_Ctrl_TA_Encrypt_Key,
@@ -60,6 +61,7 @@ is
       Tag_SB_Ctrl_Cache,
       Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA,
       Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step,
+      Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step,
       Tag_SB_Ctrl_Crypto_Add_Key,
       Tag_SB_Ctrl_Blk_IO_Write_SB,
       Tag_SB_Ctrl_Blk_IO_Sync,
@@ -133,6 +135,7 @@ is
       when Tag_Pool_SB_Ctrl_Init_Rekey => "Pool_SB_Ctrl_Init_Rekey",
       when Tag_Pool_SB_Ctrl_Rekey_VBA => "Pool_SB_Ctrl_Rekey_VBA",
       when Tag_Pool_SB_Ctrl_VBD_Ext_Step => "Pool_SB_Ctrl_VBD_Ext_Step",
+      when Tag_Pool_SB_Ctrl_FT_Ext_Step => "Pool_SB_Ctrl_FT_Ext_Step",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
       when Tag_SB_Ctrl_TA_Secure_SB => "SB_Ctrl_TA_Secure_SB",
       when Tag_SB_Ctrl_TA_Encrypt_Key => "SB_Ctrl_TA_Encrypt_Key",
@@ -140,6 +143,7 @@ is
       when Tag_SB_Ctrl_Cache => "SB_Ctrl_Cache",
       when Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA => "SB_Ctrl_VBD_Rkg_Rekey_VBA",
       when Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step => "SB_Ctrl_VBD_Rkg_VBD_Ext_Step",
+      when Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step => "SB_Ctrl_FT_Rszg_FT_Ext_Step",
       when Tag_SB_Ctrl_Crypto_Add_Key => "SB_Ctrl_Crypto_Add_Key",
       when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
       when Tag_VBD_Rkg_Cache => "VBD_Rkg_Cache",
@@ -338,6 +342,9 @@ is
    function Has_Tag_Pool_SB_Ctrl_VBD_Ext_Step (Obj : Object_Type)
    return Boolean;
 
+   function Has_Tag_Pool_SB_Ctrl_FT_Ext_Step (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_SB_Ctrl_TA_Create_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Secure_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
@@ -348,6 +355,9 @@ is
    return Boolean;
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_SB_Ctrl_Crypto_Add_Key (Obj : Object_Type) return Boolean;

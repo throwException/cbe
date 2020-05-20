@@ -288,7 +288,8 @@ is
    type Superblock_State_Type is (
       Normal,
       Rekeying,
-      Extending_VBD);
+      Extending_VBD,
+      Extending_FT);
 
    --
    --  The CBE::Superblock contains all information of a CBE

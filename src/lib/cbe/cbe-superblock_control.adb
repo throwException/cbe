@@ -144,6 +144,14 @@ is
                Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
                return;
 
+            when Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step =>
+
+               Ctrl.Jobs (Idx).Operation := FT_Extension_Step;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
+               return;
+
             when others =>
 
                raise Program_Error;
@@ -222,7 +230,7 @@ is
       Find_Corresponding_Job :
       for Idx in Ctrl.Jobs'Range loop
          case Ctrl.Jobs (Idx).Operation is
-         when Rekey_VBA | VBD_Extension_Step =>
+         when Rekey_VBA | VBD_Extension_Step | FT_Extension_Step =>
             if Ctrl.Jobs (Idx).State = Completed and then
                Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
             then
@@ -597,6 +605,294 @@ is
       end case;
 
    end Execute_VBD_Extension_Step;
+
+   --
+   --  Execute_FT_Extension_Step
+   --
+   procedure Execute_FT_Extension_Step (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         case SB.State is
+         when Normal =>
+
+            Job.Request_Finished := False;
+
+            Declare_Nr_Of_Unused_PBAs_1 :
+            declare
+               Last_Used_PBA : constant Physical_Block_Address_Type :=
+                  SB.First_PBA + (
+                     Physical_Block_Address_Type (SB.Nr_Of_PBAs) - 1);
+
+               Nr_Of_Unused_PBAs : constant Number_Of_Blocks_Type :=
+                  Number_Of_Blocks_Type (
+                     Physical_Block_Address_Type'Last - Last_Used_PBA);
+            begin
+
+               if Job.Nr_Of_Blks > Nr_Of_Unused_PBAs then
+                  raise Program_Error;
+               end if;
+
+               SB.State := Extending_FT;
+               SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+               SB.Resizing_Nr_Of_Leaves := 0;
+
+               Job.PBA := Last_Used_PBA + 1;
+
+               Debug.Print_String (
+                  "FT EXT INIT PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.PBA)) &
+                  " NR_OF_PBAS " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Nr_Of_Blks)) &
+                  " NR_OF_LEAVES " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     SB.Resizing_Nr_Of_Leaves)) &
+                  " ");
+
+            end Declare_Nr_Of_Unused_PBAs_1;
+
+            Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+            Job.Key_Plaintext := SB.Current_Key;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Encrypt_Current_Key_Pending;
+            Progress := True;
+
+         when Extending_FT =>
+
+            Declare_Nr_Of_Unused_PBAs_2 :
+            declare
+               Last_Used_PBA : constant Physical_Block_Address_Type :=
+                  SB.First_PBA + (
+                     Physical_Block_Address_Type (SB.Nr_Of_PBAs - 1));
+
+               Nr_Of_Unused_PBAs : constant Number_Of_Blocks_Type :=
+                  Number_Of_Blocks_Type (
+                     Physical_Block_Address_Type'Last - Last_Used_PBA);
+            begin
+
+               if SB.Resizing_Nr_Of_PBAs > Nr_Of_Unused_PBAs then
+                  raise Program_Error;
+               end if;
+
+               Job.PBA := Last_Used_PBA + 1;
+               Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
+
+               Debug.Print_String (
+                  "FT EXT STEP PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.PBA)) &
+                  " NR_OF_PBAS " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Nr_Of_Blks)) &
+                  " NR_OF_LEAVES " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     SB.Resizing_Nr_Of_Leaves)) &
+                  " ");
+
+            end Declare_Nr_Of_Unused_PBAs_2;
+
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := FT_Ext_Step_In_FT_Pending;
+            Progress := True;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when FT_Ext_Step_In_FT_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         if Job.Nr_Of_Blks >= SB.Resizing_Nr_Of_PBAs then
+            raise Program_Error;
+         end if;
+
+         Declare_New_First_Unused_PBA :
+         declare
+            Nr_Of_Added_PBAs : constant Number_Of_Blocks_Type :=
+               SB.Resizing_Nr_Of_PBAs - Job.Nr_Of_Blks;
+
+            New_First_Unused_PBA : constant Physical_Block_Address_Type :=
+               SB.First_PBA +
+                  Physical_Block_Address_Type (
+                     SB.Nr_Of_PBAs + Nr_Of_Added_PBAs);
+         begin
+
+            if Job.PBA /= New_First_Unused_PBA then
+               raise Program_Error;
+            end if;
+
+            SB.Nr_Of_PBAs := SB.Nr_Of_PBAs + Nr_Of_Added_PBAs;
+
+         end Declare_New_First_Unused_PBA;
+
+         SB.Snapshots := Job.Snapshots;
+         SB.Curr_Snap := Newest_Snapshot_Idx (Job.Snapshots);
+
+         if Job.Nr_Of_Blks > 0 then
+
+            SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+            SB.Resizing_Nr_Of_Leaves :=
+               SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
+
+         else
+
+            SB.State := Normal;
+            Job.Request_Finished := True;
+
+         end if;
+
+         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Job.Key_Plaintext := SB.Current_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Current_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Current_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Key_Plaintext := SB.Previous_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Previous_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Cache,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Cache_Pending;
+         Progress := True;
+
+      when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
+            Curr_Gen := Curr_Gen + 1;
+         end if;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_FT_Extension_Step;
 
    --
    --  Execute_Initialize_Rekeying
@@ -1015,6 +1311,11 @@ is
             Execute_VBD_Extension_Step (
                Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
+         when FT_Extension_Step =>
+
+            Execute_FT_Extension_Step (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
+
          when Invalid =>
 
             null;
@@ -1120,6 +1421,36 @@ is
    end Peek_Generated_VBD_Rkg_Primitive;
 
    --
+   --  Peek_Generated_FT_Rszg_Primitive
+   --
+   function Peek_Generated_FT_Rszg_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type
+   is
+   begin
+      Inspect_Each_Job :
+      for Idx in Ctrl.Jobs'Range loop
+
+         if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+            case Ctrl.Jobs (Idx).State is
+            when FT_Ext_Step_In_FT_Pending
+            =>
+
+               return Ctrl.Jobs (Idx).Generated_Prim;
+
+            when others =>
+
+               null;
+
+            end case;
+
+         end if;
+
+      end loop Inspect_Each_Job;
+      return Primitive.Invalid_Object;
+   end Peek_Generated_FT_Rszg_Primitive;
+
+   --
    --  Peek_Generated_Hash
    --
    function Peek_Generated_Hash (
@@ -1181,6 +1512,16 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
                SB.State = Extending_VBD
+            then
+               return SB.Last_Secured_Generation;
+            else
+               raise Program_Error;
+            end if;
+
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
             then
                return SB.Last_Secured_Generation;
             else
@@ -1262,6 +1603,17 @@ is
                raise Program_Error;
             end if;
 
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
+            then
+               return
+                  SB.First_PBA + Physical_Block_Address_Type (SB.Nr_Of_PBAs);
+            else
+               raise Program_Error;
+            end if;
+
          when others =>
 
             raise Program_Error;
@@ -1293,6 +1645,16 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
                SB.State = Extending_VBD
+            then
+               return SB.Resizing_Nr_Of_PBAs;
+            else
+               raise Program_Error;
+            end if;
+
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
             then
                return SB.Resizing_Nr_Of_PBAs;
             else
@@ -1403,6 +1765,154 @@ is
       raise Program_Error;
 
    end Peek_Generated_Snapshots_Degree;
+
+   --
+   --  Peek_Generated_FT_Root
+   --
+   function Peek_Generated_FT_Root (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Type_1_Node_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
+            then
+               return (SB.Free_Number, SB.Free_Gen, SB.Free_Hash);
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_FT_Root;
+
+   --
+   --  Peek_Generated_FT_Degree
+   --
+   function Peek_Generated_FT_Degree (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Degree_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
+            then
+               return SB.Free_Degree;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_FT_Degree;
+
+   --
+   --  Peek_Generated_FT_Nr_Of_Leaves
+   --
+   function Peek_Generated_FT_Nr_Of_Leaves (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Number_Of_Leafs_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
+            then
+               return SB.Free_Leafs;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_FT_Nr_Of_Leaves;
+
+   --
+   --  Peek_Generated_FT_Max_Lvl_Idx
+   --
+   function Peek_Generated_FT_Max_Lvl_Idx (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Level_Index_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
+               SB.State = Extending_FT
+            then
+               return SB.Free_Max_Level;
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_FT_Max_Lvl_Idx;
 
    --
    --  Peek_Generated_Old_Key_ID
@@ -1751,6 +2261,14 @@ is
             end if;
             raise Program_Error;
 
+         when FT_Ext_Step_In_FT_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := FT_Ext_Step_In_FT_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -1802,6 +2320,47 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Complete_VBD_Ext;
+
+   --
+   --  Mark_Generated_Prim_Complete_FT_Ext
+   --
+   procedure Mark_Generated_Prim_Complete_FT_Ext (
+      Ctrl         : in out Control_Type;
+      Prim         :        Primitive.Object_Type;
+      Snapshots    :        Snapshots_Type;
+      First_PBA    :        Physical_Block_Address_Type;
+      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
+      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when FT_Ext_Step_In_FT_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := FT_Ext_Step_In_FT_Completed;
+               Ctrl.Jobs (Idx).Snapshots := Snapshots;
+               Ctrl.Jobs (Idx).PBA := First_PBA;
+               Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
+               Ctrl.Jobs (Idx).Nr_Of_Leaves := Nr_Of_Leaves;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_FT_Ext;
 
    --
    --  Mark_Generated_Prim_Complete_Key_Value_Plaintext

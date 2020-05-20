@@ -85,6 +85,12 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Generated_FT_Rszg_Primitive
+   --
+   function Peek_Generated_FT_Rszg_Primitive (Ctrl : Control_Type)
+   return Primitive.Object_Type;
+
+   --
    --  Peek_Generated_TA_Primitive
    --
    function Peek_Generated_TA_Primitive (Ctrl : Control_Type)
@@ -195,6 +201,42 @@ is
    return Tree_Degree_Type;
 
    --
+   --  Peek_Generated_FT_Root
+   --
+   function Peek_Generated_FT_Root (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Type_1_Node_Type;
+
+   --
+   --  Peek_Generated_FT_Degree
+   --
+   function Peek_Generated_FT_Degree (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Degree_Type;
+
+   --
+   --  Peek_Generated_FT_Nr_Of_Leaves
+   --
+   function Peek_Generated_FT_Nr_Of_Leaves (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Number_Of_Leafs_Type;
+
+   --
+   --  Peek_Generated_FT_Max_Lvl_Idx
+   --
+   function Peek_Generated_FT_Max_Lvl_Idx (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Tree_Level_Index_Type;
+
+   --
    --  Peek_Generated_Old_Key_ID
    --
    function Peek_Generated_Old_Key_ID (
@@ -223,6 +265,17 @@ is
    --  Mark_Generated_Prim_Complete_VBD_Ext
    --
    procedure Mark_Generated_Prim_Complete_VBD_Ext (
+      Ctrl         : in out Control_Type;
+      Prim         :        Primitive.Object_Type;
+      Snapshots    :        Snapshots_Type;
+      First_PBA    :        Physical_Block_Address_Type;
+      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
+      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type);
+
+   --
+   --  Mark_Generated_Prim_Complete_FT_Ext
+   --
+   procedure Mark_Generated_Prim_Complete_FT_Ext (
       Ctrl         : in out Control_Type;
       Prim         :        Primitive.Object_Type;
       Snapshots    :        Snapshots_Type;
@@ -266,6 +319,7 @@ private
    type Job_Operation_Type is (
       Invalid,
       VBD_Extension_Step,
+      FT_Extension_Step,
       Initialize_Rekeying,
       Rekey_VBA);
 
@@ -277,6 +331,9 @@ private
       VBD_Ext_Step_In_VBD_Pending,
       VBD_Ext_Step_In_VBD_In_Progress,
       VBD_Ext_Step_In_VBD_Completed,
+      FT_Ext_Step_In_FT_Pending,
+      FT_Ext_Step_In_FT_In_Progress,
+      FT_Ext_Step_In_FT_Completed,
       Create_Key_Pending,
       Create_Key_In_Progress,
       Create_Key_Completed,
@@ -351,6 +408,17 @@ private
    --  Execute_VBD_Extension_Step
    --
    procedure Execute_VBD_Extension_Step (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_FT_Extension_Step
+   --
+   procedure Execute_FT_Extension_Step (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
       SB            : in out Superblock_Type;

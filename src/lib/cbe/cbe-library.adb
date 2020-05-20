@@ -1931,7 +1931,10 @@ is
                not Superblock_Control.Primitive_Acceptable (Obj.SB_Ctrl);
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step |
+               Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step
+            =>
 
                Superblock_Control.Submit_Primitive_Nr_Of_Blks (
                   Obj.SB_Ctrl, Prim,
@@ -2288,6 +2291,53 @@ is
          end Declare_VBD_Rkg_Prim;
       end loop Loop_Generated_VBD_Rkg_Prims;
 
+      Loop_Generated_FT_Rszg_Prims :
+      loop
+         Declare_FT_Rszg_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               Superblock_Control.Peek_Generated_FT_Rszg_Primitive (
+                  Obj.SB_Ctrl);
+         begin
+            exit Loop_Generated_FT_Rszg_Prims when
+               not Primitive.Valid (Prim);
+--  or else
+--               not FT_Resizing.Primitive_Acceptable (Obj.FT_Rszg);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step =>
+
+--               FT_Resizing.Submit_Primitive_Resizing (
+--                  Obj.FT_Rszg, Prim, Obj.Cur_Gen,
+--                  Superblock_Control.Peek_Generated_Last_Secured_Gen (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_FT_Root (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_FT_Max_Lvl_Idx (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_FT_Nr_Of_Leaves (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_FT_Degree (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_PBA (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+--                  Superblock_Control.Peek_Generated_Nr_Of_Blks (
+--                     Obj.SB_Ctrl, Prim, Obj.Superblock));
+
+               Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
+               raise Program_Error;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_FT_Rszg_Prim;
+      end loop Loop_Generated_FT_Rszg_Prims;
+
       Loop_Generated_TA_Prims :
       loop
          Declare_TA_Prim :
@@ -2459,7 +2509,8 @@ is
 
             when
                Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
-               Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step
+               Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step |
+               Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step
             =>
 
                Pool.Mark_Generated_Primitive_Complete_Req_Fin (

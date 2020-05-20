@@ -464,6 +464,7 @@ is
       when 0 => return Normal;
       when 1 => return Rekeying;
       when 2 => return Extending_VBD;
+      when 3 => return Extending_FT;
       when others => raise Program_Error;
       end case;
    end SB_State_From_Block_Data;
@@ -481,6 +482,7 @@ is
       when Normal => Data (Off) := 0;
       when Rekeying => Data (Off) := 1;
       when Extending_VBD => Data (Off) := 2;
+      when Extending_FT => Data (Off) := 3;
       end case;
    end Block_Data_From_SB_State;
 

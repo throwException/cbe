@@ -154,6 +154,9 @@ private
       VBD_Extension_Step_Pending,
       VBD_Extension_Step_In_Progress,
       VBD_Extension_Step_Complete,
+      FT_Extension_Step_Pending,
+      FT_Extension_Step_In_Progress,
+      FT_Extension_Step_Complete,
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
@@ -206,6 +209,15 @@ private
    --  Execute_Extend_VBD
    --
    procedure Execute_Extend_VBD (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Extend_FT
+   --
+   procedure Execute_Extend_FT (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
