@@ -229,7 +229,6 @@ is
 
       when FT_Request_Done =>
 
-         Obj.SB_Slot := Valid_SB_Slot (Obj);
          Obj.Generated_Prim :=
             Primitive.Valid_Object_No_Pool_Idx (
                Write, False, Primitive.Tag_SB_Init_MT_Init,
