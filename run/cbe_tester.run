@@ -115,11 +115,11 @@ append config {
 
 				<replay verbose="yes" bulk="no">
 
-					<request type="write" lba="1"  count="1"/>
-					<extend-vbd nr_of_phys_blocks="1000" />
-					<request type="write" lba="1000"  count="1"/>
-					<extend-vbd nr_of_phys_blocks="1000" />
-					<request type="write" lba="2000"  count="1"/>
+					<request type="write" lba="1" count="1"/>
+					<extend-ft nr_of_phys_blocks="1" />
+					<request type="write" lba="1" count="1"/>
+					<extend-ft nr_of_phys_blocks="1" />
+					<request type="write" lba="1" count="1"/>
 
 <!--
 
