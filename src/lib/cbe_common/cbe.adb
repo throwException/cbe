@@ -628,7 +628,7 @@ is
 
       SB.Nr_Of_PBAs :=
          Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
-      Off := Off + 4;
+      Off := Off + 8;
 
       SB.Free_Gen :=
          Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
@@ -892,7 +892,7 @@ is
       Off := Off + 8;
 
       Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Nr_Of_PBAs));
-      Off := Off + 4;
+      Off := Off + 8;
 
       Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Free_Gen));
       Off := Off + 8;
@@ -971,7 +971,7 @@ is
       Off := Off + 8;
 
       Block_Data_From_Unsigned_32 (Data, Off, Unsigned_32 (SB.Nr_Of_PBAs));
-      Off := Off + 4;
+      Off := Off + 8;
 
       Block_Data_From_Unsigned_64 (Data, Off, Unsigned_64 (SB.Free_Gen));
       Off := Off + 8;

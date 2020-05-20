@@ -82,7 +82,7 @@ is
    is range 2**Tree_Min_Degree_Log_2 - 1 .. 2**Tree_Max_Degree_Log_2 - 1;
 
    type Tree_Child_Index_Type is range 0 .. Tree_Max_Degree - 1;
-   type Number_Of_Blocks_Type is range 0 .. 2**32 - 1;
+   type Number_Of_Blocks_Type is mod 2**64;
    type Number_Of_Requests_Type is range 0 .. 2**32 - 1;
    type Snapshot_ID_Type is range 0 .. 2**32 - 1;
    type Key_ID_Type is range 0 .. 2**32 - 1;

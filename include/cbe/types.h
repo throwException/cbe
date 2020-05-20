@@ -145,23 +145,23 @@ namespace Cbe {
 
 		private:
 
-			Operation _operation;
-			Success   _success;
-			uint64_t  _block_number;
-			uint64_t  _offset;
-			uint32_t  _count;
-			uint32_t  _key_id;
-			uint32_t  _tag;
+			Operation        _operation;
+			Success          _success;
+			uint64_t         _block_number;
+			uint64_t         _offset;
+			Number_of_blocks _count;
+			uint32_t         _key_id;
+			uint32_t         _tag;
 
 		public:
 
-			Request(Operation operation,
-			        Success   success,
-			        uint64_t  block_number,
-			        uint64_t  offset,
-			        uint32_t  count,
-			        uint32_t  key_id,
-			        uint32_t  tag)
+			Request(Operation        operation,
+			        Success          success,
+			        uint64_t         block_number,
+			        uint64_t         offset,
+			        Number_of_blocks count,
+			        uint32_t         key_id,
+			        uint32_t         tag)
 			:
 				_operation    { operation    },
 				_success      { success      },
@@ -210,13 +210,13 @@ namespace Cbe {
 			bool discard_snapshot() const { return _operation == Operation::DISCARD_SNAPSHOT; }
 			bool rekey()            const { return _operation == Operation::REKEY; }
 
-			Operation operation()    const { return _operation; }
-			Success   success()      const { return _success; }
-			uint64_t  block_number() const { return _block_number; }
-			uint64_t  offset()       const { return _offset; }
-			uint32_t  count()        const { return _count; }
-			uint32_t  key_id()       const { return _key_id; }
-			uint32_t  tag()          const { return _tag; }
+			Operation        operation()    const { return _operation; }
+			Success          success()      const { return _success; }
+			uint64_t         block_number() const { return _block_number; }
+			uint64_t         offset()       const { return _offset; }
+			Number_of_blocks count()        const { return _count; }
+			uint32_t         key_id()       const { return _key_id; }
+			uint32_t         tag()          const { return _tag; }
 
 			void success(Success arg) { _success = arg; }
 			void tag(uint32_t arg)    { _tag = arg; }
@@ -658,7 +658,7 @@ namespace Cbe {
 		Snapshot_index         curr_snap;
 		Degree                 degree;
 		Physical_block_address first_pba;
-		uint32_t               nr_of_pbas;
+		Number_of_blocks       nr_of_pbas;
 		Generation             free_gen;
 		Physical_block_address free_number;
 		Hash                   free_hash;
@@ -671,7 +671,7 @@ namespace Cbe {
 		Height                 meta_height;
 		Degree                 meta_degree;
 		Number_of_leaves       meta_leaves;
-		char                   padding[403];
+		char                   padding[399];
 
 		void print(Genode::Output &out) const
 		{
@@ -927,7 +927,7 @@ namespace Cbe {
 			convert_success(r.success),
 			r.operation.block_number,
 			(Genode::uint64_t)r.offset,
-			(Genode::uint32_t)r.operation.count,
+			(Number_of_blocks)r.operation.count,
 			0,
 			(Genode::uint32_t)r.tag.value);
 	}
