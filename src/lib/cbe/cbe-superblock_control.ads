@@ -40,12 +40,11 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Submit_Primitive_PBA_Range
+   --  Submit_Primitive_Nr_Of_Blks
    --
-   procedure Submit_Primitive_PBA_Range (
+   procedure Submit_Primitive_Nr_Of_Blks (
       Ctrl       : in out Control_Type;
       Prim       :        Primitive.Object_Type;
-      First_PBA  :        Physical_Block_Address_Type;
       Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    --

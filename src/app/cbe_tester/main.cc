@@ -87,14 +87,10 @@ struct Rekey
 
 struct Extend_vbd
 {
-	uint64_t first_phys_block;
 	uint32_t nr_of_phys_blocks;
 
-	Extend_vbd(
-		uint64_t first_phys_block,
-		uint32_t nr_of_phys_blocks)
+	Extend_vbd(uint32_t nr_of_phys_blocks)
 	:
-		first_phys_block { first_phys_block },
 		nr_of_phys_blocks { nr_of_phys_blocks }
 	{ }
 };
@@ -310,19 +306,14 @@ struct Cbe::Block_session_component
 	{
 		struct Bad_extend_vbd_node : Exception { };
 		try {
-			uint64_t first_phys_block { 0 };
 			uint32_t nr_of_phys_blocks { 0 };
-			if (!node.attribute("first_phys_block").value(first_phys_block)) {
-				error("extend-vbd node has bad first_phys_block attribute");
-				throw Bad_extend_vbd_node();
-			}
 			if (!node.attribute("nr_of_phys_blocks").value(nr_of_phys_blocks)) {
 				error("extend-vbd node has bad nr_of_phys_blocks attribute");
 				throw Bad_extend_vbd_node();
 			}
 			Test &test = *new (_alloc) Test;
 			test.type = Test::EXTEND_VBD;
-			test.extend_vbd.construct(first_phys_block, nr_of_phys_blocks);
+			test.extend_vbd.construct(nr_of_phys_blocks);
 			_test_queue.enqueue(test);
 		} catch (Xml_node::Nonexistent_attribute) {
 			error("extend-vbd node misses attribute");
@@ -696,9 +687,7 @@ struct Cbe::Block_session_component
 			_test_in_progress.construct(test);
 			destroy(_alloc, &test);
 		});
-		log("extend-vbd started: first_phys_block ",
-		    _test_in_progress->extend_vbd->first_phys_block,
-		    " nr_of_phys_blocks ",
+		log("extend-vbd started: nr_of_phys_blocks ",
 		    _test_in_progress->extend_vbd->nr_of_phys_blocks);
 
 		fn(*_test_in_progress->extend_vbd);
@@ -707,15 +696,11 @@ struct Cbe::Block_session_component
 	void extend_vbd_done(bool success)
 	{
 		if (success) {
-			log("extend_vbd succeeded: first_phys_block ",
-			    _test_in_progress->extend_vbd->first_phys_block,
-			    " nr_of_phys_blocks ",
+			log("extend_vbd succeeded: nr_of_phys_blocks ",
 			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
 		} else {
 			_nr_of_failed_tests++;
-			log("extend_vbd failed: first_phys_block ",
-			    _test_in_progress->extend_vbd->first_phys_block,
-			    " nr_of_phys_blocks ",
+			log("extend_vbd failed: nr_of_phys_blocks ",
 			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
 		}
 		_test_in_progress.destruct();
@@ -948,7 +933,7 @@ class Cbe::Main
 		bool                                    _rekey                   { false };
 		Rekey                                   _rekey_obj               { 0 };
 		bool                                    _extend_vbd              { false };
-		Extend_vbd                              _extend_vbd_obj          { 0, 0 };
+		Extend_vbd                              _extend_vbd_obj          { 0 };
 
 		void _execute_cbe_check (bool &progress)
 		{
@@ -1465,7 +1450,7 @@ class Cbe::Main
 					Cbe::Request req(
 						Cbe::Request::Operation::EXTEND_VBD,
 						Cbe::Request::Success::FALSE,
-						extend_vbd.first_phys_block,
+						0,
 						0,
 						extend_vbd.nr_of_phys_blocks,
 						0,
@@ -1473,7 +1458,6 @@ class Cbe::Main
 
 					_cbe->submit_client_request(req, 0);
 					_extend_vbd_obj = {
-						extend_vbd.first_phys_block,
 						extend_vbd.nr_of_phys_blocks
 					};
 					_extend_vbd = true;
@@ -1488,7 +1472,6 @@ class Cbe::Main
 
 					struct Unexpected_request : Genode::Exception { };
 					if (req.operation() != Cbe::Request::Operation::EXTEND_VBD ||
-					    req.block_number() != _extend_vbd_obj.first_phys_block ||
 					    req.count() != _extend_vbd_obj.nr_of_phys_blocks)
 					{
 						throw Unexpected_request();
@@ -1497,7 +1480,7 @@ class Cbe::Main
 						req.success() ==
 							Cbe::Request::Success::TRUE ? true : false);
 
-					_extend_vbd_obj = { 0, 0 };
+					_extend_vbd_obj = { 0 };
 					_extend_vbd = false;
 					_cbe->drop_completed_client_request(req);
 

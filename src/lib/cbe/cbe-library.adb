@@ -118,6 +118,16 @@ is
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
+      Debug.Print_String ("SB First_PBA: "
+         & Debug.To_String (Debug.Uint64_Type (Obj.Superblock.First_PBA)) &
+         " Nr_Of_PBAs "
+         & Debug.To_String (Debug.Uint64_Type (Obj.Superblock.Nr_Of_PBAs)) &
+         " Last_PBA "
+         & Debug.To_String (Debug.Uint64_Type (
+            Obj.Superblock.First_PBA +
+               Physical_Block_Address_Type (Obj.Superblock.Nr_Of_PBAs - 1))) &
+         " ");
+
    end Initialize_Object;
 
    procedure Create_Snapshot (
@@ -1920,9 +1930,8 @@ is
             case Primitive.Tag (Prim) is
             when Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step =>
 
-               Superblock_Control.Submit_Primitive_PBA_Range (
+               Superblock_Control.Submit_Primitive_Nr_Of_Blks (
                   Obj.SB_Ctrl, Prim,
-                  Pool.Peek_Generated_PBA (Obj.Request_Pool_Obj, Prim),
                   Pool.Peek_Generated_Nr_Of_Blks (Obj.Request_Pool_Obj, Prim));
 
                Pool.Drop_Generated_Primitive (

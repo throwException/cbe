@@ -482,17 +482,19 @@ is
    --  Alloc_PBA_From_Resizing_Contingent
    --
    procedure Alloc_PBA_From_Resizing_Contingent (
-      First_PBA     :        Physical_Block_Address_Type;
+      First_PBA     : in out Physical_Block_Address_Type;
       Nr_Of_PBAs    : in out Number_Of_Blocks_Type;
       Allocated_PBA :    out Physical_Block_Address_Type)
    is
    begin
+
       if Nr_Of_PBAs = 0 then
          raise Program_Error;
       end if;
 
+      Allocated_PBA := First_PBA;
+      First_PBA := First_PBA + 1;
       Nr_Of_PBAs := Nr_Of_PBAs - 1;
-      Allocated_PBA := First_PBA + Physical_Block_Address_Type (Nr_Of_PBAs);
 
    end Alloc_PBA_From_Resizing_Contingent;
 
@@ -505,7 +507,7 @@ is
       Curr_Gen         :        Generation_Type;
       Last_Secured_Gen :        Generation_Type;
       T1_Blks          : in out Type_1_Node_Blocks_Type;
-      First_PBA        :        Physical_Block_Address_Type;
+      First_PBA        : in out Physical_Block_Address_Type;
       Nr_Of_PBAs       : in out Number_Of_Blocks_Type)
    is
       Old_Snap_Idx : constant Snapshots_Index_Type := Snap_Idx;
@@ -582,7 +584,7 @@ is
       Mount_Point_Lvl_Idx   :        Type_1_Node_Blocks_Index_Type;
       Mount_Point_Child_Idx :        Type_1_Node_Block_Index_Type;
       Snapshots_Degree      :        Tree_Degree_Type;
-      First_PBA             :        Physical_Block_Address_Type;
+      First_PBA             : in out Physical_Block_Address_Type;
       Nr_Of_PBAs            : in out Number_Of_Blocks_Type;
       T1_Blks               : in out Type_1_Node_Blocks_Type;
       Stopped_At_Lvl_Idx    :    out Type_1_Node_Blocks_Index_Type;

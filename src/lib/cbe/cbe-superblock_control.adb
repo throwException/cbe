@@ -124,12 +124,11 @@ is
    is (for some Job of Ctrl.Jobs => Job.Operation = Invalid);
 
    --
-   --  Submit_Primitive_PBA_Range
+   --  Submit_Primitive_Nr_Of_Blks
    --
-   procedure Submit_Primitive_PBA_Range (
+   procedure Submit_Primitive_Nr_Of_Blks (
       Ctrl       : in out Control_Type;
       Prim       :        Primitive.Object_Type;
-      First_PBA  :        Physical_Block_Address_Type;
       Nr_Of_PBAs :        Number_Of_Blocks_Type)
    is
    begin
@@ -142,7 +141,6 @@ is
                Ctrl.Jobs (Idx).Operation := VBD_Extension_Step;
                Ctrl.Jobs (Idx).State := Submitted;
                Ctrl.Jobs (Idx).Submitted_Prim := Prim;
-               Ctrl.Jobs (Idx).PBA := First_PBA;
                Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
                return;
 
@@ -155,7 +153,7 @@ is
       end loop Find_Invalid_Job;
 
       raise Program_Error;
-   end Submit_Primitive_PBA_Range;
+   end Submit_Primitive_Nr_Of_Blks;
 
    --
    --  Submit_Primitive
@@ -333,10 +331,40 @@ is
 
             Job.Request_Finished := False;
 
-            SB.State := Extending_VBD;
-            SB.Resizing_First_PBA := Job.PBA;
-            SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
-            SB.Resizing_Nr_Of_Leaves := 0;
+            Declare_Nr_Of_Unused_PBAs_1 :
+            declare
+               Last_Used_PBA : constant Physical_Block_Address_Type :=
+                  SB.First_PBA + (
+                     Physical_Block_Address_Type (SB.Nr_Of_PBAs) - 1);
+
+               Nr_Of_Unused_PBAs : constant Number_Of_Blocks_Type :=
+                  Number_Of_Blocks_Type (
+                     Physical_Block_Address_Type'Last - Last_Used_PBA);
+            begin
+
+               if Job.Nr_Of_Blks > Nr_Of_Unused_PBAs then
+                  raise Program_Error;
+               end if;
+
+               SB.State := Extending_VBD;
+               SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+               SB.Resizing_Nr_Of_Leaves := 0;
+
+               Job.PBA := Last_Used_PBA + 1;
+
+               Debug.Print_String (
+                  "VBD EXT INIT PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.PBA)) &
+                  " NR_OF_PBAS " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Nr_Of_Blks)) &
+                  " NR_OF_LEAVES " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     SB.Resizing_Nr_Of_Leaves)) &
+                  " ");
+
+            end Declare_Nr_Of_Unused_PBAs_1;
 
             Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
             Job.Key_Plaintext := SB.Current_Key;
@@ -350,19 +378,40 @@ is
             Job.State := Encrypt_Current_Key_Pending;
             Progress := True;
 
-            Debug.Print_String (
-               "VBD EXT INIT PBA " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
-               " NR_OF_PBAS " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
-               " NR_OF_LEAVES " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)) &
-               " ");
-
          when Extending_VBD =>
 
-            Job.PBA := SB.Resizing_First_PBA;
-            Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
+            Declare_Nr_Of_Unused_PBAs_2 :
+            declare
+               Last_Used_PBA : constant Physical_Block_Address_Type :=
+                  SB.First_PBA + (
+                     Physical_Block_Address_Type (SB.Nr_Of_PBAs - 1));
+
+               Nr_Of_Unused_PBAs : constant Number_Of_Blocks_Type :=
+                  Number_Of_Blocks_Type (
+                     Physical_Block_Address_Type'Last - Last_Used_PBA);
+            begin
+
+               if SB.Resizing_Nr_Of_PBAs > Nr_Of_Unused_PBAs then
+                  raise Program_Error;
+               end if;
+
+               Job.PBA := Last_Used_PBA + 1;
+               Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
+
+               Debug.Print_String (
+                  "VBD EXT STEP PBA " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.PBA)) &
+                  " NR_OF_PBAS " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     Job.Nr_Of_Blks)) &
+                  " NR_OF_LEAVES " &
+                  Debug.To_String (Debug.Uint64_Type (
+                     SB.Resizing_Nr_Of_Leaves)) &
+                  " ");
+
+            end Declare_Nr_Of_Unused_PBAs_2;
+
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
                Succ   => False,
@@ -372,15 +421,6 @@ is
 
             Job.State := VBD_Ext_Step_In_VBD_Pending;
             Progress := True;
-
-            Debug.Print_String (
-               "VBD EXT STEP PBA " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_First_PBA)) &
-               " NR_OF_PBAS " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
-               " NR_OF_LEAVES " &
-               Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)) &
-               " ");
 
          when others =>
 
@@ -394,12 +434,34 @@ is
             raise Program_Error;
          end if;
 
+         if Job.Nr_Of_Blks >= SB.Resizing_Nr_Of_PBAs then
+            raise Program_Error;
+         end if;
+
+         Declare_New_First_Unused_PBA :
+         declare
+            Nr_Of_Added_PBAs : constant Number_Of_Blocks_Type :=
+               SB.Resizing_Nr_Of_PBAs - Job.Nr_Of_Blks;
+
+            New_First_Unused_PBA : constant Physical_Block_Address_Type :=
+               SB.First_PBA +
+                  Physical_Block_Address_Type (
+                     SB.Nr_Of_PBAs + Nr_Of_Added_PBAs);
+         begin
+
+            if Job.PBA /= New_First_Unused_PBA then
+               raise Program_Error;
+            end if;
+
+            SB.Nr_Of_PBAs := SB.Nr_Of_PBAs + Nr_Of_Added_PBAs;
+
+         end Declare_New_First_Unused_PBA;
+
          SB.Snapshots := Job.Snapshots;
          SB.Curr_Snap := Newest_Snapshot_Idx (Job.Snapshots);
 
          if Job.Nr_Of_Blks > 0 then
 
-            SB.Resizing_First_PBA := Job.PBA;
             SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
             SB.Resizing_Nr_Of_Leaves :=
                SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
@@ -1194,7 +1256,8 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
                SB.State = Extending_VBD
             then
-               return SB.Resizing_First_PBA;
+               return
+                  SB.First_PBA + Physical_Block_Address_Type (SB.Nr_Of_PBAs);
             else
                raise Program_Error;
             end if;

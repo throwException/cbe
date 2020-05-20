@@ -271,36 +271,6 @@ is
    end Peek_Generated_VBD_Primitive_ID;
 
    --
-   --  Peek_Generated_PBA
-   --
-   function Peek_Generated_PBA (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Physical_Block_Address_Type
-   is
-      Idx : constant Pool_Index_Type :=
-         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
-   begin
-
-      case Obj.Items (Idx).State is
-      when VBD_Extension_Step_Pending =>
-
-         if Primitive.Equal (Prim, Obj.Items (Idx).Prim) then
-            return Physical_Block_Address_Type (
-               Request.Block_Number (Obj.Items (Idx).Req));
-         else
-            raise Program_Error;
-         end if;
-
-      when others =>
-
-         raise Program_Error;
-
-      end case;
-
-   end Peek_Generated_PBA;
-
-   --
    --  Peek_Generated_Nr_Of_Blks
    --
    function Peek_Generated_Nr_Of_Blks (

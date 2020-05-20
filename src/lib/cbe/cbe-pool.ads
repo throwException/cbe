@@ -85,14 +85,6 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_PBA
-   --
-   function Peek_Generated_PBA (
-      Obj  : Object_Type;
-      Prim : Primitive.Object_Type)
-   return Physical_Block_Address_Type;
-
-   --
    --  Peek_Generated_Nr_Of_Blks
    --
    function Peek_Generated_Nr_Of_Blks (
