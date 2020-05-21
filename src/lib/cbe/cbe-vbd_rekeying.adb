@@ -597,12 +597,12 @@ is
 
       if Mount_Point_Lvl_Idx > 1 then
 
-         Reset_All_Lvls_Below_Lvl_With_Unused_Child :
+         Reset_All_Lvls_Below_Mount_Point :
          for Lvl_Idx in 1 .. Mount_Point_Lvl_Idx - 1 loop
 
             T1_Blks (Lvl_Idx) := (others => Type_1_Node_Invalid);
 
-         end loop Reset_All_Lvls_Below_Lvl_With_Unused_Child;
+         end loop Reset_All_Lvls_Below_Mount_Point;
 
       end if;
 
@@ -632,7 +632,7 @@ is
 
                   T1_Blks (Lvl_Idx) (Child_Idx) := (
                      PBA => Child_PBA,
-                     Gen => 0,
+                     Gen => Initial_Generation,
                      Hash => (others => 0));
 
                   Debug.Print_String (
@@ -677,7 +677,7 @@ is
 
                      T1_Blks (Lvl_Idx) (Child_Idx) := (
                         PBA => Child_PBA,
-                        Gen => 0,
+                        Gen => Initial_Generation,
                         Hash => (others => 0));
 
                      Debug.Print_String (
@@ -988,7 +988,7 @@ is
                Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
                Progress := True;
 
-            elsif Child.Gen = 0 then
+            elsif Child.Gen = Initial_Generation then
 
                Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying (
                   For_Curr_Gen_Blks => Job.First_Snapshot,
