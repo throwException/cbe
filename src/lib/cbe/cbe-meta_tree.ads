@@ -35,10 +35,11 @@ is
    return Boolean;
 
    --
-   --  Submit new request
+   --  Submit_Primitive
    --
-   procedure Submit_Request (
+   procedure Submit_Primitive (
       Obj         : in out Object_Type;
+      Prim        :        Primitive.Object_Type;
       Root_Node   :        Type_1_Node_Type;
       Tree_Geom   :        Tree_Geometry_Type;
       Current_Gen :        Generation_Type;
@@ -224,19 +225,18 @@ private
       Block_Data => Block_Data);
 
    type Object_Type is record
-      State         : State_Type;
-      Root_Node     : Type_1_Node_Type;
-      Root_Dirty    : Boolean;
-      Tree_Geom     : Tree_Geometry_Type;
-      Current_Gen   : Generation_Type;
-      Old_PBA       : Physical_Block_Address_Type;
-      Complete_Prim : Primitive.Object_Type;
-      Finished      : Boolean;
-
-      Cache_Request : Cache_Request_Type;
-
-      Level_N_Nodes : Type_1_Info_Array_Type;
-      Level_1_Node  : Type_2_Info_Type;
+      State          : State_Type;
+      Submitted_Prim : Primitive.Object_Type;
+      Root_Node      : Type_1_Node_Type;
+      Root_Dirty     : Boolean;
+      Tree_Geom      : Tree_Geometry_Type;
+      Current_Gen    : Generation_Type;
+      Old_PBA        : Physical_Block_Address_Type;
+      Complete_Prim  : Primitive.Object_Type;
+      Finished       : Boolean;
+      Cache_Request  : Cache_Request_Type;
+      Level_N_Nodes  : Type_1_Info_Array_Type;
+      Level_1_Node   : Type_2_Info_Type;
    end record;
 
    procedure Exchange_NV_Level_1_Node (

@@ -985,7 +985,9 @@ is
             exit Loop_Free_Tree_Generated_Meta_Tree_Prims when
                not Meta_Tree.Request_Acceptable (Obj.Meta_Tree_Obj);
 
-            Meta_Tree.Submit_Request (Obj.Meta_Tree_Obj,
+            Meta_Tree.Submit_Primitive (
+               Obj.Meta_Tree_Obj,
+               Prim,
                (PBA => Obj.Superblock.Meta_Number,
                 Gen => Obj.Superblock.Meta_Gen,
                 Hash => Obj.Superblock.Meta_Hash),

@@ -90,8 +90,12 @@ is
    function Request_Acceptable (Obj : Object_Type) return Boolean
    is (Obj.State = Invalid);
 
-   procedure Submit_Request (
+   --
+   --  Submit_Primitive
+   --
+   procedure Submit_Primitive (
       Obj         : in out Object_Type;
+      Prim        :        Primitive.Object_Type;
       Root_Node   :        Type_1_Node_Type;
       Tree_Geom   :        Tree_Geometry_Type;
       Current_Gen :        Generation_Type;
@@ -102,12 +106,13 @@ is
          raise Program_Error;
       end if;
 
-      Obj.Root_Node     := Root_Node;
-      Obj.Tree_Geom     := Tree_Geom;
-      Obj.Current_Gen   := Current_Gen;
-      Obj.Old_PBA       := Old_PBA;
-      Obj.Complete_Prim := Primitive.Invalid_Object;
-      Obj.Finished      := False;
+      Obj.Root_Node      := Root_Node;
+      Obj.Tree_Geom      := Tree_Geom;
+      Obj.Current_Gen    := Current_Gen;
+      Obj.Old_PBA        := Old_PBA;
+      Obj.Complete_Prim  := Primitive.Invalid_Object;
+      Obj.Submitted_Prim := Prim;
+      Obj.Finished       := False;
 
       Initialize_Type_1_Info_Array (Obj.Level_N_Nodes);
       Obj.Level_1_Node := Type_2_Info_Invalid;
@@ -118,7 +123,7 @@ is
          Node_Volatile (Obj.Root_Node, Obj.Current_Gen);
 
       Obj.State := Update;
-   end Submit_Request;
+   end Submit_Primitive;
 
    --
    --  Execute module
@@ -253,14 +258,13 @@ is
 
       if not Primitive.Success (Prim) then
 
-         Obj.Complete_Prim := Primitive.Valid_Object_No_Pool_Idx (
-            Op     => Read,
-            Succ   => Request.Success_Type (False),
-            Tg     => Primitive.Tag_FT_MT,
-            Blk_Nr => 0,
-            Idx    => 0);
+         Obj.Complete_Prim :=
+            Primitive.Copy_Valid_Object_New_Succ_Blk_Nr (
+               Obj.Submitted_Prim, False, 0);
+
          Obj.State := Complete;
          return;
+
       end if;
 
       case Primitive.Operation (Obj.Cache_Request.Prim) is
@@ -424,12 +428,9 @@ is
       T2_Entry : in out Type_2_Node_Type)
    is
    begin
-      Obj.Complete_Prim := Primitive.Valid_Object_No_Pool_Idx (
-         Op     => Read,
-         Succ   => Request.Success_Type (True),
-         Tg     => Primitive.Tag_FT_MT,
-         Blk_Nr => Block_Number_Type (T2_Entry.PBA),
-         Idx    => 0);
+      Obj.Complete_Prim :=
+         Primitive.Copy_Valid_Object_New_Succ_Blk_Nr (
+            Obj.Submitted_Prim, True, Block_Number_Type (T2_Entry.PBA));
 
       Obj.Finished := True;
 
