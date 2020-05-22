@@ -612,12 +612,12 @@ is
       Off := Off + 8;
 
       SB.Resizing_Nr_Of_PBAs :=
-         Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
-      Off := Off + 4;
+         Number_Of_Blocks_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
 
       SB.Resizing_Nr_Of_Leaves :=
-         Tree_Number_Of_Leafs_Type (Unsigned_32_From_Block_Data (Data, Off));
-      Off := Off + 4;
+         Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
 
       Key_Plaintext_From_Block_Data (SB.Previous_Key, Data, Off);
       Off := Off + Key_Storage_Size_Bytes;
@@ -887,13 +887,13 @@ is
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
 
-      Block_Data_From_Unsigned_32 (
-         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_PBAs));
-      Off := Off + 4;
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_Nr_Of_PBAs));
+      Off := Off + 8;
 
-      Block_Data_From_Unsigned_32 (
-         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_Leaves));
-      Off := Off + 4;
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_Nr_Of_Leaves));
+      Off := Off + 8;
 
       Block_Data_From_Key_Ciphertext (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;
@@ -974,13 +974,13 @@ is
          Data, Off, Unsigned_64 (SB.Rekeying_VBA));
       Off := Off + 8;
 
-      Block_Data_From_Unsigned_32 (
-         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_PBAs));
-      Off := Off + 4;
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_Nr_Of_PBAs));
+      Off := Off + 8;
 
-      Block_Data_From_Unsigned_32 (
-         Data, Off, Unsigned_32 (SB.Resizing_Nr_Of_Leaves));
-      Off := Off + 4;
+      Block_Data_From_Unsigned_64 (
+         Data, Off, Unsigned_64 (SB.Resizing_Nr_Of_Leaves));
+      Off := Off + 8;
 
       Block_Data_From_Key_Plaintext (Data, Off, SB.Previous_Key);
       Off := Off + Key_Storage_Size_Bytes;
