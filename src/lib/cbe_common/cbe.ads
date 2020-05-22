@@ -95,7 +95,9 @@ is
       Discard_Snapshot,
       Rekey,
       Extend_VBD,
-      Extend_FT);
+      Extend_FT,
+      Decrypt_Keys,
+      Resume_Rekeying);
 
    type Primitive_Operation_Type is (Read, Write, Sync);
 
@@ -392,6 +394,8 @@ is
 
    type Superblocks_Index_Type is range 0 .. Nr_Of_Superblock_Slots - 1;
    type Superblocks_Type is array (Superblocks_Index_Type) of Superblock_Type;
+   type Superblocks_Ciphertext_Type is array (Superblocks_Index_Type)
+      of Superblock_Ciphertext_Type;
 
    type Timeout_Request_Type is record
       Valid   : Boolean;

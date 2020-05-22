@@ -37,10 +37,25 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
-            when Rekey | Extend_VBD | Extend_FT =>
+            when Rekey | Extend_VBD | Extend_FT | Decrypt_Keys =>
 
                Obj.Items (Idx).State := Submitted;
                Obj.Items (Idx).Req   := Req;
+               Index_Queue.Enqueue (Obj.Indices, Idx);
+               return;
+
+            when Resume_Rekeying =>
+
+               Obj.Items (Idx).State := Submitted_Resume_Rekeying;
+               Obj.Items (Idx).Req   := Request.Valid_Object (
+                  Op     => Rekey,
+                  Succ   => False,
+                  Blk_Nr => Block_Number_Type (0),
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
@@ -231,7 +246,8 @@ is
                Rekey_Init_Pending |
                Rekey_VBA_Pending |
                VBD_Extension_Step_Pending |
-               FT_Extension_Step_Pending
+               FT_Extension_Step_Pending |
+               Decrypt_Keys_Pending
             =>
 
                return Itm.Prim;
@@ -330,6 +346,9 @@ is
             return;
          when FT_Extension_Step_Pending =>
             Obj.Items (Idx).State := FT_Extension_Step_In_Progress;
+            return;
+         when Decrypt_Keys_Pending =>
+            Obj.Items (Idx).State := Decrypt_Keys_In_Progress;
             return;
          when others =>
             raise Program_Error;
@@ -595,6 +614,14 @@ is
          Items (Idx).State := Rekey_Init_Pending;
          Progress := True;
 
+      when Submitted_Resume_Rekeying =>
+
+         Items (Idx).Prim := Primitive.Invalid_Object;
+
+         Items (Idx).Nr_Of_Requests_Preponed := 0;
+         Items (Idx).State := Prepone_Requests_Pending;
+         Progress := True;
+
       when Rekey_Init_Complete =>
 
          if not Primitive.Success (Items (Idx).Prim) then
@@ -697,6 +724,49 @@ is
    end Execute_Rekey;
 
    --
+   --  Execute_Decrypt_Keys
+   --
+   procedure Execute_Decrypt_Keys (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Items (Idx).State is
+      when Submitted =>
+
+         Items (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Items (Idx).State := Decrypt_Keys_Pending;
+         Progress := True;
+
+      when Decrypt_Keys_Complete =>
+
+         if not Primitive.Success (Items (Idx).Prim) then
+            raise Program_Error;
+         end if;
+
+         Items (Idx).State := Complete;
+         Index_Queue.Dequeue (Indices, Idx);
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Decrypt_Keys;
+
+   --
    --  Execute
    --
    procedure Execute (
@@ -724,6 +794,10 @@ is
             when Extend_FT =>
 
                Execute_Extend_FT (Obj.Items, Obj.Indices, Idx, Progress);
+
+            when Decrypt_Keys =>
+
+               Execute_Decrypt_Keys (Obj.Items, Obj.Indices, Idx, Progress);
 
             when others =>
 
@@ -754,7 +828,7 @@ is
       end if;
 
       case Request.Operation (Obj.Items (Idx).Req) is
-      when Extend_VBD | Extend_FT =>
+      when Extend_VBD | Extend_FT | Resume_Rekeying =>
 
          raise Program_Error;
 
@@ -765,6 +839,20 @@ is
 
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Rekey_Init_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Decrypt_Keys =>
+
+         case Obj.Items (Idx).State is
+         when Decrypt_Keys_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Decrypt_Keys_Complete;
 
          when others =>
 
@@ -933,7 +1021,9 @@ is
          Discard_Snapshot |
          Rekey |
          Extend_VBD |
-         Extend_FT
+         Extend_FT |
+         Decrypt_Keys |
+         Resume_Rekeying
       =>
          1);
 

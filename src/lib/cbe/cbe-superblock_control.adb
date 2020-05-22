@@ -115,7 +115,11 @@ is
             Snapshots => (others => Snapshot_Invalid),
             FT_Root => Type_1_Node_Invalid,
             FT_Max_Lvl_Idx => Tree_Level_Index_Type'First,
-            FT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First);
+            FT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
+            Prev_Key_Plaintext => Key_Plaintext_Invalid,
+            Curr_Key_Plaintext => Key_Plaintext_Invalid,
+            Prev_Key_Ciphertext => Key_Ciphertext_Invalid,
+            Curr_Key_Ciphertext => Key_Ciphertext_Invalid);
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -204,6 +208,44 @@ is
    end Submit_Primitive;
 
    --
+   --  Submit_Primitive_Decrypt_Keys
+   --
+   procedure Submit_Primitive_Decrypt_Keys (
+      Ctrl : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Prev_Key :        Key_Ciphertext_Type;
+      Curr_Key :        Key_Ciphertext_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         if Ctrl.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
+
+               Ctrl.Jobs (Idx).Operation := Decrypt_Keys;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               Ctrl.Jobs (Idx).Curr_Key_Ciphertext := Curr_Key;
+               Ctrl.Jobs (Idx).Prev_Key_Ciphertext := Prev_Key;
+               Ctrl.Jobs (Idx).Curr_Key_Plaintext.ID :=
+                  Ctrl.Jobs (Idx).Curr_Key_Ciphertext.ID;
+               Ctrl.Jobs (Idx).Prev_Key_Plaintext.ID :=
+                  Ctrl.Jobs (Idx).Prev_Key_Ciphertext.ID;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_Decrypt_Keys;
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Ctrl : Control_Type)
@@ -245,6 +287,38 @@ is
       end loop Find_Corresponding_Job;
       raise Program_Error;
    end Peek_Completed_Request_Finished;
+
+   --
+   --  Peek_Completed_Decrypted_Keys_Plaintext
+   --
+   procedure Peek_Completed_Decrypted_Keys_Plaintext (
+      Ctrl     : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Prev_Key :    out Key_Plaintext_Type;
+      Curr_Key :    out Key_Plaintext_Type)
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         case Ctrl.Jobs (Idx).Operation is
+         when Decrypt_Keys =>
+
+            if Ctrl.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
+            then
+               Prev_Key := Ctrl.Jobs (Idx).Prev_Key_Plaintext;
+               Curr_Key := Ctrl.Jobs (Idx).Curr_Key_Plaintext;
+               return;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+   end Peek_Completed_Decrypted_Keys_Plaintext;
 
    --
    --  Drop_Completed_Primitive
@@ -943,6 +1017,106 @@ is
    end Execute_FT_Extension_Step;
 
    --
+   --  Execute_Decrypt_Keys
+   --
+   procedure Execute_Decrypt_Keys (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+      case Job.State is
+      when Submitted =>
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Decrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Decrypt_Current_Key_Pending;
+         Progress := True;
+
+      when Decrypt_Current_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         if Job.Prev_Key_Ciphertext = Key_Ciphertext_Invalid then
+            Job.Prev_Key_Plaintext := Key_Plaintext_Invalid;
+            Job.State := Decrypt_Previous_Key_Completed;
+         else
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_TA_Decrypt_Key,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Decrypt_Previous_Key_Pending;
+         end if;
+
+         Progress := True;
+
+      when Decrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Invalid_Object;
+         Primitive.Success (Job.Submitted_Prim, True);
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Crypto_Add_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Add_Current_Key_At_Crypto_Module_Pending;
+         Progress := True;
+
+      when Add_Current_Key_At_Crypto_Module_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         if Job.Prev_Key_Plaintext = Key_Plaintext_Invalid then
+            Job.State := Add_Previous_Key_At_Crypto_Module_Completed;
+         else
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Primitive_Operation_Type'First,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_Crypto_Add_Key,
+               Blk_Nr => Block_Number_Type'First,
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Add_Previous_Key_At_Crypto_Module_Pending;
+         end if;
+
+         Progress := True;
+
+      when Add_Previous_Key_At_Crypto_Module_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+   end Execute_Decrypt_Keys;
+
+   --
    --  Execute_Initialize_Rekeying
    --
    procedure Execute_Initialize_Rekeying (
@@ -1366,6 +1540,10 @@ is
             Execute_FT_Extension_Step (
                Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
+         when Decrypt_Keys =>
+
+            Execute_Decrypt_Keys (Ctrl.Jobs (Idx), Idx, Progress);
+
          when Invalid =>
 
             null;
@@ -1392,6 +1570,8 @@ is
             when Create_Key_Pending |
                  Encrypt_Current_Key_Pending |
                  Encrypt_Previous_Key_Pending |
+                 Decrypt_Current_Key_Pending |
+                 Decrypt_Previous_Key_Pending |
                  Secure_SB_Pending
             =>
 
@@ -1422,7 +1602,11 @@ is
          if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
-            when Add_Key_At_Crypto_Module_Pending =>
+            when
+               Add_Key_At_Crypto_Module_Pending |
+               Add_Current_Key_At_Crypto_Module_Pending |
+               Add_Previous_Key_At_Crypto_Module_Pending
+            =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
 
@@ -2067,6 +2251,20 @@ is
             end if;
             raise Program_Error;
 
+         when Add_Previous_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Prev_Key_Plaintext;
+            end if;
+            raise Program_Error;
+
+         when Add_Current_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Curr_Key_Plaintext;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -2112,6 +2310,45 @@ is
       raise Program_Error;
 
    end Peek_Generated_Key_Value_Plaintext;
+
+   --
+   --  Peek_Generated_Key_Value_Ciphertext
+   --
+   function Peek_Generated_Key_Value_Ciphertext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Value_Ciphertext_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Decrypt_Current_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Curr_Key_Ciphertext.Value;
+            end if;
+            raise Program_Error;
+
+         when Decrypt_Previous_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Prev_Key_Ciphertext.Value;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Key_Value_Ciphertext;
 
    --
    --  Peek_Generated_Cache_Primitive
@@ -2247,6 +2484,24 @@ is
             end if;
             raise Program_Error;
 
+         when Add_Previous_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State :=
+                  Add_Previous_Key_At_Crypto_Module_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Add_Current_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State :=
+                  Add_Current_Key_At_Crypto_Module_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when Encrypt_Current_Key_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
@@ -2259,6 +2514,22 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Encrypt_Previous_Key_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Decrypt_Current_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Decrypt_Current_Key_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Decrypt_Previous_Key_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Decrypt_Previous_Key_In_Progress;
                return;
             end if;
             raise Program_Error;
@@ -2440,6 +2711,26 @@ is
             end if;
             raise Program_Error;
 
+         when Decrypt_Current_Key_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Decrypt_Current_Key_Completed;
+               Ctrl.Jobs (Idx).Curr_Key_Plaintext.Value := Key_Value;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Decrypt_Previous_Key_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Decrypt_Previous_Key_Completed;
+               Ctrl.Jobs (Idx).Prev_Key_Plaintext.Value := Key_Value;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -2570,6 +2861,30 @@ is
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
 
                Ctrl.Jobs (Idx).State := Add_Key_At_Crypto_Module_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Add_Previous_Key_At_Crypto_Module_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State :=
+                  Add_Previous_Key_At_Crypto_Module_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Add_Current_Key_At_Crypto_Module_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State :=
+                  Add_Current_Key_At_Crypto_Module_Completed;
                Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 

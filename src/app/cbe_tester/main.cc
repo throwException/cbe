@@ -74,17 +74,6 @@ struct Discard_snapshot
 };
 
 
-struct Rekey
-{
-	uint32_t key_id;
-
-	Rekey(uint32_t key_id)
-	:
-		key_id { key_id }
-	{ }
-};
-
-
 struct Extend_vbd
 {
 	uint32_t nr_of_phys_blocks;
@@ -153,7 +142,6 @@ struct Cbe::Block_session_component
 		Constructible<Block::Request>          request          { };
 		Constructible<Create_snapshot>         create_snapshot  { };
 		Constructible<Discard_snapshot>        discard_snapshot { };
-		Constructible<Rekey>                   rekey            { };
 		Constructible<Extend_vbd>              extend_vbd       { };
 		Constructible<Extend_ft>               extend_ft        { };
 		Constructible<Cbe_init::Configuration> initialize       { };
@@ -173,9 +161,6 @@ struct Cbe::Block_session_component
 			}
 			if (other.discard_snapshot.constructed()) {
 				discard_snapshot.construct(*other.discard_snapshot);
-			}
-			if (other.rekey.constructed()) {
-				rekey.construct(*other.rekey);
 			}
 			if (other.extend_vbd.constructed()) {
 				extend_vbd.construct(*other.extend_vbd);
@@ -299,23 +284,11 @@ struct Cbe::Block_session_component
 		}
 	}
 
-	void _read_rekey_node(Xml_node const &node)
+	void _read_rekey_node()
 	{
-		struct Bad_rekey_node : Exception { };
-		try {
-			uint32_t key_id { 0 };
-			if (!node.attribute("key_id").value(key_id)) {
-				error("rekey node has bad key_id attribute");
-				throw Bad_rekey_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::REKEY;
-			test.rekey.construct(key_id);
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("rekey node misses attribute");
-			throw Bad_rekey_node();
-		}
+		Test &test = *new (_alloc) Test;
+		test.type = Test::REKEY;
+		_test_queue.enqueue(test);
 	}
 
 	void _read_extend_vbd_node(Xml_node const &node)
@@ -369,7 +342,7 @@ struct Cbe::Block_session_component
 				} else if (sub_node.has_type("discard-snapshot")) {
 					_read_discard_snapshot_node(sub_node);
 				} else if (sub_node.has_type("rekey")) {
-					_read_rekey_node(sub_node);
+					_read_rekey_node();
 				} else if (sub_node.has_type("extend-vbd")) {
 					_read_extend_vbd_node(sub_node);
 				} else if (sub_node.has_type("extend-ft")) {
@@ -676,21 +649,18 @@ struct Cbe::Block_session_component
 			_test_in_progress.construct(test);
 			destroy(_alloc, &test);
 		});
-		log("rekey started: key_id ",
-		    _test_in_progress->rekey->key_id);
+		log("rekey started");
 
-		fn(*_test_in_progress->rekey);
+		fn();
 	}
 
 	void rekey_done(bool success)
 	{
 		if (success) {
-			log("rekey succeeded: id ",
-		    _test_in_progress->rekey->key_id);
+			log("rekey succeeded");
 		} else {
 			_nr_of_failed_tests++;
-			log("rekey failed: id ",
-		    _test_in_progress->rekey->key_id);
+			log("rekey failed");
 		}
 		_test_in_progress.destruct();
 	}
@@ -940,7 +910,6 @@ struct Cbe::Block_session_component
 		});
 
 		log("initialize started:  vbd:",
-		    " key ", _test_in_progress->initialize->key_id(),
 		    ", lvls ", _test_in_progress->initialize->vbd_nr_of_lvls(),
 		    ", degr ", _test_in_progress->initialize->vbd_nr_of_children(),
 		    ", leafs ", _test_in_progress->initialize->vbd_nr_of_leafs(),
@@ -1017,7 +986,6 @@ class Cbe::Main
 		bool                                    _discard_snapshot        { false };
 		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
 		bool                                    _rekey                   { false };
-		Rekey                                   _rekey_obj               { 0 };
 		bool                                    _extend_vbd              { false };
 		Extend_vbd                              _extend_vbd_obj          { 0 };
 		bool                                    _extend_ft               { false };
@@ -1476,7 +1444,7 @@ class Cbe::Main
 			}
 
 			if (!_rekey) {
-				_block_session->with_rekey([&] (Rekey const rekey) {
+				_block_session->with_rekey([&] () {
 
 					struct Rekey_request_not_acceptable { };
 					if (!_cbe->client_request_acceptable()) {
@@ -1489,11 +1457,10 @@ class Cbe::Main
 						0,
 						0,
 						0,
-						rekey.key_id,
+						0,
 						0);
 
 					_cbe->submit_client_request(req, 0);
-					_rekey_obj = { rekey.key_id };
 					_rekey = true;
 					progress |= true;
 				});
@@ -1505,8 +1472,7 @@ class Cbe::Main
 				if (req.valid()) {
 
 					struct Unexpected_request : Genode::Exception { };
-					if (req.operation() != Cbe::Request::Operation::REKEY ||
-					    req.key_id() != _rekey_obj.key_id)
+					if (req.operation() != Cbe::Request::Operation::REKEY)
 					{
 						throw Unexpected_request();
 					}
@@ -1514,7 +1480,6 @@ class Cbe::Main
 						req.success() ==
 							Cbe::Request::Success::TRUE ? true : false);
 
-					_rekey_obj = { 0 };
 					_rekey = false;
 					_cbe->drop_completed_client_request(req);
 
@@ -2014,7 +1979,6 @@ class Cbe::Main
 						Cbe::Request(
 							Cbe::Request::Operation::READ,
 							Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0),
-						cfg.key_id(),
 						cfg.vbd_nr_of_lvls() - 1,
 						cfg.vbd_nr_of_children(),
 						cfg.vbd_nr_of_leafs(),
@@ -2159,25 +2123,6 @@ class Cbe::Main
 		:
 			_env { env }
 		{
-			_config_rom.xml().with_sub_node ("crypto", [&] (Xml_node const &crypto) {
-				crypto.for_each_sub_node("key", [&] (Xml_node const &key) {
-					External::Crypto::Key_data data { };
-
-					Genode::memcpy(
-						data.value,
-						key.attribute_value ("value", String<33>("")).string(),
-						32);
-
-					unsigned const id { key.attribute_value ("id", (unsigned)0) };
-
-					log("add crypto key ID " , id, " value \"",
-					    String<33>(Cstring((char const*)data.value)).string(),
-					    "\"");
-
-					_crypto.add_key(id, data);
-				});
-			});
-
 			/*
 			 * Install signal handler for the backend Block connection.
 			 *

@@ -28,7 +28,6 @@ struct Cbe_init::Library : Cbe::Spark_object<60960>
 	bool client_request_acceptable() const;
 
 	void submit_client_request(Cbe::Request const &request,
-	                           Genode::uint32_t    key_id,
 	                           Genode::uint64_t    vbd_max_lvl_idx,
 	                           Genode::uint64_t    vbd_degree,
 	                           Genode::uint64_t    vbd_nr_of_leafs,

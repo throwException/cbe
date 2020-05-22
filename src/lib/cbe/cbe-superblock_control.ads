@@ -48,6 +48,15 @@ is
       Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    --
+   --  Submit_Primitive_Decrypt_Keys
+   --
+   procedure Submit_Primitive_Decrypt_Keys (
+      Ctrl     : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Prev_Key :        Key_Ciphertext_Type;
+      Curr_Key :        Key_Ciphertext_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Ctrl : Control_Type)
@@ -60,6 +69,15 @@ is
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type)
    return Boolean;
+
+   --
+   --  Peek_Completed_Decrypted_Keys_Plaintext
+   --
+   procedure Peek_Completed_Decrypted_Keys_Plaintext (
+      Ctrl     : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Prev_Key :    out Key_Plaintext_Type;
+      Curr_Key :    out Key_Plaintext_Type);
 
    --
    --  Drop_Completed_Primitive
@@ -111,6 +129,14 @@ is
       Ctrl : Control_Type;
       Prim : Primitive.Object_Type)
    return Key_Value_Plaintext_Type;
+
+   --
+   --  Peek_Generated_Key_Value_Ciphertext
+   --
+   function Peek_Generated_Key_Value_Ciphertext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Value_Ciphertext_Type;
 
    --
    --  Peek_Generated_Key_Plaintext
@@ -323,7 +349,8 @@ private
       VBD_Extension_Step,
       FT_Extension_Step,
       Initialize_Rekeying,
-      Rekey_VBA);
+      Rekey_VBA,
+      Decrypt_Keys);
 
    type Job_State_Type is (
       Submitted,
@@ -345,12 +372,24 @@ private
       Encrypt_Previous_Key_Pending,
       Encrypt_Previous_Key_In_Progress,
       Encrypt_Previous_Key_Completed,
+      Decrypt_Current_Key_Pending,
+      Decrypt_Current_Key_In_Progress,
+      Decrypt_Current_Key_Completed,
+      Decrypt_Previous_Key_Pending,
+      Decrypt_Previous_Key_In_Progress,
+      Decrypt_Previous_Key_Completed,
       Sync_Cache_Pending,
       Sync_Cache_In_Progress,
       Sync_Cache_Completed,
       Add_Key_At_Crypto_Module_Pending,
       Add_Key_At_Crypto_Module_In_Progress,
       Add_Key_At_Crypto_Module_Completed,
+      Add_Previous_Key_At_Crypto_Module_Pending,
+      Add_Previous_Key_At_Crypto_Module_In_Progress,
+      Add_Previous_Key_At_Crypto_Module_Completed,
+      Add_Current_Key_At_Crypto_Module_Pending,
+      Add_Current_Key_At_Crypto_Module_In_Progress,
+      Add_Current_Key_At_Crypto_Module_Completed,
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,
@@ -379,6 +418,10 @@ private
       FT_Root : Type_1_Node_Type;
       FT_Max_Lvl_Idx : Tree_Level_Index_Type;
       FT_Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
+      Prev_Key_Ciphertext : Key_Ciphertext_Type;
+      Curr_Key_Ciphertext : Key_Ciphertext_Type;
+      Prev_Key_Plaintext : Key_Plaintext_Type;
+      Curr_Key_Plaintext : Key_Plaintext_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -429,6 +472,14 @@ private
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
       Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Decrypt_Keys
+   --
+   procedure Execute_Decrypt_Keys (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
       Progress      : in out Boolean);
 
    --

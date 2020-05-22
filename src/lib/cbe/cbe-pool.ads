@@ -146,6 +146,7 @@ private
       Pending,
       In_Progress,
       Submitted,
+      Submitted_Resume_Rekeying,
       Rekey_Init_Pending,
       Rekey_Init_In_Progress,
       Rekey_Init_Complete,
@@ -160,6 +161,9 @@ private
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
+      Decrypt_Keys_Pending,
+      Decrypt_Keys_In_Progress,
+      Decrypt_Keys_Complete,
       Complete);
 
    type Item_Type is record
@@ -218,6 +222,15 @@ private
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Decrypt_Keys
+   --
+   procedure Execute_Decrypt_Keys (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

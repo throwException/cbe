@@ -30,7 +30,6 @@ is
    procedure Submit_Client_Request (
       Obj             : in out Init_Library.Object_Type;
       Req             :        CXX_Request_Type;
-      Key_ID          :        CXX_Key_ID_Type;
       VBD_Max_Lvl_Idx :        CXX_Tree_Level_Index_Type;
       VBD_Degree      :        CXX_Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        CXX_Tree_Number_Of_Leafs_Type;
@@ -41,7 +40,6 @@ is
    begin
       Init_Library.Submit_Client_Request (
          Obj, CXX_Request_To_SPARK (Req),
-         Key_ID_Type (Key_ID),
          Tree_Level_Index_Type (VBD_Max_Lvl_Idx),
          Tree_Degree_Type (VBD_Degree),
          Tree_Number_Of_Leafs_Type (VBD_Nr_Of_Leafs),

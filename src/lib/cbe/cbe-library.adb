@@ -130,6 +130,49 @@ is
                Physical_Block_Address_Type (Obj.Superblock.Nr_Of_PBAs - 1))) &
          " ");
 
+      Declare_Decrypt_Keys_Request :
+      declare
+         Req : constant Request.Object_Type :=
+            Request.Valid_Object (
+               Op     => Decrypt_Keys,
+               Succ   => False,
+               Blk_Nr => Block_Number_Type (0),
+               Off    => 0,
+               Cnt    => 0,
+               Key    => 0,
+               Tg     => 0);
+      begin
+
+         if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
+            raise Program_Error;
+         end if;
+
+         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+      end Declare_Decrypt_Keys_Request;
+
+      if Obj.Superblock.State = Rekeying then
+
+         Declare_Resume_Rekeying_Request :
+         declare
+            Req : constant Request.Object_Type :=
+               Request.Valid_Object (
+                  Op     => Resume_Rekeying,
+                  Succ   => False,
+                  Blk_Nr => Block_Number_Type (0),
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+         begin
+
+            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
+               raise Program_Error;
+            end if;
+
+            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+         end Declare_Resume_Rekeying_Request;
+      end if;
+
    end Initialize_Object;
 
    procedure Create_Snapshot (
@@ -302,7 +345,9 @@ is
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
          Obj.Sync_Pending := True;
 
-      when Create_Snapshot | Discard_Snapshot =>
+      when
+         Create_Snapshot | Discard_Snapshot | Decrypt_Keys | Resume_Rekeying
+      =>
          raise Program_Error;
 
       end case;
@@ -321,7 +366,9 @@ is
       when Read | Write | Sync | Rekey | Extend_VBD | Extend_FT =>
          return Req;
 
-      when Create_Snapshot | Discard_Snapshot =>
+      when
+         Create_Snapshot | Discard_Snapshot | Decrypt_Keys | Resume_Rekeying
+      =>
          return Request.Invalid_Object;
       end case;
    end Peek_Completed_Client_Request;
@@ -2004,6 +2051,33 @@ is
 
                Progress := True;
 
+            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
+
+               Declare_Ciphertext_Keys :
+               declare
+                  Previous_Key : constant Key_Ciphertext_Type := (
+                     Value => Key_Value_Ciphertext_Type (
+                        Obj.Superblock.Previous_Key.Value),
+                     ID => Obj.Superblock.Previous_Key.ID);
+                  Current_Key : constant Key_Ciphertext_Type := (
+                     Value => Key_Value_Ciphertext_Type (
+                        Obj.Superblock.Current_Key.Value),
+                     ID => Obj.Superblock.Current_Key.ID);
+               begin
+                  Obj.Superblock.Previous_Key := Key_Plaintext_Invalid;
+                  Obj.Superblock.Current_Key  := Key_Plaintext_Invalid;
+
+                  Superblock_Control.Submit_Primitive_Decrypt_Keys (
+                     Obj.SB_Ctrl, Prim, Previous_Key,
+                     Current_Key);
+               end Declare_Ciphertext_Keys;
+
+               Pool.Drop_Generated_Primitive (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
+
+               Progress := True;
+
             when others =>
 
                raise Program_Error;
@@ -2013,6 +2087,30 @@ is
          end Declare_SB_Ctrl_Prim;
 
       end loop Loop_Pool_Generated_SB_Ctrl_Prims;
+
+      Loop_Pool_Completed_Decrypt_Keys_Reqs :
+      loop
+         Declare_Completed_Decrypt_Keys_Req :
+         declare
+            Req : constant Request.Object_Type :=
+               Pool.Peek_Completed_Request (Obj.Request_Pool_Obj);
+         begin
+
+            exit Loop_Pool_Completed_Decrypt_Keys_Reqs when
+               not Request.Valid (Req);
+
+            case Request.Operation (Req) is
+            when Decrypt_Keys =>
+
+               Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
+
+            when others =>
+
+               exit Loop_Pool_Completed_Decrypt_Keys_Reqs;
+
+            end case;
+         end Declare_Completed_Decrypt_Keys_Req;
+      end loop Loop_Pool_Completed_Decrypt_Keys_Reqs;
 
    end Execute_Request_Pool;
 
@@ -2521,6 +2619,13 @@ is
                   Superblock_Control.Peek_Generated_Key_Value_Plaintext (
                      Obj.SB_Ctrl, Prim));
 
+            when Primitive.Tag_SB_Ctrl_TA_Decrypt_Key =>
+
+               Trust_Anchor.Submit_Primitive_Key_Value_Ciphertext (
+                  Obj.TA, Prim,
+                  Superblock_Control.Peek_Generated_Key_Value_Ciphertext (
+                     Obj.SB_Ctrl, Prim));
+
             when Primitive.Tag_SB_Ctrl_TA_Secure_SB =>
 
                Trust_Anchor.Submit_Primitive_Hash (
@@ -2683,6 +2788,21 @@ is
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;
 
+            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
+
+               Superblock_Control.Peek_Completed_Decrypted_Keys_Plaintext (
+                  Obj.SB_Ctrl, Prim,
+                  Obj.Superblock.Previous_Key,
+                  Obj.Superblock.Current_Key);
+
+               Pool.Mark_Generated_Primitive_Complete (
+                  Obj.Request_Pool_Obj,
+                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+                  Primitive.Success (Prim));
+
+               Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
             when others =>
 
                raise Program_Error;
@@ -2731,6 +2851,17 @@ is
                   Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
                      Obj.SB_Ctrl, Prim,
                      Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
+                        Obj.TA, Prim));
+
+               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_TA_Decrypt_Key =>
+
+               Superblock_Control.
+                  Mark_Generated_Prim_Complete_Key_Value_Plaintext (
+                     Obj.SB_Ctrl, Prim,
+                     Trust_Anchor.Peek_Completed_Key_Value_Plaintext (
                         Obj.TA, Prim));
 
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);

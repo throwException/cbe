@@ -178,7 +178,6 @@ class Main
 					Cbe::Request(
 						Cbe::Request::Operation::READ,
 						Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0),
-					cfg.key_id(),
 					cfg.vbd_nr_of_lvls() - 1,
 					cfg.vbd_nr_of_children(),
 					cfg.vbd_nr_of_leafs(),

@@ -18,7 +18,6 @@ class Cbe_init::Configuration
 {
 	private:
 
-		Genode::uint32_t _key_id             { 0 };
 		Genode::uint64_t _vbd_nr_of_lvls     { 0 };
 		Genode::uint64_t _vbd_nr_of_children { 0 };
 		Genode::uint64_t _vbd_nr_of_leafs    { 0 };
@@ -32,11 +31,6 @@ class Cbe_init::Configuration
 
 		Configuration (Genode::Xml_node const &node)
 		{
-			node.with_sub_node("key",
-			                   [&] (Genode::Xml_node const &vbd)
-			{
-				_key_id = vbd.attribute_value("id", (Genode::uint32_t)0);
-			});
 			node.with_sub_node("virtual-block-device",
 			                   [&] (Genode::Xml_node const &vbd)
 			{
@@ -62,8 +56,7 @@ class Cbe_init::Configuration
 				_vbd_nr_of_leafs    == 0 ||
 				_ft_nr_of_lvls      == 0 ||
 				_ft_nr_of_children  == 0 ||
-				_ft_nr_of_leafs     == 0 ||
-				_key_id             == 0)
+				_ft_nr_of_leafs     == 0)
 			{
 				throw Invalid();
 			}
@@ -71,7 +64,6 @@ class Cbe_init::Configuration
 
 		Configuration (Configuration const &other)
 		{
-			_key_id             = other._key_id            ;
 			_vbd_nr_of_lvls     = other._vbd_nr_of_lvls    ;
 			_vbd_nr_of_children = other._vbd_nr_of_children;
 			_vbd_nr_of_leafs    = other._vbd_nr_of_leafs   ;
@@ -80,7 +72,6 @@ class Cbe_init::Configuration
 			_ft_nr_of_leafs     = other._ft_nr_of_leafs    ;
 		}
 
-		Genode::uint32_t key_id             () const { return _key_id            ; }
 		Genode::uint64_t vbd_nr_of_lvls     () const { return _vbd_nr_of_lvls    ; }
 		Genode::uint64_t vbd_nr_of_children () const { return _vbd_nr_of_children; }
 		Genode::uint64_t vbd_nr_of_leafs    () const { return _vbd_nr_of_leafs   ; }

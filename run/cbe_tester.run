@@ -93,15 +93,9 @@ append config {
 		<resource name="RAM" quantum="80M"/>
 		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
 
-			<crypto>
-				<key id="12" value="All your base are belong to us ?"/>
-			</crypto>
-
 			<tests>
 
 				<initialize>
-					<key id="12" />
-
 					<virtual-block-device
 						nr_of_levels="3"
 						nr_of_children="16"
@@ -115,11 +109,18 @@ append config {
 
 				<replay verbose="yes" bulk="no">
 
-					<request type="write" lba="1" count="1"/>
+					<request type="write" lba="1" count="100"/>
 					<extend-ft nr_of_phys_blocks="1" />
-					<request type="write" lba="1" count="1"/>
-					<extend-ft nr_of_phys_blocks="1" />
-					<request type="write" lba="1" count="1"/>
+					<request type="write" lba="2" count="100"/>
+					<extend-ft nr_of_phys_blocks="100" />
+					<extend-vbd nr_of_phys_blocks="1" />
+					<request type="write" lba="3" count="100"/>
+					<rekey />
+					<request type="write" lba="4" count="100"/>
+					<extend-vbd nr_of_phys_blocks="100" />
+					<request type="write" lba="5" count="100"/>
+					<rekey />
+					<request type="write" lba="6" count="100"/>
 
 <!--
 

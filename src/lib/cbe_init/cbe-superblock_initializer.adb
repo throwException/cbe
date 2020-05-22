@@ -55,7 +55,8 @@ is
       SB.Resizing_Nr_Of_PBAs     := 0;
       SB.Resizing_Nr_Of_Leaves   := 0;
       SB.Current_Key             := (
-         Value => Obj.Key_Cipher, ID => Obj.Key_ID);
+         Value => Obj.Key_Cipher,
+         ID => 1);
       SB.Previous_Key            := Key_Ciphertext_Invalid;
       SB.Curr_Snap               := 0;
       SB.Degree                  := Obj.VBD_Degree;
@@ -110,7 +111,6 @@ is
    procedure Submit_Primitive (
       Obj             : in out Object_Type;
       Prim            :        Primitive.Object_Type;
-      Key_ID          :        Key_ID_Type;
       VBD_Max_Lvl_Idx :        Tree_Level_Index_Type;
       VBD_Degree      :        Tree_Degree_Type;
       VBD_Nr_Of_Leafs :        Tree_Number_Of_Leafs_Type;
@@ -127,7 +127,6 @@ is
       end if;
       Obj.Submitted_Prim := Prim;
       Obj.SB_Slot_State := Init;
-      Obj.Key_ID := Key_ID;
       Obj.VBD_Max_Lvl_Idx := VBD_Max_Lvl_Idx;
       Obj.VBD_Degree := VBD_Degree;
       Obj.VBD_Nr_Of_Leafs := VBD_Nr_Of_Leafs;
