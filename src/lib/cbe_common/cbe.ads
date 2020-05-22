@@ -202,6 +202,10 @@ is
    return Boolean
    is (Node.PBA /= 0);
 
+   function Type_2_Node_Valid (Node : Type_2_Node_Type)
+   return Boolean
+   is (Node.PBA /= 0);
+
    function Type_1_Node_Invalid
    return Type_1_Node_Type
    is (

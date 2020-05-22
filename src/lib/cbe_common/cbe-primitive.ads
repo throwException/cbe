@@ -66,6 +66,8 @@ is
       Tag_SB_Ctrl_Blk_IO_Write_SB,
       Tag_SB_Ctrl_Blk_IO_Sync,
       Tag_VBD_Rkg_Cache,
+      Tag_FT_Rszg_Cache,
+      Tag_FT_Rszg_MT_Alloc,
       Tag_VBD_Rkg_Blk_IO,
       Tag_VBD_Rkg_Crypto_Encrypt,
       Tag_VBD_Rkg_Crypto_Decrypt,
@@ -147,6 +149,8 @@ is
       when Tag_SB_Ctrl_Crypto_Add_Key => "SB_Ctrl_Crypto_Add_Key",
       when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
       when Tag_VBD_Rkg_Cache => "VBD_Rkg_Cache",
+      when Tag_FT_Rszg_Cache => "FT_Rszg_Cache",
+      when Tag_FT_Rszg_MT_Alloc => "FT_Rszg_MT_Alloc",
       when Tag_VBD_Rkg_Blk_IO => "VBD_Rkg_Blk_IO",
       when Tag_VBD_Rkg_Crypto_Encrypt => "VBD_Rkg_Crypto_Encrypt",
       when Tag_VBD_Rkg_Crypto_Decrypt => "VBD_Rkg_Crypto_Decrypt",
@@ -364,6 +368,8 @@ is
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Cache (Obj : Object_Type) return Boolean;
+   function Has_Tag_FT_Rszg_Cache (Obj : Object_Type) return Boolean;
+   function Has_Tag_FT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Crypto_Decrypt (Obj : Object_Type) return Boolean;
