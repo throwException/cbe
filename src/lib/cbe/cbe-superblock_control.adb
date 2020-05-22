@@ -112,7 +112,10 @@ is
             Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             SB_Ciphertext => Superblock_Ciphertext_Invalid,
             Request_Finished => Boolean'First,
-            Snapshots => (others => Snapshot_Invalid));
+            Snapshots => (others => Snapshot_Invalid),
+            FT_Root => Type_1_Node_Invalid,
+            FT_Max_Lvl_Idx => Tree_Level_Index_Type'First,
+            FT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -753,8 +756,11 @@ is
 
          end Declare_New_First_Unused_PBA;
 
-         SB.Snapshots := Job.Snapshots;
-         SB.Curr_Snap := Newest_Snapshot_Idx (Job.Snapshots);
+         SB.Free_Gen       := Job.FT_Root.Gen;
+         SB.Free_Number    := Job.FT_Root.PBA;
+         SB.Free_Hash      := Job.FT_Root.Hash;
+         SB.Free_Max_Level := Job.FT_Max_Lvl_Idx;
+         SB.Free_Leafs     := Job.FT_Nr_Of_Leaves;
 
          if Job.Nr_Of_Blks > 0 then
 
@@ -2325,12 +2331,14 @@ is
    --  Mark_Generated_Prim_Complete_FT_Ext
    --
    procedure Mark_Generated_Prim_Complete_FT_Ext (
-      Ctrl         : in out Control_Type;
-      Prim         :        Primitive.Object_Type;
-      Snapshots    :        Snapshots_Type;
-      First_PBA    :        Physical_Block_Address_Type;
-      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
-      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type)
+      Ctrl            : in out Control_Type;
+      Prim            :        Primitive.Object_Type;
+      FT_Root         :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type;
+      First_PBA       :        Physical_Block_Address_Type;
+      Nr_Of_PBAs      :        Number_Of_Blocks_Type;
+      Nr_Of_Leaves    :        Tree_Number_Of_Leafs_Type)
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
@@ -2342,7 +2350,9 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := FT_Ext_Step_In_FT_Completed;
-               Ctrl.Jobs (Idx).Snapshots := Snapshots;
+               Ctrl.Jobs (Idx).FT_Root := FT_Root;
+               Ctrl.Jobs (Idx).FT_Max_Lvl_Idx := FT_Max_Lvl_Idx;
+               Ctrl.Jobs (Idx).FT_Nr_Of_Leaves := FT_Nr_Of_Leaves;
                Ctrl.Jobs (Idx).PBA := First_PBA;
                Ctrl.Jobs (Idx).Nr_Of_Blks := Nr_Of_PBAs;
                Ctrl.Jobs (Idx).Nr_Of_Leaves := Nr_Of_Leaves;

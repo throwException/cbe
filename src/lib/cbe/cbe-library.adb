@@ -112,6 +112,7 @@ is
 
       Obj.WB_Prim := Primitive.Invalid_Object;
 
+      FT_Resizing.Initialize_Resizing (Obj.FT_Rszg);
       Superblock_Control.Initialize_Control (Obj.SB_Ctrl);
       Trust_Anchor.Initialize_Anchor (Obj.TA);
       VBD_Rekeying.Initialize_Rekeying (Obj.VBD_Rkg);
@@ -1155,7 +1156,9 @@ is
                "Loop_Completed_Meta_Tree_Primitives: "
                & Primitive.To_String (Prim)));
 
-            if Primitive.Has_Tag_FT_MT (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_FT_MT =>
+
                declare
                   Node : constant Type_1_Node_Type :=
                      Meta_Tree.Peek_Completed_Root_Node (Obj.Meta_Tree_Obj,
@@ -1181,9 +1184,33 @@ is
                Meta_Tree.Drop_Completed_Primitive (
                   Obj.Meta_Tree_Obj, Prim);
                Progress := True;
-            else
+
+            when Primitive.Tag_FT_Rszg_MT_Alloc =>
+
+               declare
+                  Node : constant Type_1_Node_Type :=
+                     Meta_Tree.Peek_Completed_Root_Node (Obj.Meta_Tree_Obj,
+                        Prim);
+               begin
+                  Obj.Superblock.Meta_Gen    := Node.Gen;
+                  Obj.Superblock.Meta_Number := Node.PBA;
+                  Obj.Superblock.Meta_Hash   := Node.Hash;
+               end;
+
+               FT_Resizing.Mark_Generated_Prim_Completed_New_PBA (
+                  Obj.FT_Rszg, Prim,
+                  Meta_Tree.Peek_Completed_New_PBA (Obj.Meta_Tree_Obj, Prim));
+
+               Meta_Tree.Drop_Completed_Primitive (
+                  Obj.Meta_Tree_Obj, Prim);
+
+               Progress := True;
+
+            when others =>
+
                raise Program_Error;
-            end if;
+
+            end case;
          end;
       end loop Loop_Completed_Meta_Tree_Primitives;
    end Execute_Meta_Tree;
@@ -1710,6 +1737,25 @@ is
 
             end case;
 
+         when Primitive.Tag_FT_Rszg_Cache =>
+
+            case Primitive.Operation (Prim) is
+            when Read =>
+
+               FT_Resizing.Mark_Generated_Prim_Completed_Blk_Data (
+                  Obj.FT_Rszg, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            when Write | Sync =>
+
+               FT_Resizing.Mark_Generated_Prim_Completed (Obj.FT_Rszg, Prim);
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            end case;
+
          when others => raise Program_Error;
          end case;
 
@@ -1969,6 +2015,125 @@ is
       end loop Loop_Pool_Generated_SB_Ctrl_Prims;
 
    end Execute_Request_Pool;
+
+   --
+   --  Execute_FT_Rszg
+   --
+   procedure Execute_FT_Rszg (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      FT_Resizing.Execute (Obj.FT_Rszg, Progress);
+
+      Loop_Generated_MT_Prims :
+      loop
+
+         Declare_MT_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               FT_Resizing.Peek_Generated_MT_Primitive (Obj.FT_Rszg);
+         begin
+            exit Loop_Generated_MT_Prims when
+               not Primitive.Valid (Prim) or else
+               not Meta_Tree.Request_Acceptable (Obj.Meta_Tree_Obj);
+
+            Meta_Tree.Submit_Primitive (
+               Obj.Meta_Tree_Obj,
+               Prim,
+               (PBA => Obj.Superblock.Meta_Number,
+                Gen => Obj.Superblock.Meta_Gen,
+                Hash => Obj.Superblock.Meta_Hash),
+               (Max_Level => Obj.Superblock.Meta_Max_Level,
+                Edges => Obj.Superblock.Meta_Degree,
+                Leafs => Obj.Superblock.Meta_Leafs),
+               FT_Resizing.Peek_Generated_Curr_Gen (Obj.FT_Rszg, Prim),
+               FT_Resizing.Peek_Generated_Old_PBA (Obj.FT_Rszg, Prim));
+
+            FT_Resizing.Drop_Generated_Primitive (Obj.FT_Rszg, Prim);
+            Progress := True;
+
+         end Declare_MT_Prim;
+
+      end loop Loop_Generated_MT_Prims;
+
+      Loop_Generated_Cache_Prims :
+      loop
+         Declare_Cache_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               FT_Resizing.Peek_Generated_Cache_Primitive (Obj.FT_Rszg);
+         begin
+            exit Loop_Generated_Cache_Prims when
+               not Primitive.Valid (Prim) or else
+               not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+            case Primitive.Operation (Prim) is
+            when Write =>
+
+               Declare_Cache_Job_Idx :
+               declare
+                  Idx : Cache.Jobs_Index_Type;
+               begin
+
+                  Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Idx);
+                  Obj.Cache_Jobs_Data (Idx) :=
+                     FT_Resizing.Peek_Generated_Blk_Data (Obj.FT_Rszg, Prim);
+
+               end Declare_Cache_Job_Idx;
+
+               FT_Resizing.Drop_Generated_Primitive (Obj.FT_Rszg, Prim);
+               Progress := True;
+
+            when Read | Sync =>
+
+               Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
+               FT_Resizing.Drop_Generated_Primitive (Obj.FT_Rszg, Prim);
+               Progress := True;
+
+            end case;
+
+         end Declare_Cache_Prim;
+      end loop Loop_Generated_Cache_Prims;
+
+      Loop_Completed_Prims :
+      loop
+         Declare_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               FT_Resizing.Peek_Completed_Primitive (Obj.FT_Rszg);
+         begin
+            exit Loop_Completed_Prims when not Primitive.Valid (Prim);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_FT_Ext (
+                  Obj.SB_Ctrl,
+                  Prim,
+                  FT_Resizing.Peek_Completed_FT_Root (Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Completed_FT_Max_Lvl_Idx (
+                     Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Completed_FT_Nr_Of_Leaves (
+                     Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Completed_PBA (Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Completed_Nr_Of_PBAs (Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Completed_Nr_Of_Leaves (
+                     Obj.FT_Rszg, Prim));
+
+               FT_Resizing.Drop_Completed_Primitive (Obj.FT_Rszg, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Prim;
+      end loop Loop_Completed_Prims;
+
+   end Execute_FT_Rszg;
 
    --
    --  Execute_VBD_Rkg
@@ -2300,34 +2465,29 @@ is
                   Obj.SB_Ctrl);
          begin
             exit Loop_Generated_FT_Rszg_Prims when
-               not Primitive.Valid (Prim);
---  or else
---               not FT_Resizing.Primitive_Acceptable (Obj.FT_Rszg);
+               not Primitive.Valid (Prim) or else
+               not FT_Resizing.Primitive_Acceptable (Obj.FT_Rszg);
 
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step =>
 
---               FT_Resizing.Submit_Primitive_Resizing (
---                  Obj.FT_Rszg, Prim, Obj.Cur_Gen,
---                  Superblock_Control.Peek_Generated_Last_Secured_Gen (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_FT_Root (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_FT_Max_Lvl_Idx (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_FT_Nr_Of_Leaves (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_FT_Degree (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_PBA (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock),
---                  Superblock_Control.Peek_Generated_Nr_Of_Blks (
---                     Obj.SB_Ctrl, Prim, Obj.Superblock));
+               FT_Resizing.Submit_Primitive (
+                  Obj.FT_Rszg, Prim, Obj.Cur_Gen,
+                  Superblock_Control.Peek_Generated_FT_Root (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_FT_Max_Lvl_Idx (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_FT_Nr_Of_Leaves (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_FT_Degree (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_PBA (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Nr_Of_Blks (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock));
 
                Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;
-
-               raise Program_Error;
 
             when others =>
 
@@ -3313,6 +3473,7 @@ is
       Execute_TA (Obj, Progress);
       Execute_VBD_Rkg (
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
+      Execute_FT_Rszg (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);

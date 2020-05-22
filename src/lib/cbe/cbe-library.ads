@@ -22,6 +22,7 @@ with CBE.Meta_Tree;
 with CBE.Superblock_Control;
 with CBE.Trust_Anchor;
 with CBE.VBD_Rekeying;
+with CBE.FT_Resizing;
 
 package CBE.Library
 with SPARK_Mode
@@ -504,6 +505,7 @@ private
       SB_Ctrl : Superblock_Control.Control_Type;
       TA      : Trust_Anchor.Anchor_Type;
       VBD_Rkg : VBD_Rekeying.Rekeying_Type;
+      FT_Rszg : FT_Resizing.Resizing_Type;
 
    end record;
 
@@ -595,6 +597,13 @@ private
       Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean);
+
+   --
+   --  Execute_FT_Rszg
+   --
+   procedure Execute_FT_Rszg (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
 
    procedure Execute_Writeback (
       Obj              : in out Object_Type;

@@ -276,12 +276,14 @@ is
    --  Mark_Generated_Prim_Complete_FT_Ext
    --
    procedure Mark_Generated_Prim_Complete_FT_Ext (
-      Ctrl         : in out Control_Type;
-      Prim         :        Primitive.Object_Type;
-      Snapshots    :        Snapshots_Type;
-      First_PBA    :        Physical_Block_Address_Type;
-      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
-      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type);
+      Ctrl            : in out Control_Type;
+      Prim            :        Primitive.Object_Type;
+      FT_Root         :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type;
+      First_PBA       :        Physical_Block_Address_Type;
+      Nr_Of_PBAs      :        Number_Of_Blocks_Type;
+      Nr_Of_Leaves    :        Tree_Number_Of_Leafs_Type);
 
    --
    --  Mark_Generated_Prim_Complete_Key_Value_Plaintext
@@ -374,6 +376,9 @@ private
       Snapshots : Snapshots_Type;
       PBA : Physical_Block_Address_Type;
       Nr_Of_Blks : Number_Of_Blocks_Type;
+      FT_Root : Type_1_Node_Type;
+      FT_Max_Lvl_Idx : Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
