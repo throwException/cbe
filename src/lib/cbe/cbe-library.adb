@@ -114,6 +114,7 @@ is
 
       Superblock_Control.Initialize_Control (Obj.SB_Ctrl);
       Trust_Anchor.Initialize_Anchor (Obj.TA);
+      VBD_Rekeying.Initialize_Rekeying (Obj.VBD_Rkg);
 
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
