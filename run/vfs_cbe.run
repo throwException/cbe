@@ -22,7 +22,6 @@ proc cbe_image_file { } {
 }
 
 set use_interactively [expr ![get_cmd_switch --autopilot]]
-set use_block 0
 
 import_from_depot [depot_user]/src/[base_src] \
                   [depot_user]/pkg/[drivers_interactive_pkg] \
@@ -39,7 +38,6 @@ import_from_depot [depot_user]/src/[base_src] \
                   [depot_user]/src/log_terminal
 
 build {
-	server/lx_block
 	server/lx_fs
 	lib/vfs/cbe
 	test/vfs_stress
@@ -104,51 +102,29 @@ append_if [expr !$use_interactively] config {
 		</route>
 	</start>}
 
-append_if $use_block config {
-	<start name="block_device" ld="no">
-		<binary name="lx_block"/>
-		<resource name="RAM" quantum="2M"/>
-		<provides> <service name="Block"/> </provides>
-		<config file="} [cbe_image_file] {" block_size="4K" writeable="yes"/>
-	</start>}
-
-append_if [expr !$use_block] config {
+append config {
 	<start name="lx_fs" ld="no">
 		<resource name="RAM" quantum="4M"/>
 		<provides> <service name="File_system"/> </provides>
 		<config>
 			<default-policy root="/" writeable="yes"/>
 		</config>
-	</start>}
-
-append config {
+	</start>
 
 	<start name="vfs_cbe" caps="120">
 		<binary name="vfs"/>
 		<resource name="RAM" quantum="30M"/>
 		<provides><service name="File_system"/></provides>
 		<config>
-			<vfs>}
-
-append_if $use_block config {
-				<block name="block" label="block_backend"/>}
-append_if [expr !$use_block] config {
-				<fs buffer_size="1M" label="fs_backend"/>}
-
-append_if $use_block config {
-				<cbe name="cbe" show_progress="no" block="/block">}
-
-append_if [expr !$use_block] config "<cbe name=\"cbe\" show_progress=\"no\" block=\"/[cbe_image_file]\">"
-
-append config {
-					<!-- key smallest id in sync with init run scripts -->
-					<crypto>
-						<key id="12" value="All your base are belong to us ?"/>
-					</crypto>
-				</cbe>
+			<vfs>
+				<fs buffer_size="1M" label="fs_backend"/>
+				<dir name="dev">
+					<cbe name="cbe" debug="no" verbose="yes"
+                         block="/} [cbe_image_file] {"/>
+				</dir>
 			</vfs>
 
-			<default-policy root="/" writeable="yes"/>
+			<default-policy root="/dev" writeable="yes"/>
 		</config>
 		<route>
 			<service name="File_system" label="fs_backend"> <child name="lx_fs"/> </service>
@@ -196,7 +172,7 @@ append config {
 	</start>
 
 	<start name="/bin/bash" caps="1000">
-		<resource name="RAM" quantum="64M" />
+		<resource name="RAM" quantum="64M"/>
 		<config ld_verbose="yes">
 			<libc stdin="/dev/terminal" stdout="/dev/terminal"
 			      stderr="/dev/terminal" rtc="/dev/rtc" pipe="/dev/pipe"/>
@@ -210,7 +186,7 @@ append config {
 			<arg value="bash"/>
 			<env key="TERM" value="screen"/>
 			<env key="HOME" value="/"/>
-			<env key="PATH" value="/bin" />
+			<env key="PATH" value="/bin"/>
 		</config>
 		<route>
 			<service name="File_system" label="shell"> <child name="vfs"/> </service>
@@ -231,7 +207,7 @@ set repo "[repository_contains $shell_script]"
 exec cp $repo/$shell_script bin/
 
 append boot_modules {
-	lx_block lx_fs
+	lx_fs
 	spark.lib.so libsparkcrypto.lib.so vfs_cbe.lib.so
 	vfs_cbe.sh
 
