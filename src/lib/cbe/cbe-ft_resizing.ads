@@ -220,6 +220,9 @@ private
    type Tree_Level_PBAs_Type
    is array (Tree_Level_Index_Type) of Physical_Block_Address_Type;
 
+   type Tree_Level_Generations_Type
+   is array (Tree_Level_Index_Type) of Generation_Type;
+
    type Job_Type is record
       Operation        : Job_Operation_Type;
       State            : Job_State_Type;
@@ -235,6 +238,7 @@ private
       Alloc_Lvl_Idx    : Tree_Level_Index_Type;
       VBA              : Virtual_Block_Address_Type;
       Old_PBAs         : Tree_Level_PBAs_Type;
+      Old_Generations  : Tree_Level_Generations_Type;
       New_PBAs         : Tree_Level_PBAs_Type;
       PBA              : Physical_Block_Address_Type;
       Nr_Of_PBAs       : Number_Of_Blocks_Type;
@@ -303,6 +307,7 @@ private
       Mount_Point_Lvl_Idx   :        Tree_Level_Index_Type;
       Mount_Point_Child_Idx :        Tree_Child_Index_Type;
       FT_Degree             :        Tree_Degree_Type;
+      Curr_Gen              :        Generation_Type;
       First_PBA             : in out Physical_Block_Address_Type;
       Nr_Of_PBAs            : in out Number_Of_Blocks_Type;
       T1_Blks               : in out Type_1_Node_Blocks_Type;
