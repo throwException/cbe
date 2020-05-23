@@ -377,6 +377,8 @@ is
 
             end Declare_Nr_Of_Unused_PBAs_1;
 
+            SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
             Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
             Job.Key_Plaintext := SB.Current_Key;
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
@@ -484,6 +486,8 @@ is
 
          end if;
 
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
          Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
@@ -584,9 +588,8 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
-            Curr_Gen := Curr_Gen + 1;
-         end if;
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
 
          Progress := True;
 
@@ -664,6 +667,8 @@ is
                   " ");
 
             end Declare_Nr_Of_Unused_PBAs_1;
+
+            SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
             Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
             Job.Key_Plaintext := SB.Current_Key;
@@ -762,18 +767,53 @@ is
          SB.Free_Max_Level := Job.FT_Max_Lvl_Idx;
          SB.Free_Leafs     := Job.FT_Nr_Of_Leaves;
 
-         if Job.Nr_Of_Blks > 0 then
+         SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
+         SB.Resizing_Nr_Of_Leaves :=
+            SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
 
-            SB.Resizing_Nr_Of_PBAs := Job.Nr_Of_Blks;
-            SB.Resizing_Nr_Of_Leaves :=
-               SB.Resizing_Nr_Of_Leaves + Job.Nr_Of_Leaves;
-
-         else
+         if Job.Nr_Of_Blks = 0 then
 
             SB.State := Normal;
             Job.Request_Finished := True;
 
          end if;
+
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
+         Debug.Print_String ("   SET SB");
+         Debug.Print_String (
+            "      STATE " &
+            (case SB.State is
+             when Normal => "Normal",
+             when Extending_VBD => "Ext_VBD",
+             when Extending_FT => "Ext_FT",
+             when Rekeying => "Rekg"));
+
+         Debug.Print_String (
+            "      RESIZING PBAS " &
+            Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
+            " LEAFS " &
+            Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)));
+
+         Debug.Print_String (
+            "      CURR_SNAP PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               SB.Snapshots (SB.Curr_Snap).PBA)) &
+            " GEN " &
+            Debug.To_String (Debug.Uint64_Type (
+               SB.Snapshots (SB.Curr_Snap).Gen)));
+
+         Debug.Print_String (
+            "      FT PBA " &
+            Debug.To_String (Debug.Uint64_Type (SB.Free_Number)) &
+            " GEN " &
+            Debug.To_String (Debug.Uint64_Type (SB.Free_Gen)) &
+            " LEAFS " &
+            Debug.To_String (Debug.Uint64_Type (SB.Free_Leafs)) &
+            " MAX_LVL " &
+            Debug.To_String (Debug.Uint64_Type (SB.Free_Max_Level)) &
+            " " &
+            Debug.To_String (SB.Free_Hash));
 
          Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
@@ -826,6 +866,9 @@ is
             raise Program_Error;
          end if;
 
+         Debug.Print_String (
+            "   WRITE SB");
+
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Write,
             Succ   => False,
@@ -875,9 +918,8 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
-            Curr_Gen := Curr_Gen + 1;
-         end if;
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
 
          Progress := True;
 
@@ -950,6 +992,8 @@ is
             raise Program_Error;
          end if;
 
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
          Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
@@ -1050,9 +1094,8 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         if SB.Snapshots (SB.Curr_Snap).Gen = Curr_Gen then
-            Curr_Gen := Curr_Gen + 1;
-         end if;
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
 
          Progress := True;
 
@@ -1144,6 +1187,8 @@ is
             end if;
 
          end Declare_Max_VBA;
+
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
          Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
@@ -1261,7 +1306,6 @@ is
             SB_Idx := Superblocks_Index_Type'First;
          end if;
 
-         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
          Job.Generation := Curr_Gen;
          Curr_Gen := Curr_Gen + 1;
 

@@ -231,9 +231,10 @@ private
       FT_Degree        : Tree_Degree_Type;
       T1_Blks          : Type_1_Node_Blocks_Type;
       T2_Blk           : Type_2_Node_Block_Type;
-      Old_PBA          : Physical_Block_Address_Type;
       Lvl_Idx          : Tree_Level_Index_Type;
+      Alloc_Lvl_Idx    : Tree_Level_Index_Type;
       VBA              : Virtual_Block_Address_Type;
+      Old_PBAs         : Tree_Level_PBAs_Type;
       New_PBAs         : Tree_Level_PBAs_Type;
       PBA              : Physical_Block_Address_Type;
       Nr_Of_PBAs       : Number_Of_Blocks_Type;
@@ -291,6 +292,7 @@ private
       FT_Nr_Of_Leaves  :        Tree_Number_Of_Leafs_Type;
       Curr_Gen         :        Generation_Type;
       T1_Blks          : in out Type_1_Node_Blocks_Type;
+      New_PBAs         : in out Tree_Level_PBAs_Type;
       First_PBA        : in out Physical_Block_Address_Type;
       Nr_Of_PBAs       : in out Number_Of_Blocks_Type);
 
@@ -305,6 +307,7 @@ private
       Nr_Of_PBAs            : in out Number_Of_Blocks_Type;
       T1_Blks               : in out Type_1_Node_Blocks_Type;
       T2_Blk                : in out Type_2_Node_Block_Type;
+      New_PBAs              : in out Tree_Level_PBAs_Type;
       Stopped_At_Lvl_Idx    :    out Tree_Level_Index_Type;
       Nr_Of_Leaves          :    out Tree_Number_Of_Leafs_Type);
 
