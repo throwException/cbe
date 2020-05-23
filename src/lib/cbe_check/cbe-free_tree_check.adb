@@ -255,21 +255,9 @@ is
 
       if Child_State = Read_Block then
 
-         if Nr_Of_Leafs = 0 then
+         if not Type_1_Node_Valid (Child) then
 
-            if Child /= Type_1_Node_Invalid then
-
-               pragma Debug (
-                  Debug.Print_String (
-                     "[ft_check] node " &
-                     Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                     " " &
-                     Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                     ", inner node unexpectedly in use"));
-
-               raise Program_Error;
-
-            else
+            if Nr_Of_Leafs = 0 then
 
                Child_State := Done;
                Progress := True;
@@ -281,6 +269,19 @@ is
                      " " &
                      Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
                      ", done, inner node unused"));
+
+            else
+
+               pragma Debug (
+                  Debug.Print_String (
+                     "[ft_check] node " &
+                     Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+                     " " &
+                     Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+                     ", inner node unexpectedly unused"));
+
+               raise Program_Error;
+
             end if;
 
          elsif not Primitive.Valid (Prim) then
@@ -405,21 +406,9 @@ is
 
       if Child_State = Read_Block then
 
-         if Nr_Of_Leafs = 0 then
+         if not Type_1_Node_Valid (Child) then
 
-            if Child /= Type_1_Node_Invalid then
-
-               pragma Debug (
-                  Debug.Print_String (
-                     "[ft_check] node " &
-                     Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                     " " &
-                     Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
-                     ", inner node unexpectedly in use"));
-
-               raise Program_Error;
-
-            else
+            if Nr_Of_Leafs = 0 then
 
                Child_State := Done;
                Progress := True;
@@ -431,6 +420,19 @@ is
                      " " &
                      Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
                      ", done, inner node unused"));
+
+            else
+
+               pragma Debug (
+                  Debug.Print_String (
+                     "[ft_check] node " &
+                     Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
+                     " " &
+                     Debug.To_String (Debug.Uint64_Type (Child_Idx)) &
+                     ", inner node unexpectedly unused"));
+
+               raise Program_Error;
+
             end if;
 
          elsif not Primitive.Valid (Prim) then
