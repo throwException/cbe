@@ -1176,7 +1176,7 @@ is
 
                New_Free_Tree.Mark_Generated_Meta_Tree_Primitive_Complete (
                   Obj.New_Free_Tree_Obj, Obj.New_Free_Tree_Prim,
-                  Physical_Block_Address_Type (Primitive.Block_Number (Prim)));
+                  Meta_Tree.Peek_Completed_New_PBA (Obj.Meta_Tree_Obj, Prim));
 
                Meta_Tree.Drop_Completed_Primitive (
                   Obj.Meta_Tree_Obj, Prim);

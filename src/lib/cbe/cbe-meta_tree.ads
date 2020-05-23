@@ -67,6 +67,14 @@ is
    return Type_1_Node_Type;
 
    --
+   --  Peek_Completed_New_PBA
+   --
+   function Peek_Completed_New_PBA (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Physical_Block_Address_Type;
+
+   --
    --  Discard given completed primitive
    --
    procedure Drop_Completed_Primitive (
@@ -232,7 +240,7 @@ private
       Tree_Geom      : Tree_Geometry_Type;
       Current_Gen    : Generation_Type;
       Old_PBA        : Physical_Block_Address_Type;
-      Complete_Prim  : Primitive.Object_Type;
+      New_PBA        : Physical_Block_Address_Type;
       Finished       : Boolean;
       Cache_Request  : Cache_Request_Type;
       Level_N_Nodes  : Type_1_Info_Array_Type;

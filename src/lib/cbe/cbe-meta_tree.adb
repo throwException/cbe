@@ -73,7 +73,7 @@ is
          Leafs     => 0);
       Obj.Current_Gen   := 0;
       Obj.Old_PBA       := PBA_Invalid;
-      Obj.Complete_Prim := Primitive.Invalid_Object;
+      Obj.New_PBA       := PBA_Invalid;
       Obj.Finished      := False;
 
       Obj.Cache_Request := Invalid_Cache_Request;
@@ -110,7 +110,6 @@ is
       Obj.Tree_Geom      := Tree_Geom;
       Obj.Current_Gen    := Current_Gen;
       Obj.Old_PBA        := Old_PBA;
-      Obj.Complete_Prim  := Primitive.Invalid_Object;
       Obj.Submitted_Prim := Prim;
       Obj.Finished       := False;
 
@@ -159,8 +158,25 @@ is
       if Obj.State /= Complete then
          return Primitive.Invalid_Object;
       end if;
-      return Obj.Complete_Prim;
+      return Obj.Submitted_Prim;
    end Peek_Completed_Primitive;
+
+   --
+   --  Peek_Completed_New_PBA
+   --
+   function Peek_Completed_New_PBA (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Physical_Block_Address_Type
+   is
+   begin
+      if Obj.State /= Complete
+         or else not Primitive.Equal (Prim, Obj.Submitted_Prim)
+      then
+         raise Program_Error;
+      end if;
+      return Obj.New_PBA;
+   end Peek_Completed_New_PBA;
 
    --
    --  Get the current root node
@@ -172,7 +188,7 @@ is
    is
    begin
       if Obj.State /= Complete
-         or else not Primitive.Equal (Prim, Obj.Complete_Prim)
+         or else not Primitive.Equal (Prim, Obj.Submitted_Prim)
       then
          raise Program_Error;
       end if;
@@ -188,7 +204,7 @@ is
    is
    begin
       if Obj.State /= Complete
-         or else not Primitive.Equal (Prim, Obj.Complete_Prim)
+         or else not Primitive.Equal (Prim, Obj.Submitted_Prim)
       then
          raise Program_Error;
       end if;
@@ -258,10 +274,8 @@ is
 
       if not Primitive.Success (Prim) then
 
-         Obj.Complete_Prim :=
-            Primitive.Copy_Valid_Object_New_Succ_Blk_Nr (
-               Obj.Submitted_Prim, False, 0);
-
+         Primitive.Success (Obj.Submitted_Prim, False);
+         Obj.New_PBA := PBA_Invalid;
          Obj.State := Complete;
          return;
 
@@ -428,10 +442,8 @@ is
       T2_Entry : in out Type_2_Node_Type)
    is
    begin
-      Obj.Complete_Prim :=
-         Primitive.Copy_Valid_Object_New_Succ_Blk_Nr (
-            Obj.Submitted_Prim, True, Block_Number_Type (T2_Entry.PBA));
-
+      Primitive.Success (Obj.Submitted_Prim, True);
+      Obj.New_PBA := T2_Entry.PBA;
       Obj.Finished := True;
 
       T2_Entry.PBA       := Obj.Old_PBA;
