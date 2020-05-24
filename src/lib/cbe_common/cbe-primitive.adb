@@ -311,6 +311,10 @@ is
    function Has_Tag_FT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_Rszg_MT_Alloc);
 
+   function Has_Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf);
+
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Blk_IO);
 
@@ -379,6 +383,12 @@ is
 
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_MT);
+
+   function Has_Tag_MT_Rszg_Cache (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_MT_Rszg_Cache);
+
+   function Has_Tag_MT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_MT_Rszg_MT_Alloc);
 
    function Has_Tag_MT_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_MT_Cache);

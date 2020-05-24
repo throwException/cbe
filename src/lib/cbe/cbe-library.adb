@@ -80,6 +80,7 @@ is
       Obj.WB_Prim := Primitive.Invalid_Object;
 
       FT_Resizing.Initialize_Resizing (Obj.FT_Rszg);
+      MT_Resizing.Initialize_Resizing (Obj.MT_Rszg);
       Superblock_Control.Initialize_Control (Obj.SB_Ctrl);
       Trust_Anchor.Initialize_Anchor (Obj.TA);
       VBD_Rekeying.Initialize_Rekeying (Obj.VBD_Rkg);
@@ -1065,6 +1066,16 @@ is
 
                Progress := True;
 
+            when Primitive.Tag_MT_Rszg_MT_Alloc =>
+
+               MT_Resizing.Mark_Generated_Prim_Completed_PBA_Alloc (
+                  Obj.MT_Rszg, Prim,
+                  Meta_Tree.Peek_Completed_Root_Node (Obj.Meta_Tree_Obj, Prim),
+                  Meta_Tree.Peek_Completed_New_PBA (Obj.Meta_Tree_Obj, Prim));
+
+               Meta_Tree.Drop_Completed_Primitive (Obj.Meta_Tree_Obj, Prim);
+               Progress := True;
+
             when others =>
 
                raise Program_Error;
@@ -1607,6 +1618,25 @@ is
 
             end case;
 
+         when Primitive.Tag_MT_Rszg_Cache =>
+
+            case Primitive.Operation (Prim) is
+            when Read =>
+
+               MT_Resizing.Mark_Generated_Prim_Completed_Blk_Data (
+                  Obj.MT_Rszg, Prim, Obj.Cache_Jobs_Data (Job_Idx));
+
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            when Write | Sync =>
+
+               MT_Resizing.Mark_Generated_Prim_Completed (Obj.MT_Rszg, Prim);
+               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
+               Progress := True;
+
+            end case;
+
          when others => raise Program_Error;
          end case;
 
@@ -1822,6 +1852,43 @@ is
 
       end loop Loop_Generated_MT_Prims;
 
+      Loop_Generated_MT_Rszg_Prims :
+      loop
+         Declare_MT_Rszg_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               FT_Resizing.Peek_Generated_MT_Rszg_Primitive (Obj.FT_Rszg);
+         begin
+            exit Loop_Generated_MT_Rszg_Prims when
+               not Primitive.Valid (Prim) or else
+               not MT_Resizing.Primitive_Acceptable (Obj.MT_Rszg);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf =>
+
+               MT_Resizing.Submit_Primitive (
+                  Obj.MT_Rszg, Prim, Obj.Cur_Gen,
+                  (Obj.Superblock.Meta_Number,
+                   Obj.Superblock.Meta_Gen,
+                   Obj.Superblock.Meta_Hash),
+                  Obj.Superblock.Meta_Max_Level,
+                  Obj.Superblock.Meta_Leafs,
+                  Obj.Superblock.Meta_Degree,
+                  FT_Resizing.Peek_Generated_PBA (Obj.FT_Rszg, Prim),
+                  FT_Resizing.Peek_Generated_Nr_Of_PBAs (Obj.FT_Rszg, Prim));
+
+               FT_Resizing.Drop_Generated_Primitive (Obj.FT_Rszg, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_MT_Rszg_Prim;
+      end loop Loop_Generated_MT_Rszg_Prims;
+
       Loop_Generated_Cache_Prims :
       loop
          Declare_Cache_Prim :
@@ -1899,6 +1966,130 @@ is
       end loop Loop_Completed_Prims;
 
    end Execute_FT_Rszg;
+
+   --
+   --  Execute_MT_Rszg
+   --
+   procedure Execute_MT_Rszg (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean)
+   is
+   begin
+      MT_Resizing.Execute (Obj.MT_Rszg, Progress);
+
+      Loop_Generated_MT_Prims :
+      loop
+
+         Declare_MT_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               MT_Resizing.Peek_Generated_MT_Primitive (Obj.MT_Rszg);
+         begin
+            exit Loop_Generated_MT_Prims when
+               not Primitive.Valid (Prim) or else
+               not Meta_Tree.Request_Acceptable (Obj.Meta_Tree_Obj);
+
+            Meta_Tree.Submit_Primitive (
+               Obj.Meta_Tree_Obj, Prim,
+               MT_Resizing.Peek_Generated_MT_Root (Obj.MT_Rszg, Prim),
+               MT_Resizing.Peek_Generated_MT_Geom (Obj.MT_Rszg, Prim),
+               MT_Resizing.Peek_Generated_Curr_Gen (Obj.MT_Rszg, Prim),
+               MT_Resizing.Peek_Generated_Old_PBA (Obj.MT_Rszg, Prim));
+
+            MT_Resizing.Drop_Generated_Primitive (Obj.MT_Rszg, Prim);
+            Progress := True;
+
+         end Declare_MT_Prim;
+
+      end loop Loop_Generated_MT_Prims;
+
+      Loop_Generated_Cache_Prims :
+      loop
+         Declare_Cache_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               MT_Resizing.Peek_Generated_Cache_Primitive (Obj.MT_Rszg);
+         begin
+            exit Loop_Generated_Cache_Prims when
+               not Primitive.Valid (Prim) or else
+               not Cache.Primitive_Acceptable (Obj.Cache_Obj);
+
+            case Primitive.Operation (Prim) is
+            when Write =>
+
+               Declare_Cache_Job_Idx :
+               declare
+                  Idx : Cache.Jobs_Index_Type;
+               begin
+
+                  Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Idx);
+                  Obj.Cache_Jobs_Data (Idx) :=
+                     MT_Resizing.Peek_Generated_Blk_Data (Obj.MT_Rszg, Prim);
+
+               end Declare_Cache_Job_Idx;
+
+               MT_Resizing.Drop_Generated_Primitive (Obj.MT_Rszg, Prim);
+               Progress := True;
+
+            when Read | Sync =>
+
+               Cache.Submit_Primitive_Without_Data (Obj.Cache_Obj, Prim);
+               MT_Resizing.Drop_Generated_Primitive (Obj.MT_Rszg, Prim);
+               Progress := True;
+
+            end case;
+
+         end Declare_Cache_Prim;
+      end loop Loop_Generated_Cache_Prims;
+
+      Loop_Completed_Prims :
+      loop
+         Declare_Prim :
+         declare
+            Prim : constant Primitive.Object_Type :=
+               MT_Resizing.Peek_Completed_Primitive (Obj.MT_Rszg);
+         begin
+            exit Loop_Completed_Prims when not Primitive.Valid (Prim);
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf =>
+
+               declare
+                  MT_Root : constant Type_1_Node_Type :=
+                     MT_Resizing.Peek_Completed_MT_Root (Obj.MT_Rszg, Prim);
+               begin
+                  Obj.Superblock.Meta_Gen    := MT_Root.Gen;
+                  Obj.Superblock.Meta_Number := MT_Root.PBA;
+                  Obj.Superblock.Meta_Hash   := MT_Root.Hash;
+
+                  Obj.Superblock.Meta_Max_Level :=
+                     MT_Resizing.Peek_Completed_MT_Max_Lvl_Idx (
+                        Obj.MT_Rszg, Prim);
+
+                  Obj.Superblock.Meta_Leafs :=
+                     MT_Resizing.Peek_Completed_MT_Nr_Of_Leaves (
+                        Obj.MT_Rszg, Prim);
+               end;
+
+               FT_Resizing.Mark_Generated_Prim_Completed_MT_Ext (
+                  Obj.FT_Rszg, Prim,
+                  MT_Resizing.Peek_Completed_PBA (Obj.MT_Rszg, Prim),
+                  MT_Resizing.Peek_Completed_Nr_Of_PBAs (Obj.MT_Rszg, Prim),
+                  MT_Resizing.Peek_Completed_Nr_Of_Leaves (Obj.MT_Rszg, Prim));
+
+               MT_Resizing.Drop_Completed_Primitive (Obj.MT_Rszg, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end Declare_Prim;
+      end loop Loop_Completed_Prims;
+
+   end Execute_MT_Rszg;
 
    --
    --  Execute_VBD_Rkg
@@ -3152,6 +3343,7 @@ is
       Execute_VBD_Rkg (
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_FT_Rszg (Obj, Progress);
+      Execute_MT_Rszg (Obj, Progress);
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);

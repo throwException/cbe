@@ -10,7 +10,7 @@ pragma Ada_2012;
 
 with CBE.Primitive;
 
-package CBE.FT_Resizing
+package CBE.MT_Resizing
 with SPARK_Mode
 is
    pragma Pure;
@@ -35,10 +35,10 @@ is
       Rszg             : in out Resizing_Type;
       Prim             :        Primitive.Object_Type;
       Curr_Gen         :        Generation_Type;
-      FT_Root          :        Type_1_Node_Type;
-      FT_Max_Lvl_Idx   :        Tree_Level_Index_Type;
-      FT_Nr_Of_Leaves  :        Tree_Number_Of_Leafs_Type;
-      FT_Degree        :        Tree_Degree_Type;
+      MT_Root          :        Type_1_Node_Type;
+      MT_Max_Lvl_Idx   :        Tree_Level_Index_Type;
+      MT_Nr_Of_Leaves  :        Tree_Number_Of_Leafs_Type;
+      MT_Degree        :        Tree_Degree_Type;
       First_PBA        :        Physical_Block_Address_Type;
       Nr_Of_PBAs       :        Number_Of_Blocks_Type);
 
@@ -49,25 +49,25 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Completed_FT_Root
+   --  Peek_Completed_MT_Root
    --
-   function Peek_Completed_FT_Root (
+   function Peek_Completed_MT_Root (
       Rszg : Resizing_Type;
       Prim : Primitive.Object_Type)
    return Type_1_Node_Type;
 
    --
-   --  Peek_Completed_FT_Max_Lvl_Idx
+   --  Peek_Completed_MT_Max_Lvl_Idx
    --
-   function Peek_Completed_FT_Max_Lvl_Idx (
+   function Peek_Completed_MT_Max_Lvl_Idx (
       Rszg : Resizing_Type;
       Prim : Primitive.Object_Type)
    return Tree_Level_Index_Type;
 
    --
-   --  Peek_Completed_FT_Nr_Of_Leaves
+   --  Peek_Completed_MT_Nr_Of_Leaves
    --
-   function Peek_Completed_FT_Nr_Of_Leaves (
+   function Peek_Completed_MT_Nr_Of_Leaves (
       Rszg : Resizing_Type;
       Prim : Primitive.Object_Type)
    return Tree_Number_Of_Leafs_Type;
@@ -123,28 +123,6 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_MT_Rszg_Primitive
-   --
-   function Peek_Generated_MT_Rszg_Primitive (Rszg : Resizing_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_PBA
-   --
-   function Peek_Generated_PBA (
-      Rszg : Resizing_Type;
-      Prim : Primitive.Object_Type)
-   return Physical_Block_Address_Type;
-
-   --
-   --  Peek_Generated_Nr_Of_PBAs
-   --
-   function Peek_Generated_Nr_Of_PBAs (
-      Rszg : Resizing_Type;
-      Prim : Primitive.Object_Type)
-   return Number_Of_Blocks_Type;
-
-   --
    --  Peek_Generated_Curr_Gen
    --
    function Peek_Generated_Curr_Gen (
@@ -159,6 +137,22 @@ is
       Rszg : Resizing_Type;
       Prim : Primitive.Object_Type)
    return Physical_Block_Address_Type;
+
+   --
+   --  Peek_Generated_MT_Root
+   --
+   function Peek_Generated_MT_Root (
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
+   return Type_1_Node_Type;
+
+   --
+   --  Peek_Generated_MT_Geom
+   --
+   function Peek_Generated_MT_Geom (
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
+   return Tree_Geometry_Type;
 
    --
    --  Peek_Generated_Blk_Data
@@ -191,22 +185,13 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Mark_Generated_Prim_Completed_New_PBA
+   --  Mark_Generated_Prim_Completed_PBA_Alloc
    --
-   procedure Mark_Generated_Prim_Completed_New_PBA (
+   procedure Mark_Generated_Prim_Completed_PBA_Alloc (
       Rszg    : in out Resizing_Type;
       Prim    :        Primitive.Object_Type;
+      MT_Root :        Type_1_Node_Type;
       New_PBA :        Physical_Block_Address_Type);
-
-   --
-   --  Mark_Generated_Prim_Completed_MT_Ext
-   --
-   procedure Mark_Generated_Prim_Completed_MT_Ext (
-      Rszg         : in out Resizing_Type;
-      Prim         :        Primitive.Object_Type;
-      First_PBA    :        Physical_Block_Address_Type;
-      Nr_Of_PBAs   :        Number_Of_Blocks_Type;
-      Nr_Of_Leaves :        Tree_Number_Of_Leafs_Type);
 
 private
 
@@ -214,7 +199,7 @@ private
 
    type Job_Operation_Type is (
       Invalid,
-      FT_Extension_Step
+      Extend_By_One_Leaf
    );
 
    type Job_State_Type is (
@@ -231,10 +216,6 @@ private
       Alloc_PBA_Pending,
       Alloc_PBA_In_Progress,
       Alloc_PBA_Completed,
-
-      Extend_MT_By_One_Leaf_Pending,
-      Extend_MT_By_One_Leaf_In_Progress,
-      Extend_MT_By_One_Leaf_Completed,
 
       Write_Inner_Node_Pending,
       Write_Inner_Node_In_Progress,
@@ -264,10 +245,10 @@ private
       State            : Job_State_Type;
       Submitted_Prim   : Primitive.Object_Type;
       Generated_Prim   : Primitive.Object_Type;
-      FT_Root          : Type_1_Node_Type;
-      FT_Max_Lvl_Idx   : Tree_Level_Index_Type;
-      FT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
-      FT_Degree        : Tree_Degree_Type;
+      MT_Root          : Type_1_Node_Type;
+      MT_Max_Lvl_Idx   : Tree_Level_Index_Type;
+      MT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
+      MT_Degree        : Tree_Degree_Type;
       T1_Blks          : Type_1_Node_Blocks_Type;
       T2_Blk           : Type_2_Node_Block_Type;
       Lvl_Idx          : Tree_Level_Index_Type;
@@ -279,7 +260,6 @@ private
       PBA              : Physical_Block_Address_Type;
       Nr_Of_PBAs       : Number_Of_Blocks_Type;
       Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
-      MT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
       Curr_Gen         : Generation_Type;
    end record;
 
@@ -292,9 +272,9 @@ private
    end record;
 
    --
-   --  Execute_FT_Extension_Step
+   --  Execute_Extend_By_One_Leaf
    --
-   procedure Execute_FT_Extension_Step (
+   procedure Execute_Extend_By_One_Leaf (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Progress : in out Boolean);
@@ -325,12 +305,12 @@ private
       Allocated_PBA :    out Physical_Block_Address_Type);
 
    --
-   --  Add_New_Root_Lvl_To_FT_Using_PBA_Contingent
+   --  Add_New_Root_Lvl_To_MT_Using_PBA_Contingent
    --
-   procedure Add_New_Root_Lvl_To_FT_Using_PBA_Contingent (
-      FT_Root          : in out Type_1_Node_Type;
-      FT_Max_Lvl_Idx   : in out Tree_Level_Index_Type;
-      FT_Nr_Of_Leaves  :        Tree_Number_Of_Leafs_Type;
+   procedure Add_New_Root_Lvl_To_MT_Using_PBA_Contingent (
+      MT_Root          : in out Type_1_Node_Type;
+      MT_Max_Lvl_Idx   : in out Tree_Level_Index_Type;
+      MT_Nr_Of_Leaves  :        Tree_Number_Of_Leafs_Type;
       Curr_Gen         :        Generation_Type;
       T1_Blks          : in out Type_1_Node_Blocks_Type;
       New_PBAs         : in out Tree_Level_PBAs_Type;
@@ -338,12 +318,11 @@ private
       Nr_Of_PBAs       : in out Number_Of_Blocks_Type);
 
    --
-   --  Add_New_Branch_To_FT_Using_PBA_Contingent
+   --  Add_New_Branch_To_MT_Using_PBA_Contingent
    --
-   procedure Add_New_Branch_To_FT_Using_PBA_Contingent (
+   procedure Add_New_Branch_To_MT_Using_PBA_Contingent (
       Mount_Point_Lvl_Idx   :        Tree_Level_Index_Type;
       Mount_Point_Child_Idx :        Tree_Child_Index_Type;
-      FT_Degree             :        Tree_Degree_Type;
       Curr_Gen              :        Generation_Type;
       First_PBA             : in out Physical_Block_Address_Type;
       Nr_Of_PBAs            : in out Number_Of_Blocks_Type;
@@ -354,12 +333,12 @@ private
       Nr_Of_Leaves          :    out Tree_Number_Of_Leafs_Type);
 
    --
-   --  Execute_FT_Ext_Step_Read_Inner_Node_Completed
+   --  Execute_MT_Ext_Step_Read_Inner_Node_Completed
    --
-   procedure Execute_FT_Ext_Step_Read_Inner_Node_Completed (
+   procedure Execute_MT_Ext_Step_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
-      Progress :    out Boolean);
+      Progress : in out Boolean);
 
    --
    --  Tree_Max_Max_VBA
@@ -381,4 +360,4 @@ private
       Progress    : out Boolean;
       Prim        : out Primitive.Object_Type);
 
-end CBE.FT_Resizing;
+end CBE.MT_Resizing;

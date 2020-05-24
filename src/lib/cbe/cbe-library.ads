@@ -22,6 +22,7 @@ with CBE.Superblock_Control;
 with CBE.Trust_Anchor;
 with CBE.VBD_Rekeying;
 with CBE.FT_Resizing;
+with CBE.MT_Resizing;
 
 package CBE.Library
 with SPARK_Mode
@@ -439,6 +440,7 @@ private
       TA      : Trust_Anchor.Anchor_Type;
       VBD_Rkg : VBD_Rekeying.Rekeying_Type;
       FT_Rszg : FT_Resizing.Resizing_Type;
+      MT_Rszg : MT_Resizing.Resizing_Type;
 
    end record;
 
@@ -533,6 +535,13 @@ private
    --  Execute_FT_Rszg
    --
    procedure Execute_FT_Rszg (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_MT_Rszg
+   --
+   procedure Execute_MT_Rszg (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 

@@ -12,6 +12,7 @@ SRC_ADB += cbe-write_back.adb
 SRC_ADB += cbe-cache.adb
 SRC_ADB += cbe-new_free_tree.adb
 SRC_ADB += cbe-ft_resizing.adb
+SRC_ADB += cbe-mt_resizing.adb
 SRC_ADB += cbe-meta_tree.adb
 SRC_ADB += cbe-generic_index_queue.adb
 SRC_ADB += cbe-superblock_control.adb

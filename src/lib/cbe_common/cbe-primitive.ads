@@ -72,6 +72,7 @@ is
       Tag_VBD_Rkg_Cache,
       Tag_FT_Rszg_Cache,
       Tag_FT_Rszg_MT_Alloc,
+      Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf,
       Tag_VBD_Rkg_Blk_IO,
       Tag_VBD_Rkg_Crypto_Encrypt,
       Tag_VBD_Rkg_Crypto_Decrypt,
@@ -95,6 +96,8 @@ is
       Tag_Free_Tree_IO,
       Tag_Free_Tree_WB,
       Tag_FT_MT,
+      Tag_MT_Rszg_Cache,
+      Tag_MT_Rszg_MT_Alloc,
       Tag_MT_Cache);
 
    function To_String (Tag : Tag_Type)
@@ -155,6 +158,8 @@ is
       when Tag_VBD_Rkg_Cache => "VBD_Rkg_Cache",
       when Tag_FT_Rszg_Cache => "FT_Rszg_Cache",
       when Tag_FT_Rszg_MT_Alloc => "FT_Rszg_MT_Alloc",
+      when Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf =>
+         "FT_Rszg_MT_Rszg_Extend_By_One_Leaf",
       when Tag_VBD_Rkg_Blk_IO => "VBD_Rkg_Blk_IO",
       when Tag_VBD_Rkg_Crypto_Encrypt => "VBD_Rkg_Crypto_Encrypt",
       when Tag_VBD_Rkg_Crypto_Decrypt => "VBD_Rkg_Crypto_Decrypt",
@@ -182,6 +187,8 @@ is
       when Tag_Free_Tree_IO => "Free_Tree_IO",
       when Tag_Free_Tree_WB => "Free_Tree_WB",
       when Tag_FT_MT => "FT_MT",
+      when Tag_MT_Rszg_Cache => "MT_Rszg_Cache",
+      when Tag_MT_Rszg_MT_Alloc => "MT_Rszg_MT_Alloc",
       when Tag_MT_Cache => "MT_Cache");
 
    type Index_Type  is range 0 .. 2**32 - 1;
@@ -388,6 +395,10 @@ is
    function Has_Tag_VBD_Rkg_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Rszg_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean;
+
+   function Has_Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Crypto_Decrypt (Obj : Object_Type) return Boolean;
@@ -417,6 +428,8 @@ is
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean;
+   function Has_Tag_MT_Rszg_Cache (Obj : Object_Type) return Boolean;
+   function Has_Tag_MT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_MT_Cache (Obj : Object_Type) return Boolean;
 
 private
