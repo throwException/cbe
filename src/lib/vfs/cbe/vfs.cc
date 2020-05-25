@@ -162,30 +162,6 @@ class Vfs_cbe::Wrapper
 			_verbose      = config.attribute_value("verbose", _verbose);
 			_debug        = config.attribute_value("debug",   _debug);
 			_block_device = config.attribute_value("block",   _block_device);
-
-			config.with_sub_node ("crypto", [&] (Xml_node const &crypto) {
-
-				crypto.for_each_sub_node("key", [&] (Xml_node const &key) {
-
-					using Key_string = Genode::String<32+1>;
-
-					Key_string const value = key.attribute_value("value", Key_string());
-
-					External::Crypto::Key_data data { };
-					memcpy(data.value, value.string(), value.length() - 1);
-
-					unsigned const id { key.attribute_value ("id",   0u) };
-
-					/* select the hights id for rekeying */
-					if (id > _rekey_obj.key_id) {
-						_rekey_obj.key_id = id;
-					}
-
-					log("Add crypto key ", id, " '", value, "'");
-
-					_crypto.add_key(id, data);
-				});
-			});
 		}
 
 		Cbe::Superblocks_index _read_superblocks(Cbe::Superblocks &sbs)
