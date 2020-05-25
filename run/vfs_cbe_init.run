@@ -92,7 +92,7 @@ append config {
 			<free-tree
 				nr_of_levels="3"
 				nr_of_children="64"
-				nr_of_leafs="512" />
+				nr_of_leafs="2048" />
 		</config>
 		<route>
 			<service name="Block"> <child name="lx_block"/> </service>
