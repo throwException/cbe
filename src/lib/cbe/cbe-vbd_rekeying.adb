@@ -1290,7 +1290,6 @@ is
       Curr_Gen         :        Generation_Type;
       Last_Secured_Gen :        Generation_Type)
    is
-      Could_Discard_Snapshots : Boolean := False;
    begin
 
       For_Each_Snap :
@@ -1301,15 +1300,10 @@ is
             Snapshots (Idx).Gen /= Curr_Gen and then
             Snapshots (Idx).Gen /= Last_Secured_Gen
          then
-            Could_Discard_Snapshots := True;
             Snapshots (Idx).Valid := False;
          end if;
 
       end loop For_Each_Snap;
-
-      if not Could_Discard_Snapshots then
-         raise Program_Error;
-      end if;
 
    end Discard_Disposable_Snapshots;
 
@@ -1427,6 +1421,9 @@ is
 
       case Job.State is
       when Submitted =>
+
+         Discard_Disposable_Snapshots (
+            Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
 
          Job.Nr_Of_Leaves := 0;
          Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
@@ -1547,6 +1544,10 @@ is
 
       when Alloc_PBAs_At_Lowest_Inner_Lvl_Completed =>
 
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
          Debug.Print_String (
             "   PBAS ALLOCATED" &
             " ");
@@ -1567,41 +1568,29 @@ is
 
          end loop;
 
-         if Primitive.Success (Job.Generated_Prim) then
+         Debug.Print_String (
+            "   WRITE LVL " &
+            Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
+            " PBA " &
+            Debug.To_String (Debug.Uint64_Type (
+               Job.New_PBAs (Job.T1_Blk_Idx))) &
+            " ");
 
-            Debug.Print_String (
-               "   WRITE LVL " &
-               Debug.To_String (Debug.Uint64_Type (Job.T1_Blk_Idx)) &
-               " PBA " &
-               Debug.To_String (Debug.Uint64_Type (
-                  Job.New_PBAs (Job.T1_Blk_Idx))) &
-               " ");
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Cache,
+            Blk_Nr => Block_Number_Type (Job.New_PBAs (Job.T1_Blk_Idx)),
+            Idx    => Primitive.Index_Type (Job_Idx));
 
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Write,
-               Succ   => False,
-               Tg     => Primitive.Tag_VBD_Rkg_Cache,
-               Blk_Nr => Block_Number_Type (Job.New_PBAs (Job.T1_Blk_Idx)),
-               Idx    => Primitive.Index_Type (Job_Idx));
+         if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level then
 
-            if Job.T1_Blk_Idx < Job.Snapshots (Job.Snapshot_Idx).Max_Level then
-
-               Job.State := Write_Inner_Node_Pending;
-               Progress := True;
-
-            else
-
-               Job.State := Write_Root_Node_Pending;
-               Progress := True;
-
-            end if;
+            Job.State := Write_Inner_Node_Pending;
+            Progress := True;
 
          else
 
-            Discard_Disposable_Snapshots (
-               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
-
-            Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
+            Job.State := Write_Root_Node_Pending;
             Progress := True;
 
          end if;
@@ -1772,6 +1761,9 @@ is
       case Job.State is
       when Submitted =>
 
+         Discard_Disposable_Snapshots (
+            Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
+
          Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
          Job.First_Snapshot := True;
          Job.T1_Blk_Idx :=
@@ -1878,44 +1870,28 @@ is
 
       when Alloc_PBAs_At_Lowest_Inner_Lvl_Completed =>
 
-         if Primitive.Success (Job.Generated_Prim) then
-
-            Job.State := Write_Leaf_Node_Completed;
-            Progress := True;
-
-         else
-
-            Discard_Disposable_Snapshots (
-               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
-
-            Job.State := Alloc_PBAs_At_Lowest_Inner_Lvl_Pending;
-            Progress := True;
-
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
          end if;
+
+         Job.State := Write_Leaf_Node_Completed;
+         Progress := True;
 
       when Alloc_PBAs_At_Leaf_Lvl_Completed =>
 
-         if Primitive.Success (Job.Generated_Prim) then
-
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Write,
-               Succ   => False,
-               Tg     => Primitive.Tag_VBD_Rkg_Crypto_Encrypt,
-               Blk_Nr => Block_Number_Type (Job.New_PBAs (0)),
-               Idx    => Primitive.Index_Type (Job_Idx));
-
-            Job.State := Encrypt_Leaf_Node_Pending;
-            Progress := True;
-
-         else
-
-            Discard_Disposable_Snapshots (
-               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
-
-            Job.State := Alloc_PBAs_At_Leaf_Lvl_Pending;
-            Progress := True;
-
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
          end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Crypto_Encrypt,
+            Blk_Nr => Block_Number_Type (Job.New_PBAs (0)),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Leaf_Node_Pending;
+         Progress := True;
 
       when Encrypt_Leaf_Node_Completed =>
 
@@ -2149,20 +2125,12 @@ is
 
       when Alloc_PBAs_At_Higher_Inner_Lvl_Completed =>
 
-         if Primitive.Success (Job.Generated_Prim) then
-
-            Job.State := Write_Inner_Node_Completed;
-            Progress := True;
-
-         else
-
-            Discard_Disposable_Snapshots (
-               Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
-
-            Job.State := Alloc_PBAs_At_Higher_Inner_Lvl_Pending;
-            Progress := True;
-
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
          end if;
+
+         Job.State := Write_Inner_Node_Completed;
+         Progress := True;
 
       when others =>
 
