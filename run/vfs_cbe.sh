@@ -8,7 +8,7 @@ produce_pattern() {
 	[ "$pattern" = "" ] && exit 1
 
 	local tmp_file="/tmp/pattern.tmp"
-	local N=12000
+	local N=1050
 	# prints numbers until N and uses pattern as delimiter and
 	# generates about 60 KiB of data with a 1 byte pattern
 	seq -s "$pattern" $N > $tmp_file
