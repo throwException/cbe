@@ -282,6 +282,22 @@ class Vfs_cbe::Wrapper
 			Genode::log("Use superblock[", _cur_sb, "]: ",
 			            _super_blocks.block[_cur_sb.value]);
 
+			Cbe::Superblock::State const sb_state =
+				_super_blocks.block[_cur_sb.value].state;
+
+			using State = Cbe::Superblock::State;
+			switch (sb_state) {
+			case State::NORMAL:
+				break;
+			case State::REKEYING:
+				_rekey_obj.state = Rekeying::State::IN_PROGRESS;
+				break;
+			case State::EXTENDING_VBD:
+				break;
+			case State::EXTENDING_FT:
+				break;
+			}
+
 			_backend->handler(&_backend_io_response_handler);
 			_cbe.construct(_super_blocks, _cur_sb);
 		}
