@@ -9,6 +9,7 @@
 /* Genode includes */
 #include <vfs/dir_file_system.h>
 #include <vfs/single_file_system.h>
+#include <util/arg_string.h>
 #include <util/xml_generator.h>
 #include <trace/timestamp.h>
 
@@ -26,6 +27,7 @@ namespace Vfs_cbe {
 
 	class Data_file_system;
 
+	class Extend_file_system;
 	class Rekey_file_system;
 	class Create_snapshot_file_system;
 	class Discard_snapshot_file_system;
@@ -143,12 +145,41 @@ class Vfs_cbe::Wrapper
 			uint32_t key_id;
 		};
 
+		struct Extending
+		{
+			enum Type { INVALID, VBD, FT };
+			enum State { IDLE, IN_PROGRESS, };
+			enum Result { NONE, SUCCESS, FAILED, };
+			Type   type;
+			State  state;
+			Result last_result;
+
+			static Type string_to_type(char const *s)
+			{
+				if (Genode::strcmp("vbd", s, 3) == 0) {
+					return Type::VBD;
+				} else
+
+				if (Genode::strcmp("ft", s, 2) == 0) {
+					return Type::FT;
+				}
+
+				return Type::INVALID;
+			}
+		};
+
 	private:
 
 		Rekeying _rekey_obj {
 			.state       = Rekeying::State::IDLE,
 			.last_result = Rekeying::Result::NONE,
 			.key_id      = 0, };
+
+		Extending _extend_obj {
+			.type        = Extending::Type::INVALID,
+			.state       = Extending::State::IDLE,
+			.last_result = Extending::Result::NONE,
+		};
 
 		/* configuration options */
 		bool _verbose       { false };
@@ -293,8 +324,12 @@ class Vfs_cbe::Wrapper
 				_rekey_obj.state = Rekeying::State::IN_PROGRESS;
 				break;
 			case State::EXTENDING_VBD:
+				_extend_obj.type  = Extending::Type::VBD;
+				_extend_obj.state = Extending::State::IN_PROGRESS;
 				break;
 			case State::EXTENDING_FT:
+				_extend_obj.type  = Extending::Type::FT;
+				_extend_obj.state = Extending::State::IN_PROGRESS;
 				break;
 			}
 
@@ -859,6 +894,32 @@ class Vfs_cbe::Wrapper
 					continue;
 				}
 
+				if (cbe_request.operation() == Cbe::Request::Operation::EXTEND_VBD) {
+					bool const req_sucess =
+						cbe_request.success() == Cbe::Request::Success::TRUE;
+					if (_verbose) {
+						log("Complete request: backend request (", cbe_request, ")");
+					}
+					_extend_obj.state = Extending::State::IDLE;
+					_extend_obj.last_result =
+						req_sucess ? Extending::Result::SUCCESS
+						           : Extending::Result::FAILED;
+					continue;
+				}
+
+				if (cbe_request.operation() == Cbe::Request::Operation::EXTEND_FT) {
+					bool const req_sucess =
+						cbe_request.success() == Cbe::Request::Success::TRUE;
+					if (_verbose) {
+						log("Complete request: backend request (", cbe_request, ")");
+					}
+					_extend_obj.state = Extending::State::IDLE;
+					_extend_obj.last_result =
+						req_sucess ? Extending::Result::SUCCESS
+						           : Extending::Result::FAILED;
+					continue;
+				}
+
 				if (cbe_request.success() != Cbe::Request::Success::TRUE) {
 					_helper_read_request.state  = Helper_request::State::NONE;
 					_helper_write_request.state = Helper_request::State::NONE;
@@ -1174,9 +1235,52 @@ class Vfs_cbe::Wrapper
 			return true;
 		}
 
-		Rekeying const &rekeying_progress() const
+		Rekeying const rekeying_progress() const
 		{
 			return _rekey_obj;
+		}
+
+		bool start_extending(Extending::Type       type,
+		                     Cbe::Number_of_blocks blocks)
+		{
+			if (!_cbe->client_request_acceptable()) {
+				return false;
+			}
+
+			Cbe::Request::Operation op =
+				Cbe::Request::Operation::INVALID;
+
+			switch (type) {
+			case Extending::Type::VBD:
+				op = Cbe::Request::Operation::EXTEND_VBD;
+				break;
+			case Extending::Type::FT:
+				op = Cbe::Request::Operation::EXTEND_FT;
+				break;
+			case Extending::Type::INVALID:
+				return false;
+			}
+
+			Cbe::Request req(op, Cbe::Request::Success::FALSE,
+			                 0, 0, blocks, 0, 0);
+
+			if (_verbose) {
+				Genode::log("Req: (background req: ", req, ")");
+			}
+
+			_cbe->submit_client_request(req, 0);
+			_extend_obj.type        = type;
+			_extend_obj.state       = Extending::State::IN_PROGRESS;
+			_extend_obj.last_result = Extending::Result::NONE;
+
+			// XXX kick-off extending
+			handle_frontend_request();
+			return true;
+		}
+
+		Extending const extending_progress() const
+		{
+			return _extend_obj;
 		}
 
 		void active_snapshot_ids(Cbe::Active_snapshot_ids &ids)
@@ -1459,6 +1563,142 @@ class Vfs_cbe::Data_file_system : public Single_file_system
 
 		static char const *type_name() { return "data"; }
 		char const *type() override { return type_name(); }
+};
+
+
+class Vfs_cbe::Extend_file_system : public Vfs::Single_file_system
+{
+	private:
+
+		Wrapper &_w;
+
+		struct Vfs_handle : Single_vfs_handle
+		{
+			Wrapper &_w;
+
+			Vfs_handle(Directory_service &ds,
+			           File_io_service   &fs,
+			           Genode::Allocator &alloc,
+			           Wrapper &w)
+			:
+				Single_vfs_handle(ds, fs, alloc, 0),
+				_w(w)
+			{ }
+
+			Read_result read(char *dst, file_size count,
+			                 file_size &out_count) override
+			{
+				if (seek() != 0) {
+					out_count = 0;
+					return READ_OK;
+				}
+
+				using Extending = Wrapper::Extending;
+
+				Extending const exp =
+					_w.extending_progress();
+
+				bool const in_progress =
+					exp.state == Extending::State::IN_PROGRESS;
+				bool const last_result =
+					!in_progress && exp.last_result != Extending::Result::NONE;
+				bool const success =
+					exp.last_result == Extending::Result::SUCCESS;
+
+				using Result = Genode::String<32>;
+				Result result {
+					in_progress ? "in-progress" : "idle",
+					" last-result:", last_result ? success ?
+					                 "success" : "failed" : "none",
+					"\n" };
+				strncpy(dst, result.string(), count);
+				size_t const length_without_nul = result.length() - 1;
+				out_count = count > length_without_nul - 1 ?
+				            length_without_nul : count;
+				return READ_OK;
+			}
+
+			Write_result write(char const *src, file_size count, file_size &out_count) override
+			{
+				using Type = Wrapper::Extending::Type;
+				using State = Wrapper::Extending::State;
+				if (_w.extending_progress().state != State::IDLE) {
+					return WRITE_ERR_IO;
+				}
+
+				char tree[16];
+				Arg_string::find_arg(src, "tree").string(tree, sizeof (tree), "-");
+				Type type = Wrapper::Extending::string_to_type(tree);
+				if (type == Type::INVALID) {
+					return WRITE_ERR_IO;
+				}
+
+				unsigned long blocks = Arg_string::find_arg(src, "blocks").ulong_value(0);
+				if (blocks == 0) {
+					return WRITE_ERR_IO;
+				}
+
+				bool const okay = _w.start_extending(type, blocks);
+				if (!okay) {
+					return WRITE_ERR_IO;
+				}
+
+				out_count = count;
+				return WRITE_OK;
+			}
+
+			bool read_ready() override { return true; }
+		};
+
+	public:
+
+		Extend_file_system(Wrapper &w)
+		:
+			Single_file_system(Node_type::TRANSACTIONAL_FILE, type_name(),
+			                   Node_rwx::wo(), Xml_node("<extend/>")),
+			_w(w)
+		{ }
+
+		static char const *type_name() { return "extend"; }
+
+		char const *type() override { return type_name(); }
+
+
+		/*********************************
+		 ** Directory-service interface **
+		 *********************************/
+
+		Open_result open(char const  *path, unsigned,
+		                 Vfs::Vfs_handle **out_handle,
+		                 Genode::Allocator   &alloc) override
+		{
+			if (!_single_file(path))
+				return OPEN_ERR_UNACCESSIBLE;
+
+			try {
+				*out_handle =
+					new (alloc) Vfs_handle(*this, *this, alloc, _w);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
+		}
+
+		Stat_result stat(char const *path, Stat &out) override
+		{
+			Stat_result result = Single_file_system::stat(path, out);
+			return result;
+		}
+
+
+		/********************************
+		 ** File I/O service interface **
+		 ********************************/
+
+		Ftruncate_result ftruncate(Vfs::Vfs_handle *handle, file_size) override
+		{
+			return FTRUNCATE_OK;
+		}
 };
 
 
@@ -2264,6 +2504,7 @@ struct Vfs_cbe::Control_local_factory : File_system_factory
 	Rekey_file_system             _rekeying_fs;
 	Create_snapshot_file_system   _create_snapshot_fs;
 	Discard_snapshot_file_system  _discard_snapshot_fs;
+	Extend_file_system            _extend_fs;
 
 	Control_local_factory(Vfs::Env     &env,
 	                      Xml_node      config,
@@ -2271,7 +2512,8 @@ struct Vfs_cbe::Control_local_factory : File_system_factory
 	:
 		_rekeying_fs(cbe),
 		_create_snapshot_fs(cbe),
-		_discard_snapshot_fs(cbe)
+		_discard_snapshot_fs(cbe),
+		_extend_fs(cbe)
 	{ }
 
 	Vfs::File_system *create(Vfs::Env&, Xml_node node) override
@@ -2286,6 +2528,10 @@ struct Vfs_cbe::Control_local_factory : File_system_factory
 
 		if (node.has_type(Discard_snapshot_file_system::type_name())) {
 			return &_discard_snapshot_fs;
+		}
+
+		if (node.has_type(Extend_file_system::type_name())) {
+			return &_extend_fs;
 		}
 
 		return nullptr;
@@ -2307,6 +2553,7 @@ class Vfs_cbe::Control_file_system : private Control_local_factory,
 			Xml_generator xml(buf, sizeof(buf), "dir", [&] () {
 				xml.attribute("name", "control");
 				xml.node("rekey", [&] () { });
+				xml.node("extend", [&] () { });
 				xml.node("create_snapshot", [&] () { });
 				xml.node("discard_snapshot", [&] () { });
 			});
