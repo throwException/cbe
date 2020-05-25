@@ -2882,11 +2882,10 @@ is
 
             Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
 
-            if Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen =
-                  Obj.Cur_Gen
-            then
-               Obj.Cur_Gen := Obj.Cur_Gen + 1;
-            end if;
+            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
+               Obj.Cur_Gen;
+
+            Obj.Cur_Gen := Obj.Cur_Gen + 1;
 
             if not Obj.Write_Stalled then
 
