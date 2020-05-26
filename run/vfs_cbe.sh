@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 echo "--- Automated CBE testing ---"
 
@@ -18,20 +19,16 @@ produce_pattern() {
 test_write_1() {
 	local data_file="$1"
 	local offset=$2
-	local pattern="$offset"
 
-	local pattern_file="/tmp/pattern.$pattern"
-	produce_pattern "$pattern" "4096" > $pattern_file
+	local pattern_file="/tmp/pattern"
 	dd bs=4096 count=1 if=$pattern_file of=$data_file seek=$offset 2>/dev/null || exit 1
 }
 
 test_read_compare_1() {
 	local data_file="$1"
 	local offset=$2
-	local pattern="$offset"
 
-	local pattern_file="/tmp/pattern.$pattern"
-	produce_pattern "$pattern" "4096" > $pattern_file
+	local pattern_file="/tmp/pattern"
 	rm $pattern_file.out 2>/dev/null
 
 	dd bs=4096 count=1 if=$data_file of=$pattern_file.out skip=$offset 2>/dev/null || exit 1
@@ -83,6 +80,31 @@ test_rekey() {
 	echo "Reykeying started"
 }
 
+test_vbd_extension() {
+	local cbe_dir="$1"
+	local nr_of_phys_blocks="$2"
+
+	echo "Start extending VBD"
+	echo tree=vbd, blocks=$nr_of_phys_blocks > $cbe_dir/control/extend
+	echo "VBD extension started"
+}
+
+test_ft_extension() {
+	local cbe_dir="$1"
+	local nr_of_phys_blocks="$2"
+
+	echo "Start extending FT"
+	echo tree=ft, blocks=$nr_of_phys_blocks > $cbe_dir/control/extend
+	echo "FT extension started"
+}
+
+test_rekey_state() {
+	local cbe_dir="$1"
+	local state="$(< $cbe_dir/control/rekey)"
+
+	echo "Rekeying state: $state"
+}
+
 test_rekey_state() {
 	local cbe_dir="$1"
 	local state="$(< $cbe_dir/control/rekey)"
@@ -106,6 +128,38 @@ wait_for_rekeying() {
 	done
 }
 
+wait_for_vbd_extension() {
+	local cbe_dir="$1"
+
+	echo "Wait for VBD extension to finish..."
+	while : ; do
+		local file_content="$(< $cbe_dir/control/extend)"
+		local state="${file_content:0:4}"
+		if [ "$state" = "idle" ]; then
+			local result="${file_content:5}"
+			echo "VBD extension done: $result"
+			break;
+		fi
+		sleep 2
+	done
+}
+
+wait_for_ft_extension() {
+	local cbe_dir="$1"
+
+	echo "Wait for FT extension to finish..."
+	while : ; do
+		local file_content="$(< $cbe_dir/control/extend)"
+		local state="${file_content:0:4}"
+		if [ "$state" = "idle" ]; then
+			local result="${file_content:5}"
+			echo "VBD extension done: $result"
+			break;
+		fi
+		sleep 2
+	done
+}
+
 main() {
 	local cbe_dir="/dev/cbe"
 	local data_file="$cbe_dir/current/data"
@@ -113,13 +167,47 @@ main() {
 	ls -l $cbe_dir
 
 	for i in $(seq 3); do
+
 		echo "--> Run $i:"
+
+		local pattern_file="/tmp/pattern"
+		produce_pattern "$i" "4096" > $pattern_file
+
+		test_write_1 "$data_file" "419"
+		test_write_1 "$data_file"  "63"
+		test_write_1 "$data_file" "333"
+
+		test_create_snapshot "$cbe_dir"
+
+		test_vbd_extension "$cbe_dir" "1000"
+		test_read_compare_1 "$data_file" "63"
+		test_write_1 "$data_file" "175"
+		test_read_compare_1 "$data_file" "419"
+		test_write_1 "$data_file" "91"
+		test_read_compare_1 "$data_file" "175"
+		test_read_compare_1 "$data_file" "91"
+		test_read_compare_1 "$data_file" "333"
+		wait_for_vbd_extension "$cbe_dir"
+
+		test_write_1 "$data_file"  "32"
+		test_write_1 "$data_file"  "77"
+		test_write_1 "$data_file" "199"
+
+		test_ft_extension "$cbe_dir" "1000"
+		test_read_compare_1 "$data_file" "32"
+		test_write_1 "$data_file" "211"
+		test_read_compare_1 "$data_file" "77"
+		test_write_1 "$data_file" "278"
+		test_read_compare_1 "$data_file" "199"
+		test_read_compare_1 "$data_file" "278"
+		test_read_compare_1 "$data_file" "211"
+		wait_for_ft_extension "$cbe_dir"
+
 		test_write_1 "$data_file"  "0"
 		test_write_1 "$data_file"  "8"
 		test_write_1 "$data_file" "16"
 		test_write_1 "$data_file" "490"
 		test_write_1 "$data_file" "468"
-		test_create_snapshot "$cbe_dir"
 
 		test_read_compare_1 "$data_file" "0"
 		test_read_compare_1 "$data_file" "8"
@@ -127,7 +215,6 @@ main() {
 		test_read_compare_1 "$data_file" "490"
 
 		test_rekey "$cbe_dir"
-
 		test_write_1 "$data_file" "0"
 		test_rekey_state "$cbe_dir"
 		test_read_compare_1 "$data_file" "490"
@@ -145,9 +232,10 @@ main() {
 		test_write_1 "$data_file" "240"
 		test_write_1 "$data_file" "201"
 		test_write_1 "$data_file" "328"
-
 		wait_for_rekeying "$cbe_dir"
+
 		echo "--> Run $i done"
+
 	done
 
 	echo "--> Read/Compare test"
