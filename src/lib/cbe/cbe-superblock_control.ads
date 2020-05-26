@@ -490,9 +490,9 @@ private
       Key_Value :        Key_Value_Plaintext_Type);
 
    --
-   --  Init_SB_Ciphertext_Without_Keys
+   --  Init_SB_Ciphertext_Without_Key_Values
    --
-   procedure Init_SB_Ciphertext_Without_Keys (
+   procedure Init_SB_Ciphertext_Without_Key_Values (
       SB_Plain  :     Superblock_Type;
       SB_Cipher : out Superblock_Ciphertext_Type);
 

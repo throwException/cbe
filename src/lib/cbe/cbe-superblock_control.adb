@@ -364,9 +364,9 @@ is
    end Superblock_Enter_Rekeying_State;
 
    --
-   --  Init_SB_Ciphertext_Without_Keys
+   --  Init_SB_Ciphertext_Without_Key_Values
    --
-   procedure Init_SB_Ciphertext_Without_Keys (
+   procedure Init_SB_Ciphertext_Without_Key_Values (
       SB_Plain  :     Superblock_Type;
       SB_Cipher : out Superblock_Ciphertext_Type)
    is
@@ -374,8 +374,10 @@ is
 
       SB_Cipher.State                   := SB_Plain.State;
       SB_Cipher.Rekeying_VBA            := SB_Plain.Rekeying_VBA;
-      SB_Cipher.Previous_Key            := Key_Ciphertext_Invalid;
-      SB_Cipher.Current_Key             := Key_Ciphertext_Invalid;
+      SB_Cipher.Previous_Key.Value      := (others => Byte_Type'First);
+      SB_Cipher.Previous_Key.ID         := SB_Plain.Previous_Key.ID;
+      SB_Cipher.Current_Key.Value       := (others => Byte_Type'First);
+      SB_Cipher.Current_Key.ID          := SB_Plain.Current_Key.ID;
       SB_Cipher.Snapshots               := SB_Plain.Snapshots;
       SB_Cipher.Last_Secured_Generation := SB_Plain.Last_Secured_Generation;
       SB_Cipher.Curr_Snap               := SB_Plain.Curr_Snap;
@@ -393,7 +395,7 @@ is
       SB_Cipher.Meta_Degree             := SB_Plain.Meta_Degree;
       SB_Cipher.Meta_Leafs              := SB_Plain.Meta_Leafs;
 
-   end Init_SB_Ciphertext_Without_Keys;
+   end Init_SB_Ciphertext_Without_Key_Values;
 
    --
    --  Execute_VBD_Extension_Step
@@ -453,7 +455,7 @@ is
 
             SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-            Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+            Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
             Job.Key_Plaintext := SB.Current_Key;
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
@@ -562,7 +564,7 @@ is
 
          SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
@@ -744,7 +746,7 @@ is
 
             SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-            Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+            Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
             Job.Key_Plaintext := SB.Current_Key;
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
@@ -889,7 +891,7 @@ is
             " " &
             Debug.To_String (SB.Free_Hash));
 
-         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
@@ -1168,7 +1170,7 @@ is
 
          SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
@@ -1364,7 +1366,7 @@ is
 
          SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-         Init_SB_Ciphertext_Without_Keys (SB, Job.SB_Ciphertext);
+         Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
