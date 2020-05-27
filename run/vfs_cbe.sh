@@ -9,9 +9,9 @@ produce_pattern() {
 	[ "$pattern" = "" ] && exit 1
 
 	local tmp_file="/tmp/pattern.tmp"
-	local N=1050
+	local N=1041
 	# prints numbers until N and uses pattern as delimiter and
-	# generates about 60 KiB of data with a 1 byte pattern
+	# generates about 4 KiB of data with a 1 byte pattern
 	seq -s "$pattern" $N > $tmp_file
 	dd if=$tmp_file count=1 bs=$size 2>/dev/null
 }
