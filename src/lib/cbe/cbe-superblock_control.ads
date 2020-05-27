@@ -66,18 +66,25 @@ is
    --  Peek_Completed_Request_Finished
    --
    function Peek_Completed_Request_Finished (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Boolean;
 
    --
-   --  Peek_Completed_Decrypted_Keys_Plaintext
+   --  Peek_Completed_Previous_Key_Plaintext
    --
-   procedure Peek_Completed_Decrypted_Keys_Plaintext (
-      Ctrl     : in out Control_Type;
-      Prim     :        Primitive.Object_Type;
-      Prev_Key :    out Key_Plaintext_Type;
-      Curr_Key :    out Key_Plaintext_Type);
+   function Peek_Completed_Previous_Key_Plaintext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Plaintext_Type;
+
+   --
+   --  Peek_Completed_Current_Key_Plaintext
+   --
+   function Peek_Completed_Current_Key_Plaintext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Plaintext_Type;
 
    --
    --  Drop_Completed_Primitive
@@ -168,8 +175,8 @@ is
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type;
 
    --

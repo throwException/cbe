@@ -89,10 +89,13 @@ is
 
       Obj.WB_Data := Write_Back_Data_Invalid;
 
-      Obj.Rekeying        := Boolean'First;
-      Obj.Previous_Key_ID := Key_ID_Type'First;
-      Obj.Current_Key_ID  := Key_ID_Type'First;
-      Obj.Rekeying_VBA    := Virtual_Block_Address_Type'First;
+      Obj.Rekeying         := Boolean'First;
+      Obj.Previous_Key_ID  := Key_ID_Type'First;
+      Obj.Current_Key_ID   := Key_ID_Type'First;
+      Obj.Rekeying_VBA     := Virtual_Block_Address_Type'First;
+      Obj.VBD_Degree_Log_2 := Tree_Degree_Log_2_Type'First;
+      Obj.VBD_Highest_VBA  := Virtual_Block_Address_Type'First;
+      Obj.Free_Gen         := Generation_Type'First;
 
    end Initialized_Object;
 

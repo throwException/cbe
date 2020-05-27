@@ -71,32 +71,32 @@ is
    --  Peek_Completed_Snapshots
    --
    function Peek_Completed_Snapshots (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Snapshots_Type;
 
    --
    --  Peek_Completed_Nr_Of_Leaves
    --
    function Peek_Completed_Nr_Of_Leaves (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Tree_Number_Of_Leafs_Type;
 
    --
    --  Peek_Completed_PBA
    --
    function Peek_Completed_PBA (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Physical_Block_Address_Type;
 
    --
    --  Peek_Completed_Nr_Of_PBAs
    --
    function Peek_Completed_Nr_Of_PBAs (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Number_Of_Blocks_Type;
 
    --
@@ -220,8 +220,8 @@ is
    --  Peek_Generated_Crypto_Key_ID
    --
    function Peek_Generated_Crypto_Key_ID (
-      Rkg  : in out Rekeying_Type;
-      Prim :        Primitive.Object_Type)
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
    return Key_ID_Type;
 
    --
@@ -411,8 +411,7 @@ private
    procedure Execute_Rekey_VBA_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
-      Hash     :        Hash_Type;
-      Progress : in out Boolean);
+      Progress :    out Boolean);
 
    --
    --  Execute_VBD_Ext_Step_Read_Inner_Node_Completed
@@ -420,8 +419,7 @@ private
    procedure Execute_VBD_Ext_Step_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
-      Hash     :        Hash_Type;
-      Progress : in out Boolean);
+      Progress :    out Boolean);
 
    --
    --  Log_2

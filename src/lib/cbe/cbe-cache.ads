@@ -208,7 +208,7 @@ private
    --
    procedure Write_Back_One_Dirty_Slot (
       Slots      : in out Slots_Type;
-      Progress   : in out Boolean);
+      Progress   :    out Boolean);
 
    --
    --  Submit_Primitive_Assertions

@@ -120,16 +120,6 @@ is
       pragma Debug (Debug.Print_String ("Initial SB state: "));
       pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
 
-      Debug.Print_String ("SB First_PBA: "
-         & Debug.To_String (Debug.Uint64_Type (Obj.Superblock.First_PBA)) &
-         " Nr_Of_PBAs "
-         & Debug.To_String (Debug.Uint64_Type (Obj.Superblock.Nr_Of_PBAs)) &
-         " Last_PBA "
-         & Debug.To_String (Debug.Uint64_Type (
-            Obj.Superblock.First_PBA +
-               Physical_Block_Address_Type (Obj.Superblock.Nr_Of_PBAs - 1))) &
-         " ");
-
       Declare_Decrypt_Keys_Request :
       declare
          Req : constant Request.Object_Type :=
@@ -634,6 +624,7 @@ is
       if not Primitive.Valid (Prim) or else
          not Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim)
       then
+         Key := Key_Plaintext_Invalid;
          Req := Request.Invalid_Object;
          return;
       end if;
@@ -2790,10 +2781,13 @@ is
 
             when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
 
-               Superblock_Control.Peek_Completed_Decrypted_Keys_Plaintext (
-                  Obj.SB_Ctrl, Prim,
-                  Obj.Superblock.Previous_Key,
-                  Obj.Superblock.Current_Key);
+               Obj.Superblock.Previous_Key :=
+                  Superblock_Control.Peek_Completed_Previous_Key_Plaintext (
+                     Obj.SB_Ctrl, Prim);
+
+               Obj.Superblock.Current_Key :=
+                  Superblock_Control.Peek_Completed_Current_Key_Plaintext (
+                     Obj.SB_Ctrl, Prim);
 
                Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
@@ -3429,10 +3423,11 @@ is
                Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
                   null;
 
+               Progress := True;
+
             end case;
 
          end Declare_Prim;
-         Progress := True;
 
       end loop Loop_Crypto_Completed_Prims;
 

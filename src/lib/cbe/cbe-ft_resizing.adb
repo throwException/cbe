@@ -12,6 +12,8 @@ with SHA256_4K;
 with Interfaces;
 with CBE.Debug;
 
+pragma Unreferenced (CBE.Debug);
+
 use Interfaces;
 
 package body CBE.FT_Resizing
@@ -261,8 +263,8 @@ is
    --  Peek_Completed_FT_Root
    --
    function Peek_Completed_FT_Root (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Type_1_Node_Type
    is
    begin
@@ -294,8 +296,8 @@ is
    --  Peek_Completed_FT_Max_Lvl_Idx
    --
    function Peek_Completed_FT_Max_Lvl_Idx (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Tree_Level_Index_Type
    is
    begin
@@ -327,8 +329,8 @@ is
    --  Peek_Completed_FT_Nr_Of_Leaves
    --
    function Peek_Completed_FT_Nr_Of_Leaves (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Tree_Number_Of_Leafs_Type
    is
    begin
@@ -360,8 +362,8 @@ is
    --  Peek_Completed_Nr_Of_Leaves
    --
    function Peek_Completed_Nr_Of_Leaves (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Tree_Number_Of_Leafs_Type
    is
    begin
@@ -393,8 +395,8 @@ is
    --  Peek_Completed_PBA
    --
    function Peek_Completed_PBA (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Physical_Block_Address_Type
    is
    begin
@@ -426,8 +428,8 @@ is
    --  Peek_Completed_Nr_Of_PBAs
    --
    function Peek_Completed_Nr_Of_PBAs (
-      Rszg : in out Resizing_Type;
-      Prim :        Primitive.Object_Type)
+      Rszg : Resizing_Type;
+      Prim : Primitive.Object_Type)
    return Number_Of_Blocks_Type
    is
    begin
@@ -578,7 +580,7 @@ is
          Gen => Curr_Gen,
          Hash => (others => 0));
 
-      Debug.Print_String (
+      pragma Debug (Debug.Print_String (
          "   SET FT_ROOT PBA " &
          Debug.To_String (Debug.Uint64_Type (FT_Root.PBA)) &
          " GEN " &
@@ -589,9 +591,9 @@ is
          Debug.To_String (Debug.Uint64_Type (FT_Max_Lvl_Idx)) &
          " " &
          Debug.To_String (FT_Root.Hash) &
-         " ");
+         " "));
 
-      Debug.Print_String (
+      pragma Debug (Debug.Print_String (
          "   SET LVL " &
          Debug.To_String (Debug.Uint64_Type (FT_Max_Lvl_Idx)) &
          " CHILD 0 PBA " &
@@ -603,7 +605,9 @@ is
          " " &
          Debug.To_String (
             T1_Blks (FT_Max_Lvl_Idx) (0).Hash) &
-         " ");
+         " "));
+
+      pragma Unreferenced (FT_Nr_Of_Leaves);
 
    end Add_New_Root_Lvl_To_FT_Using_PBA_Contingent;
 
@@ -639,9 +643,9 @@ is
                T2_Blk := (others => Type_2_Node_Invalid);
             end if;
 
-            Debug.Print_String (
+            pragma Debug (Debug.Print_String (
                "   RESET LVL " &
-               Debug.To_String (Debug.Uint64_Type (Lvl_Idx)));
+               Debug.To_String (Debug.Uint64_Type (Lvl_Idx))));
 
          end loop Reset_All_Lvls_Below_Mount_Point;
 
@@ -679,7 +683,7 @@ is
                      Gen => Curr_Gen,
                      Hash => (others => 0));
 
-                  Debug.Print_String (
+                  pragma Debug (Debug.Print_String (
                      "   SET LVL " &
                      Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
                      " CHILD " &
@@ -693,7 +697,7 @@ is
                      " " &
                      Debug.To_String (
                         T1_Blks (Lvl_Idx) (Child_Idx).Hash) &
-                     " ");
+                     " "));
 
                end Declare_Child_Args;
 
@@ -729,7 +733,7 @@ is
                         Last_Key_ID => Key_ID_Invalid,
                         Reserved => False);
 
-                     Debug.Print_String (
+                     pragma Debug (Debug.Print_String (
                         "   SET LVL " &
                         Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
                         " CHILD " &
@@ -749,7 +753,7 @@ is
                         " VBA " &
                         Debug.To_String (Debug.Uint64_Type (
                            T2_Blk (Child_Idx).Last_VBA)) &
-                        " ");
+                        " "));
 
                      Nr_Of_Leaves := Nr_Of_Leaves + 1;
 
@@ -771,8 +775,7 @@ is
    procedure Execute_FT_Ext_Step_Read_Inner_Node_Completed (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
-      Hash     :        Hash_Type;
-      Progress : in out Boolean)
+      Progress :    out Boolean)
    is
    begin
 
@@ -782,18 +785,33 @@ is
 
       if Job.Lvl_Idx > 1 then
 
-         if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.Lvl_Idx)) /= Hash then
+         if Job.Lvl_Idx = Job.FT_Max_Lvl_Idx then
 
-            Debug.Print_String (
-               "   HASH MISMATCH LVL " &
-               Debug.To_String (Debug.Uint64_Type (Job.Lvl_Idx)) &
-               " GOT " &
-               Debug.To_String (
-                  Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.Lvl_Idx))) &
-               " EXP " &
-               Debug.To_String (Hash));
+            if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.Lvl_Idx)) /=
+               Job.FT_Root.Hash
+            then
+               raise Program_Error;
+            end if;
 
-            raise Program_Error;
+         else
+
+            Declare_Child_Idx_1 :
+            declare
+               Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+                  Job.Lvl_Idx + 1;
+
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  T1_Child_Idx_For_VBA (
+                     Job.VBA, Parent_Lvl_Idx, Job.FT_Degree);
+            begin
+
+               if Hash_Of_T1_Node_Blk (Job.T1_Blks (Job.Lvl_Idx)) /=
+                  Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash
+               then
+                  raise Program_Error;
+               end if;
+
+            end Declare_Child_Idx_1;
 
          end if;
 
@@ -828,7 +846,7 @@ is
                Job.State := Read_Inner_Node_Pending;
                Progress := True;
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "   READ LVL " &
                   Debug.To_String (Debug.Uint64_Type (Child_Lvl_Idx)) &
                   " PARENT LVL " &
@@ -841,7 +859,7 @@ is
                   Debug.To_String (Debug.Uint64_Type (Child.Gen)) &
                   " " &
                   Debug.To_String (Child.Hash) &
-                  " ");
+                  " "));
 
             else
 
@@ -888,20 +906,23 @@ is
 
       else
 
-         if Hash_Of_T2_Node_Blk (Job.T2_Blk) /= Hash then
+         Declare_Child_Idx_4 :
+         declare
+            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
+               Job.Lvl_Idx + 1;
 
-            Debug.Print_String (
-               "   HASH MISMATCH LVL " &
-               Debug.To_String (Debug.Uint64_Type (Job.Lvl_Idx)) &
-               " GOT " &
-               Debug.To_String (
-                  Hash_Of_T2_Node_Blk (Job.T2_Blk)) &
-               " EXP " &
-               Debug.To_String (Hash));
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               T1_Child_Idx_For_VBA (
+                  Job.VBA, Parent_Lvl_Idx, Job.FT_Degree);
+         begin
 
-            raise Program_Error;
+            if Hash_Of_T2_Node_Blk (Job.T2_Blk) /=
+               Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash
+            then
+               raise Program_Error;
+            end if;
 
-         end if;
+         end Declare_Child_Idx_4;
 
          Declare_Child_3 :
          declare
@@ -931,9 +952,9 @@ is
 
             Job.Alloc_Lvl_Idx := Parent_Lvl_Idx;
 
-            Debug.Print_String (
+            pragma Debug (Debug.Print_String (
                "   ALLOC LVL " &
-               Debug.To_String (Debug.Uint64_Type (Job.Alloc_Lvl_Idx)));
+               Debug.To_String (Debug.Uint64_Type (Job.Alloc_Lvl_Idx))));
 
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
@@ -990,12 +1011,12 @@ is
          Blk_Nr => Block_Number_Type (PBA),
          Idx    => Prim_Idx);
 
-      Debug.Print_String (
+      pragma Debug (Debug.Print_String (
          "   WRITE LVL " &
          Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
          " PBA " &
          Debug.To_String (Debug.Uint64_Type (PBA)) &
-         " ");
+         " "));
 
       if Lvl_Idx < Max_Lvl_Idx then
 
@@ -1047,7 +1068,7 @@ is
                Blk_Nr => Block_Number_Type (Job.FT_Root.PBA),
                Idx    => Primitive.Index_Type (Job_Idx));
 
-            Debug.Print_String (
+            pragma Debug (Debug.Print_String (
                "   READ LVL " &
                Debug.To_String (Debug.Uint64_Type (Job.Lvl_Idx)) &
                " PARENT FT_ROOT PBA " &
@@ -1064,7 +1085,7 @@ is
                   Job.FT_Max_Lvl_Idx)) &
                " " &
                Debug.To_String (Job.FT_Root.Hash) &
-               " ");
+               " "));
 
             Job.State := Read_Root_Node_Pending;
             Progress := True;
@@ -1094,28 +1115,10 @@ is
                Stopped_At_Lvl_Idx    => Job.Lvl_Idx,
                Nr_Of_Leaves          => Job.Nr_Of_Leaves);
 
-            Debug.Print_String (
+            pragma Debug (Debug.Print_String (
                "   PBAS ALLOCATED CURR_GEN " &
                Debug.To_String (Debug.Uint64_Type (Job.Curr_Gen)) &
-               " ");
-
-            for Lvl_Idx in reverse Tree_Level_Index_Type loop
-
-               Debug.Print_String (
-                  "      LVL " &
-                  Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                  "      NEW_PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.New_PBAs (Lvl_Idx))) &
-                  "      OLD_PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Old_PBAs (Lvl_Idx))) &
-                  "      OLD_GEN " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Old_Generations (Lvl_Idx))) &
-                  " ");
-
-            end loop;
+               " "));
 
             Set_Args_For_Write_Back_Of_Inner_Lvl (
                Max_Lvl_Idx => Job.FT_Max_Lvl_Idx,
@@ -1131,28 +1134,12 @@ is
       when Read_Root_Node_Completed =>
 
          Execute_FT_Ext_Step_Read_Inner_Node_Completed (
-            Job, Job_Idx, Job.FT_Root.Hash, Progress);
+            Job, Job_Idx, Progress);
 
       when Read_Inner_Node_Completed =>
 
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
-         end if;
-
-         Declare_Child_Idx_1 :
-         declare
-            Parent_Lvl_Idx : constant Type_1_Node_Blocks_Index_Type :=
-               Job.Lvl_Idx + 1;
-
-            Child_Idx : constant Type_1_Node_Block_Index_Type :=
-               T1_Child_Idx_For_VBA (Job.VBA, Parent_Lvl_Idx, Job.FT_Degree);
-         begin
-
-            Execute_FT_Ext_Step_Read_Inner_Node_Completed (
-               Job, Job_Idx, Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash,
-               Progress);
-
-         end Declare_Child_Idx_1;
+         Execute_FT_Ext_Step_Read_Inner_Node_Completed (
+            Job, Job_Idx, Progress);
 
       when Alloc_PBA_Completed =>
 
@@ -1184,28 +1171,10 @@ is
 
          else
 
-            Debug.Print_String (
+            pragma Debug (Debug.Print_String (
                "   PBAS ALLOCATED CURR_GEN " &
                Debug.To_String (Debug.Uint64_Type (Job.Curr_Gen)) &
-               " ");
-
-            for Lvl_Idx in reverse Tree_Level_Index_Type loop
-
-               Debug.Print_String (
-                  "      LVL " &
-                  Debug.To_String (Debug.Uint64_Type (Lvl_Idx)) &
-                  "      NEW_PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.New_PBAs (Lvl_Idx))) &
-                  "      OLD_PBA " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Old_PBAs (Lvl_Idx))) &
-                  "      OLD_GEN " &
-                  Debug.To_String (Debug.Uint64_Type (
-                     Job.Old_Generations (Lvl_Idx))) &
-                  " ");
-
-            end loop;
+               " "));
 
             Set_Args_For_Write_Back_Of_Inner_Lvl (
                Max_Lvl_Idx => Job.FT_Max_Lvl_Idx,
@@ -1244,7 +1213,7 @@ is
                   Gen => Job.Curr_Gen,
                   Hash => Hash_Of_T1_Node_Blk (Job.T1_Blks (Child_Lvl_Idx)));
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "   SET LVL " &
                   Debug.To_String (Debug.Uint64_Type (Parent_Lvl_Idx)) &
                   " CHILD " &
@@ -1258,7 +1227,7 @@ is
                   " " &
                   Debug.To_String (
                      Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash) &
-                  " ");
+                  " "));
 
                Set_Args_For_Write_Back_Of_Inner_Lvl (
                   Max_Lvl_Idx => Job.FT_Max_Lvl_Idx,
@@ -1293,7 +1262,7 @@ is
                   Gen => Job.Curr_Gen,
                   Hash => Hash_Of_T2_Node_Blk (Job.T2_Blk));
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "   SET LVL " &
                   Debug.To_String (Debug.Uint64_Type (
                      Parent_Lvl_Idx)) &
@@ -1309,7 +1278,7 @@ is
                   " " &
                   Debug.To_String (
                      Job.T1_Blks (Parent_Lvl_Idx) (Child_Idx).Hash) &
-                  " ");
+                  " "));
 
                Set_Args_For_Write_Back_Of_Inner_Lvl (
                   Max_Lvl_Idx => Job.FT_Max_Lvl_Idx,

@@ -11,6 +11,8 @@ pragma Ada_2012;
 with CBE.Debug;
 with SHA256_4K;
 
+pragma Unreferenced (CBE.Debug);
+
 package body CBE.Superblock_Control
 with SPARK_Mode
 is
@@ -267,8 +269,8 @@ is
    --  Peek_Completed_Request_Finished
    --
    function Peek_Completed_Request_Finished (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Boolean
    is
    begin
@@ -289,13 +291,12 @@ is
    end Peek_Completed_Request_Finished;
 
    --
-   --  Peek_Completed_Decrypted_Keys_Plaintext
+   --  Peek_Completed_Previous_Key_Plaintext
    --
-   procedure Peek_Completed_Decrypted_Keys_Plaintext (
-      Ctrl     : in out Control_Type;
-      Prim     :        Primitive.Object_Type;
-      Prev_Key :    out Key_Plaintext_Type;
-      Curr_Key :    out Key_Plaintext_Type)
+   function Peek_Completed_Previous_Key_Plaintext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Plaintext_Type
    is
    begin
       Find_Corresponding_Job :
@@ -306,9 +307,7 @@ is
             if Ctrl.Jobs (Idx).State = Completed and then
                Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
             then
-               Prev_Key := Ctrl.Jobs (Idx).Prev_Key_Plaintext;
-               Curr_Key := Ctrl.Jobs (Idx).Curr_Key_Plaintext;
-               return;
+               return Ctrl.Jobs (Idx).Prev_Key_Plaintext;
             end if;
 
          when others =>
@@ -318,7 +317,36 @@ is
          end case;
       end loop Find_Corresponding_Job;
       raise Program_Error;
-   end Peek_Completed_Decrypted_Keys_Plaintext;
+   end Peek_Completed_Previous_Key_Plaintext;
+
+   --
+   --  Peek_Completed_Current_Key_Plaintext
+   --
+   function Peek_Completed_Current_Key_Plaintext (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_Plaintext_Type
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         case Ctrl.Jobs (Idx).Operation is
+         when Decrypt_Keys =>
+
+            if Ctrl.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
+            then
+               return Ctrl.Jobs (Idx).Curr_Key_Plaintext;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+   end Peek_Completed_Current_Key_Plaintext;
 
    --
    --  Drop_Completed_Primitive
@@ -374,6 +402,10 @@ is
 
       SB_Cipher.State                   := SB_Plain.State;
       SB_Cipher.Rekeying_VBA            := SB_Plain.Rekeying_VBA;
+      SB_Cipher.Resizing_Nr_Of_PBAs     := SB_Plain.Resizing_Nr_Of_PBAs;
+      SB_Cipher.Resizing_Nr_Of_Leaves   := SB_Plain.Resizing_Nr_Of_Leaves;
+      SB_Cipher.First_PBA               := SB_Plain.First_PBA;
+      SB_Cipher.Nr_Of_PBAs              := SB_Plain.Nr_Of_PBAs;
       SB_Cipher.Previous_Key.Value      := (others => Byte_Type'First);
       SB_Cipher.Previous_Key.ID         := SB_Plain.Previous_Key.ID;
       SB_Cipher.Current_Key.Value       := (others => Byte_Type'First);
@@ -439,7 +471,7 @@ is
 
                Job.PBA := Last_Used_PBA + 1;
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "VBD EXT INIT PBA " &
                   Debug.To_String (Debug.Uint64_Type (
                      Job.PBA)) &
@@ -449,7 +481,7 @@ is
                   " NR_OF_LEAVES " &
                   Debug.To_String (Debug.Uint64_Type (
                      SB.Resizing_Nr_Of_Leaves)) &
-                  " ");
+                  " "));
 
             end Declare_Nr_Of_Unused_PBAs_1;
 
@@ -487,7 +519,7 @@ is
                Job.PBA := Last_Used_PBA + 1;
                Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "VBD EXT STEP PBA " &
                   Debug.To_String (Debug.Uint64_Type (
                      Job.PBA)) &
@@ -497,7 +529,7 @@ is
                   " NR_OF_LEAVES " &
                   Debug.To_String (Debug.Uint64_Type (
                      SB.Resizing_Nr_Of_Leaves)) &
-                  " ");
+                  " "));
 
             end Declare_Nr_Of_Unused_PBAs_2;
 
@@ -648,7 +680,6 @@ is
          end if;
 
          Job.Hash := Hash_Of_Superblock (SB);
-         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -730,7 +761,7 @@ is
 
                Job.PBA := Last_Used_PBA + 1;
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "FT EXT INIT PBA " &
                   Debug.To_String (Debug.Uint64_Type (
                      Job.PBA)) &
@@ -740,7 +771,7 @@ is
                   " NR_OF_LEAVES " &
                   Debug.To_String (Debug.Uint64_Type (
                      SB.Resizing_Nr_Of_Leaves)) &
-                  " ");
+                  " "));
 
             end Declare_Nr_Of_Unused_PBAs_1;
 
@@ -778,7 +809,7 @@ is
                Job.PBA := Last_Used_PBA + 1;
                Job.Nr_Of_Blks := SB.Resizing_Nr_Of_PBAs;
 
-               Debug.Print_String (
+               pragma Debug (Debug.Print_String (
                   "FT EXT STEP PBA " &
                   Debug.To_String (Debug.Uint64_Type (
                      Job.PBA)) &
@@ -788,7 +819,7 @@ is
                   " NR_OF_LEAVES " &
                   Debug.To_String (Debug.Uint64_Type (
                      SB.Resizing_Nr_Of_Leaves)) &
-                  " ");
+                  " "));
 
             end Declare_Nr_Of_Unused_PBAs_2;
 
@@ -856,30 +887,30 @@ is
 
          SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
-         Debug.Print_String ("   SET SB");
-         Debug.Print_String (
+         pragma Debug (Debug.Print_String ("   SET SB"));
+         pragma Debug (Debug.Print_String (
             "      STATE " &
             (case SB.State is
              when Normal => "Normal",
              when Extending_VBD => "Ext_VBD",
              when Extending_FT => "Ext_FT",
-             when Rekeying => "Rekg"));
+             when Rekeying => "Rekg")));
 
-         Debug.Print_String (
+         pragma Debug (Debug.Print_String (
             "      RESIZING PBAS " &
             Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_PBAs)) &
             " LEAFS " &
-            Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves)));
+            Debug.To_String (Debug.Uint64_Type (SB.Resizing_Nr_Of_Leaves))));
 
-         Debug.Print_String (
+         pragma Debug (Debug.Print_String (
             "      CURR_SNAP PBA " &
             Debug.To_String (Debug.Uint64_Type (
                SB.Snapshots (SB.Curr_Snap).PBA)) &
             " GEN " &
             Debug.To_String (Debug.Uint64_Type (
-               SB.Snapshots (SB.Curr_Snap).Gen)));
+               SB.Snapshots (SB.Curr_Snap).Gen))));
 
-         Debug.Print_String (
+         pragma Debug (Debug.Print_String (
             "      FT PBA " &
             Debug.To_String (Debug.Uint64_Type (SB.Free_Number)) &
             " GEN " &
@@ -889,7 +920,7 @@ is
             " MAX_LVL " &
             Debug.To_String (Debug.Uint64_Type (SB.Free_Max_Level)) &
             " " &
-            Debug.To_String (SB.Free_Hash));
+            Debug.To_String (SB.Free_Hash)));
 
          Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
          Job.Key_Plaintext := SB.Current_Key;
@@ -942,8 +973,8 @@ is
             raise Program_Error;
          end if;
 
-         Debug.Print_String (
-            "   WRITE SB");
+         pragma Debug (Debug.Print_String (
+            "   WRITE SB"));
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Write,
@@ -978,7 +1009,6 @@ is
          end if;
 
          Job.Hash := Hash_Of_Superblock (SB);
-         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1068,7 +1098,6 @@ is
             raise Program_Error;
          end if;
 
-         Job.Generated_Prim := Primitive.Invalid_Object;
          Primitive.Success (Job.Submitted_Prim, True);
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
@@ -1254,7 +1283,6 @@ is
          end if;
 
          Job.Hash := Hash_Of_Superblock (SB);
-         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1314,8 +1342,8 @@ is
             raise Program_Error;
          end if;
 
-         Debug.Print_String ("REKEY VBA " &
-            Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA)));
+         pragma Debug (Debug.Print_String ("REKEY VBA " &
+            Debug.To_String (Debug.Uint64_Type (SB.Rekeying_VBA))));
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
@@ -1466,7 +1494,6 @@ is
          end if;
 
          Job.Hash := Hash_Of_Superblock (SB);
-         Job.Generation := SB.Snapshots (SB.Curr_Snap).Gen;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -2416,8 +2443,8 @@ is
    --  Peek_Generated_Blk_Data
    --
    function Peek_Generated_Blk_Data (
-      Ctrl : in out Control_Type;
-      Prim :        Primitive.Object_Type)
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
    return Block_Data_Type
    is
       Idx : constant Jobs_Index_Type :=

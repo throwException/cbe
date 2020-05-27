@@ -261,7 +261,7 @@ is
    --
    procedure Write_Back_One_Dirty_Slot (
       Slots    : in out Slots_Type;
-      Progress : in out Boolean)
+      Progress :    out Boolean)
    is
    begin
       Find_Dirty_Slot :

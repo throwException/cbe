@@ -77,6 +77,7 @@ is
       Obj.Finished      := False;
 
       Obj.Cache_Request := Invalid_Cache_Request;
+      Obj.Submitted_Prim := Primitive.Invalid_Object;
 
       Initialize_Type_1_Info_Array (Obj.Level_N_Nodes);
       Obj.Level_1_Node := Type_2_Info_Invalid;
