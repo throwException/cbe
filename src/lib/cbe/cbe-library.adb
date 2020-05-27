@@ -161,6 +161,50 @@ is
 
             Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
          end Declare_Resume_Rekeying_Request;
+
+      elsif Obj.Superblock.State = Extending_VBD then
+
+         Declare_Resume_Extend_VBD_Request :
+         declare
+            Req : constant Request.Object_Type :=
+               Request.Valid_Object (
+                  Op     => Extend_VBD,
+                  Succ   => False,
+                  Blk_Nr => Block_Number_Type (0),
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+         begin
+
+            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
+               raise Program_Error;
+            end if;
+
+            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+         end Declare_Resume_Extend_VBD_Request;
+
+      elsif Obj.Superblock.State = Extending_FT then
+
+         Declare_Resume_Extend_FT_Request :
+         declare
+            Req : constant Request.Object_Type :=
+               Request.Valid_Object (
+                  Op     => Extend_FT,
+                  Succ   => False,
+                  Blk_Nr => Block_Number_Type (0),
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+         begin
+
+            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
+               raise Program_Error;
+            end if;
+
+            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+         end Declare_Resume_Extend_FT_Request;
       end if;
 
    end Initialize_Object;
