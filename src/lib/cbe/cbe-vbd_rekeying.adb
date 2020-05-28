@@ -1753,6 +1753,16 @@ is
    end Execute_VBD_Extension_Step;
 
    --
+   --  Snapshot_Contains_VBA
+   --
+   function Snapshot_Contains_VBA (
+      Snapshot : Snapshot_Type;
+      VBA      : Virtual_Block_Address_Type)
+   return Boolean
+   is (
+      VBA <= Virtual_Block_Address_Type (Snapshot.Nr_Of_Leafs - 1));
+
+   --
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
@@ -1768,24 +1778,57 @@ is
          Discard_Disposable_Snapshots (
             Job.Snapshots, Job.Curr_Gen, Job.Last_Secured_Gen);
 
-         Job.Snapshot_Idx := Newest_Snapshot_Idx (Job.Snapshots);
-         Job.First_Snapshot := True;
-         Job.T1_Blk_Idx :=
-            Type_1_Node_Blocks_Index_Type (
-               Job.Snapshots (Job.Snapshot_Idx).Max_Level);
+         Declare_First_Snap_Idx :
+         declare
+            First_Snap_Idx : Snapshots_Index_Type :=
+               Snapshots_Index_Type'First;
 
-         Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) :=
-            Job.Snapshots (Job.Snapshot_Idx).PBA;
+            First_Snap_Idx_Found : Boolean := False;
+         begin
 
-         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-            Op     => Read,
-            Succ   => False,
-            Tg     => Primitive.Tag_VBD_Rkg_Cache,
-            Blk_Nr => Block_Number_Type (Job.Snapshots (Job.Snapshot_Idx).PBA),
-            Idx    => Primitive.Index_Type (Job_Idx));
+            Find_First_Snapshot :
+            for Snap_Idx in Job.Snapshots'Range loop
 
-         Job.State := Read_Root_Node_Pending;
-         Progress := True;
+               if Job.Snapshots (Snap_Idx).Valid and then
+                  (not First_Snap_Idx_Found or else
+                   Job.Snapshots (Snap_Idx).Gen >
+                      Job.Snapshots (First_Snap_Idx).Gen)
+               then
+                  First_Snap_Idx := Snap_Idx;
+                  First_Snap_Idx_Found := True;
+               end if;
+
+            end loop Find_First_Snapshot;
+
+            if First_Snap_Idx_Found then
+
+               Job.Snapshot_Idx := First_Snap_Idx;
+               Job.First_Snapshot := True;
+               Job.T1_Blk_Idx :=
+                  Type_1_Node_Blocks_Index_Type (
+                     Job.Snapshots (Job.Snapshot_Idx).Max_Level);
+
+               Job.T1_Blks_Old_PBAs (Job.T1_Blk_Idx) :=
+                  Job.Snapshots (Job.Snapshot_Idx).PBA;
+
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Read,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_VBD_Rkg_Cache,
+                  Blk_Nr => Block_Number_Type (Job.Snapshots (
+                               Job.Snapshot_Idx).PBA),
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Job.State := Read_Root_Node_Pending;
+               Progress := True;
+
+            else
+
+               raise Program_Error;
+
+            end if;
+
+         end Declare_First_Snap_Idx;
 
       when Read_Root_Node_Completed =>
 
@@ -2020,31 +2063,30 @@ is
 
          end Declare_Child_Idx_7;
 
-         Declare_New_Snap_Idx :
+         Declare_Next_Snap_Idx :
          declare
-            New_Snap_Idx : Snapshots_Index_Type :=
+            Next_Snap_Idx : Snapshots_Index_Type :=
                Snapshots_Index_Type'First;
-            New_Snap_Idx_Valid : Boolean := False;
+            Next_Snap_Idx_Valid : Boolean := False;
             Old_Snap_Idx : constant Snapshots_Index_Type := Job.Snapshot_Idx;
          begin
 
-            --
-            --  Find the next snapshot
-            --
-            For_Each_Snap_Idx :
+            Find_Next_Snapshot :
             for Snap_Idx in Job.Snapshots'Range loop
 
-               if Job.Snapshots (Snap_Idx).Valid then
+               if Job.Snapshots (Snap_Idx).Valid and then
+                  Snapshot_Contains_VBA (Job.Snapshots (Snap_Idx), Job.VBA)
+               then
 
-                  if New_Snap_Idx_Valid then
+                  if Next_Snap_Idx_Valid then
 
                      if Job.Snapshots (Snap_Idx).Gen >
-                           Job.Snapshots (New_Snap_Idx).Gen and then
+                           Job.Snapshots (Next_Snap_Idx).Gen and then
                         Job.Snapshots (Snap_Idx).Gen <
                            Job.Snapshots (Old_Snap_Idx).Gen
                      then
-                        New_Snap_Idx := Snap_Idx;
-                        New_Snap_Idx_Valid := True;
+                        Next_Snap_Idx := Snap_Idx;
+                        Next_Snap_Idx_Valid := True;
                      end if;
 
                   else
@@ -2052,23 +2094,23 @@ is
                      if Job.Snapshots (Snap_Idx).Gen <
                            Job.Snapshots (Old_Snap_Idx).Gen
                      then
-                        New_Snap_Idx := Snap_Idx;
-                        New_Snap_Idx_Valid := True;
+                        Next_Snap_Idx := Snap_Idx;
+                        Next_Snap_Idx_Valid := True;
                      end if;
 
                   end if;
 
                end if;
 
-            end loop For_Each_Snap_Idx;
+            end loop Find_Next_Snapshot;
 
-            if New_Snap_Idx_Valid then
+            if Next_Snap_Idx_Valid then
 
                --
                --  Start rekeying VBA in next snapshot
                --
 
-               Job.Snapshot_Idx := New_Snap_Idx;
+               Job.Snapshot_Idx := Next_Snap_Idx;
                Job.First_Snapshot := False;
                Job.T1_Blk_Idx :=
                   Type_1_Node_Blocks_Index_Type (
@@ -2108,7 +2150,7 @@ is
 
             end if;
 
-         end Declare_New_Snap_Idx;
+         end Declare_Next_Snap_Idx;
 
       when Alloc_PBAs_At_Higher_Inner_Lvl_Completed =>
 
