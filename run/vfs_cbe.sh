@@ -177,8 +177,6 @@ main() {
 		test_write_1 "$data_file"  "63"
 		test_write_1 "$data_file" "333"
 
-		test_create_snapshot "$cbe_dir"
-
 		test_vbd_extension "$cbe_dir" "1000"
 		test_read_compare_1 "$data_file" "63"
 		test_write_1 "$data_file" "175"
