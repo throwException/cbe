@@ -193,6 +193,28 @@ extern "C" void print_cstring(char const *s, Genode::size_t len)
 	Genode::log(Genode::Cstring(s, len));
 }
 
+extern "C" void print_cstring_buffered(char const     *input,
+                                       Genode::size_t  input_len)
+{
+	enum { BUF_SIZE = 256 };
+
+	static char   buf[BUF_SIZE];
+	static size_t buf_left { BUF_SIZE };
+
+	char const *input_curr = input;
+	for (size_t input_left = input_len; input_left; input_left--) {
+		if (*input_curr == '\n' || buf_left == 0) {
+			Genode::log(Genode::Cstring(buf, BUF_SIZE - buf_left));
+			buf_left = BUF_SIZE;
+		} else {
+			buf[BUF_SIZE - buf_left] = *input_curr;
+			buf_left--;
+		}
+		input_curr++;
+	}
+
+}
+
 extern "C" int memcmp(const void *p0, const void *p1, Genode::size_t size)
 {
 	return Genode::memcmp(p0, p1, size);
