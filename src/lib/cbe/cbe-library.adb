@@ -847,27 +847,21 @@ is
       raise Program_Error;
    end Snap_Slot_For_ID;
 
-   function Next_Snap_Slot (SB : Superblock_Type)
+   --
+   --  Idx_Of_Any_Invalid_Snap
+   --
+   function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type
    is
-         Next_Snap : Snapshots_Index_Type := SB.Curr_Snap;
    begin
-      --  XXX make sure we end up at the same idx in case
-      --  there is no free slot
-      Loop_Snap_Slots :
-      for Idx in Snapshots_Index_Type loop
-         Next_Snap := (
-            if Next_Snap < Snapshots_Index_Type'Last then
-               Next_Snap + 1
-            else
-               Snapshots_Index_Type'First);
-
-         exit Loop_Snap_Slots when
-            not SB.Snapshots (Next_Snap).Valid or else
-            not SB.Snapshots (Next_Snap).Keep;
-      end loop Loop_Snap_Slots;
-      return Next_Snap;
-   end Next_Snap_Slot;
+      Find_Invalid_Snap_Idx :
+      for Idx in Snapshots'Range loop
+         if not Snapshots (Idx).Valid then
+            return Idx;
+         end if;
+      end loop Find_Invalid_Snap_Idx;
+      raise Program_Error;
+   end Idx_Of_Any_Invalid_Snap;
 
    function Max_VBA (Obj : Object_Type)
    return Virtual_Block_Address_Type
@@ -2919,7 +2913,7 @@ is
             then
                declare
                   Snap_Idx : constant Snapshots_Index_Type :=
-                     Next_Snap_Slot (Obj.Superblock);
+                     Idx_Of_Any_Invalid_Snap (Obj.Superblock.Snapshots);
                begin
                   Obj.Superblock.Snapshots (Snap_Idx) :=
                      Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);

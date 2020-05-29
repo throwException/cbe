@@ -524,7 +524,10 @@ private
       ID  : Generation_Type)
    return Snapshots_Index_Type;
 
-   function Next_Snap_Slot (SB : Superblock_Type)
+   --
+   --  Idx_Of_Any_Invalid_Snap
+   --
+   function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
 
    function Front_End_Busy_With_Other_Request (
