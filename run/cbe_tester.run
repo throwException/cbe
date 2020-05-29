@@ -99,7 +99,7 @@ append config {
 					<virtual-block-device
 						nr_of_levels="4"
 						nr_of_children="16"
-						nr_of_leafs="1024" />
+						nr_of_leafs="256" />
 
 					<free-tree
 						nr_of_levels="3"
@@ -111,12 +111,14 @@ append config {
 
 					<request type="write" lba="10" count="100"/>
 					<request type="read" lba="150" count="100"/>
+					<create-snapshot id="1" quarantine="yes"/>
 					<extend-ft nr_of_phys_blocks="1" />
 					<request type="write" lba="20" count="100"/>
 					<request type="read" lba="140" count="100"/>
 					<extend-ft nr_of_phys_blocks="100" />
 					<extend-vbd nr_of_phys_blocks="1" />
 					<request type="write" lba="30" count="100"/>
+					<create-snapshot id="2" quarantine="yes"/>
 					<request type="read" lba="130" count="100"/>
 					<rekey />
 					<request type="write" lba="40" count="100"/>
@@ -124,8 +126,10 @@ append config {
 					<extend-vbd nr_of_phys_blocks="100" />
 					<request type="write" lba="50" count="100"/>
 					<request type="read" lba="110" count="100"/>
+					<extend-ft nr_of_phys_blocks="100" />
 					<rekey />
 					<request type="write" lba="60" count="100"/>
+					<create-snapshot id="3" quarantine="yes"/>
 					<request type="read" lba="100" count="100"/>
 
 				</replay>
