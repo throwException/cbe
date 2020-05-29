@@ -86,7 +86,43 @@ is
    function To_String (Blk : Block_Data_Type)
    return String;
 
-   function To_String (H : Hash_Type)
+   function To_String (Hash : Hash_Type)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (Pool_Idx_Slot : Pool_Index_Slot_Type)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (Node : Type_1_Node_Type)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (Node : Type_2_Node_Type)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (Int : Integer)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (Snap : Snapshot_Type)
+   return String;
+
+   --
+   --  To_String
+   --
+   function To_String (ID : Key_ID_Type)
    return String;
 
    function Byte_To_Hex_String (Byte : Byte_Type)

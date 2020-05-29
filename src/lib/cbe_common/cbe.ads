@@ -513,9 +513,6 @@ is
    function Pool_Idx_Slot_Invalid
    return Pool_Index_Slot_Type;
 
-   function To_String (Pool_Idx_Slot : Pool_Index_Slot_Type)
-   return String;
-
    function Idx_Slot_Valid (Slot : Index_Slot_Type)
    return Boolean;
 

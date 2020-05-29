@@ -94,30 +94,103 @@ is
    return String
    is (To_String (Uint64_Type (G)));
 
+   --
+   --  To_String
+   --
    function To_String (Blk : Block_Data_Type)
    return String
    is (
-      "Block_Data (" &
       To_String (Uint64_Type (Blk (1))) & ", " &
       To_String (Uint64_Type (Blk (2))) & ", " &
       To_String (Uint64_Type (Blk (3))) & ", " &
-      To_String (Uint64_Type (Blk (4))) & ", " &
-      To_String (Uint64_Type (Blk (5))) & ", " &
-      "...)");
+      To_String (Uint64_Type (Blk (4))) & ", ...");
 
-   function To_String (H : Hash_Type)
+   --
+   --  To_String
+   --
+   function To_String (Hash : Hash_Type)
    return String
    is (
-      "HASH (" &
-      To_String (Uint64_Type (H (1))) & "," &
-      To_String (Uint64_Type (H (2))) & "," &
-      To_String (Uint64_Type (H (3))) & "," &
-      To_String (Uint64_Type (H (4))) & "," &
-      To_String (Uint64_Type (H (5))) & "," &
-      To_String (Uint64_Type (H (6))) & "," &
-      To_String (Uint64_Type (H (7))) & "," &
-      To_String (Uint64_Type (H (8))) & "," &
-      "...)");
+      To_String (Uint64_Type (Hash (1))) & ", " &
+      To_String (Uint64_Type (Hash (2))) & ", " &
+      To_String (Uint64_Type (Hash (3))) & ", " &
+      To_String (Uint64_Type (Hash (4))) & ", ...");
+
+   --
+   --  To_String
+   --
+   function To_String (Int : Integer)
+   return String
+   is (
+      Debug.To_String (Debug.Uint64_Type (Int)));
+
+   --
+   --  To_String
+   --
+   function To_String (ID : Key_ID_Type)
+   return String
+   is (
+      Debug.To_String (Debug.Uint64_Type (ID)));
+
+   --
+   --  To_String
+   --
+   function To_String (Node : Type_1_Node_Type)
+   return String
+   is (
+      "PBA " &
+      Debug.To_String (Node.PBA) &
+      " Gen " &
+      Debug.To_String (Node.Gen) &
+      " Hash " &
+      Debug.To_String (Node.Hash));
+
+   --
+   --  To_String
+   --
+   function To_String (Snap : Snapshot_Type)
+   return String
+   is (
+      "PBA " &
+      Debug.To_String (Snap.PBA) &
+      " Gen " &
+      Debug.To_String (Snap.Gen) &
+      " Hash " &
+      Debug.To_String (Snap.Hash) &
+      " MaxLvl " &
+      Debug.To_String (Debug.Uint64_Type (Snap.Max_Level)) &
+      " Leafs " &
+      Debug.To_String (Debug.Uint64_Type (Snap.Nr_Of_Leafs)) &
+      " Keep " &
+      Debug.To_String (Snap.Keep));
+
+   --
+   --  To_String
+   --
+   function To_String (Node : Type_2_Node_Type)
+   return String
+   is (
+      "PBA " &
+      Debug.To_String (Node.PBA) &
+      " AGen " &
+      Debug.To_String (Node.Alloc_Gen) &
+      " FGen " &
+      Debug.To_String (Node.Free_Gen) &
+      " VBA " &
+      Debug.To_String (Node.Last_VBA) &
+      " Key " &
+      Debug.To_String (Node.Last_Key_ID) &
+      " Reserved " &
+      Debug.To_String (Node.Reserved));
+
+   function To_String (Pool_Idx_Slot : Pool_Index_Slot_Type)
+   return String
+   is (
+      if Pool_Idx_Slot_Valid (Pool_Idx_Slot) then
+         Debug.To_String (
+            Debug.Uint64_Type (Pool_Idx_Slot_Content (Pool_Idx_Slot)))
+      else
+         "<Invalid>");
 
    function Byte_To_Hex_String (Byte : Byte_Type)
    return String

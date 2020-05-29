@@ -1071,15 +1071,6 @@ is
       return Slot.Content;
    end Pool_Idx_Slot_Content;
 
-   function To_String (Pool_Idx_Slot : Pool_Index_Slot_Type)
-   return String
-   is (
-      if Pool_Idx_Slot_Valid (Pool_Idx_Slot) then
-         Debug.To_String (
-            Debug.Uint64_Type (Pool_Idx_Slot_Content (Pool_Idx_Slot)))
-      else
-         "<Invalid>");
-
    function Idx_Slot_Valid (Cont : Index_Type)
    return Index_Slot_Type
    is (

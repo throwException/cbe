@@ -432,7 +432,7 @@ is
          ", Tag=" &
          To_String (Obj.Tag) &
          ", Pool_Idx=" &
-         To_String (Obj.Pool_Idx_Slot) &
+         Debug.To_String (Obj.Pool_Idx_Slot) &
          ", Success=" &
          Debug.To_String (Obj.Success) &
          ", Block_Number=" &
