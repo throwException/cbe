@@ -1,0 +1,13 @@
+cnuke/raw/cbe_binaries/20.02-demo
+_/raw/cbe_vbox5-nova
+_/src/base-nova
+_/src/libc
+_/src/init
+_/src/nit_fb
+_/src/libc
+_/src/posix
+_/src/zlib
+_/src/nit_fb
+_/src/libiconv
+_/src/stdcxx
+_/src/vfs

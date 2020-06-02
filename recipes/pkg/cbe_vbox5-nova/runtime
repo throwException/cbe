@@ -1,0 +1,35 @@
+<runtime ram="1500M" caps="1500" binary="init" config="init.config">
+
+	<requires>
+		<file_system label="vm"/>
+		<file_system label="cbe"/>
+		<file_system label="shared"/>
+		<nic/>
+		<nitpicker/>
+		<rom label="capslock"/>
+		<rom label="platform_info"/>
+		<report label="shape"/>
+		<report label="clipboard"/>
+		<rom    label="clipboard"/>
+		<rm/>
+		<rtc/>
+		<usb/>
+	</requires>
+
+	<content>
+		<rom label="init"/>
+		<rom label="init.config"/>
+		<rom label="ld.lib.so"/>
+		<rom label="libc.lib.so"/>
+		<rom label="libc_pipe.lib.so"/>
+		<rom label="libiconv.lib.so"/>
+		<rom label="libm.lib.so"/>
+		<rom label="nit_fb"/>
+		<rom label="qemu-usb.lib.so"/>
+		<rom label="stdcxx.lib.so"/>
+		<rom label="timer"/>
+		<rom label="usb_devices"/>
+		<rom label="vfs.lib.so"/>
+		<rom label="virtualbox5-nova"/>
+	</content>
+</runtime>
