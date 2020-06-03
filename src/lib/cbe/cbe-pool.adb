@@ -980,7 +980,9 @@ is
    begin
       For_Each_Item_Idx :
       for Idx in Obj.Items'Range loop
-         if Request.Equal (Obj.Items (Idx).Req, Req) then
+         if Request.Valid (Obj.Items (Idx).Req)
+            and then Request.Equal (Obj.Items (Idx).Req, Req)
+         then
             if Obj.Items (Idx).State /= Complete then
                raise Program_Error;
             end if;
