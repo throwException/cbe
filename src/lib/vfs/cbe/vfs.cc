@@ -2636,7 +2636,9 @@ class Vfs_cbe::File_system : private Local_factory,
 			Xml_generator xml(buf, sizeof(buf), "dir", [&] () {
 				typedef String<64> Name;
 
-				xml.attribute("name", node.attribute_value("name", Name()));
+				xml.attribute("name",
+				              node.attribute_value("name",
+				                                   Name("cbe")));
 
 				xml.node("control", [&] () { });
 
