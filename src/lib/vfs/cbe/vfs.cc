@@ -265,9 +265,9 @@ class Vfs_cbe::Wrapper
 				}
 
 				if (dst.valid() &&
-				    dst.snapshots[dst.curr_snap].gen >= highest_gen)
+				    dst.last_secured_generation >= highest_gen)
 				{
-					if (dst.snapshots[dst.curr_snap].gen == highest_gen &&
+					if (dst.last_secured_generation == highest_gen &&
 					    highest_gen > 0)
 					{
 						Genode::error("generation: ", highest_gen,
@@ -277,7 +277,7 @@ class Vfs_cbe::Wrapper
 					}
 					most_recent_sb.value = i;
 					most_recent_sb_valid = true;
-					highest_gen = dst.snapshots[dst.curr_snap].gen;
+					highest_gen = dst.last_secured_generation;
 				}
 			}
 
