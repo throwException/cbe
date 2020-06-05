@@ -730,7 +730,7 @@ class Vfs_cbe::Wrapper
 
 			if (unaligned_request) {
 				_helper_read_request.cbe_request = Cbe::Request(
-					op,
+					Cbe::Request::Operation::READ,
 					Cbe::Request::Success::FALSE,
 					offset / Cbe::BLOCK_SIZE,
 					(uint64_t)&_helper_read_request.block_data,
@@ -1040,15 +1040,32 @@ class Vfs_cbe::Wrapper
 					return progress;
 				}
 
-				Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
-					cbe_request.offset() + (prim_index * Cbe::BLOCK_SIZE));
+				Cbe::Block_data *data = nullptr;
+
+				if (_helper_read_request.in_progress()) {
+					data = reinterpret_cast<Cbe::Block_data*>(
+						&_helper_read_request.block_data);
+				} else
+
+				if (_frontend_request.in_progress()) {
+					// XXX check after helper request because it will be IN_PROGRESS
+					//     in case helper request is used
+					data = reinterpret_cast<Cbe::Block_data*>(
+						cbe_request.offset() + (prim_index * Cbe::BLOCK_SIZE));
+				} else
+					throw -1;
+
+				if (data == nullptr) {
+					struct Data_nullptr { };
+					throw Data_nullptr();
+				}
 
 				Cbe::Crypto_plain_buffer::Index data_index(~0);
 				bool const data_index_valid =
 					cbe.obtain_client_data(cbe_request, data_index);
 
 				if (data_index_valid) {
-					Genode::memcpy(&data, &_plain_data.item(data_index), sizeof (Cbe::Block_data));
+					Genode::memcpy(data, &_plain_data.item(data_index), sizeof (Cbe::Block_data));
 
 					progress = true;
 				}
@@ -1064,10 +1081,27 @@ class Vfs_cbe::Wrapper
 					return progress;
 				}
 
-				Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(
-					cbe_request.offset() + (prim_index * Cbe::BLOCK_SIZE));
+				Cbe::Block_data *data = nullptr;
 
-				progress = cbe.supply_client_data(0, cbe_request, data);
+				if (_helper_write_request.in_progress()) {
+					data = reinterpret_cast<Cbe::Block_data*>(
+						&_helper_write_request.block_data);
+				} else
+
+				if (_frontend_request.in_progress()) {
+					// XXX check after helper request because it will be IN_PROGRESS
+					//     in case helper request is used
+					data = reinterpret_cast<Cbe::Block_data*>(
+						cbe_request.offset() + (prim_index * Cbe::BLOCK_SIZE));
+				} else
+					throw -1;
+
+				if (data == nullptr) {
+					struct Data_nullptr { };
+					throw Data_nullptr();
+				}
+
+				progress = cbe.supply_client_data(0, cbe_request, *data);
 				progress |= true; /// XXX why?
 			}
 
