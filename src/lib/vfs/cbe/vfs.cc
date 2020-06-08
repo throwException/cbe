@@ -680,6 +680,7 @@ class Vfs_cbe::Wrapper
 		{
 			// assert current state was *_COMPLETE
 			_frontend_request.state = Frontend_request::State::NONE;
+			_frontend_request.cbe_request = Cbe::Request { };
 			_enqueued_vfs_handle = nullptr;
 		}
 
@@ -1157,9 +1158,11 @@ class Vfs_cbe::Wrapper
 		{
 			if (_debug) {
 				static uint64_t cnt = 0;
-				log("FE: ", Frontend_request::state_to_string(_frontend_request.state), " ",
+				log("FE: ", Frontend_request::state_to_string(_frontend_request.state),
+				     " (", _frontend_request.cbe_request, ") ",
 				    "BE: ", Backend_request::state_to_string(_backend_request.state),
-				    " ", ++cnt);
+				     " (", _backend_request.cbe_request, ") ",
+				    ++cnt);
 			}
 		}
 
