@@ -426,8 +426,6 @@ private
 
       Write_Stalled : Boolean;
 
-      Sync_Pending : Boolean;
-
       Snap_Token : Token_Type;
       Snap_Gen   : Generation_Type;
 

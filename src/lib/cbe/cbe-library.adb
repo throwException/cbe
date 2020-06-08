@@ -33,8 +33,6 @@ is
 
       Obj.Write_Stalled := False;
 
-      Obj.Sync_Pending := False;
-
       Obj.Execute_Progress := False;
       Obj.Request_Pool_Obj := Pool.Initialized_Object;
       Obj.Crypto_Obj       := Crypto.Initialized_Object;
@@ -407,7 +405,6 @@ is
       when Sync =>
 
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
-         Obj.Sync_Pending := True;
 
       when
          Create_Snapshot | Discard_Snapshot | Decrypt_Keys | Resume_Rekeying
