@@ -719,7 +719,12 @@ class Vfs_cbe::Wrapper
 			/* unaligned request if any condition is true */
 			unaligned_request |= (offset % Cbe::BLOCK_SIZE) != 0;
 			unaligned_request |= (count < Cbe::BLOCK_SIZE);
-			unaligned_request |= (count % Cbe::BLOCK_SIZE) != 0;
+
+			if ((count % Cbe::BLOCK_SIZE) != 0 &&
+			    !unaligned_request)
+			{
+				count = count - (count % Cbe::BLOCK_SIZE);
+			}
 
 			if (unaligned_request) {
 				_helper_read_request.cbe_request = Cbe::Request(
