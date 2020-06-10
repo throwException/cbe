@@ -23,25 +23,24 @@ proc cbe_image_file { } {
 
 set use_interactively [expr ![get_cmd_switch --autopilot]]
 
-import_from_depot [depot_user]/src/[base_src] \
-                  [depot_user]/pkg/[drivers_interactive_pkg] \
+import_from_depot [depot_user]/pkg/[drivers_interactive_pkg] \
                   [depot_user]/pkg/terminal \
-                  [depot_user]/src/init \
-                  [depot_user]/src/posix \
                   [depot_user]/src/ncurses \
                   [depot_user]/src/bash \
-                  [depot_user]/src/coreutils \
-                  [depot_user]/src/vfs \
-                  [depot_user]/src/vfs_pipe \
-                  [depot_user]/src/fs_rom \
-                  [depot_user]/src/report_rom \
-                  [depot_user]/src/log_terminal
+                  [depot_user]/src/coreutils
 
 build {
+	core
+	timer
+	init
 	server/lx_fs
 	lib/vfs/cbe
+	lib/vfs/pipe
 	test/vfs_stress
 	test/libc
+	server/log_terminal
+	server/report_rom
+	server/fs_rom
 }
 
 set config {
@@ -208,10 +207,21 @@ exec cp $repo/$shell_script bin/
 
 append boot_modules {
 	lx_fs
-	spark.lib.so libsparkcrypto.lib.so vfs_cbe.lib.so
+	spark.lib.so
+	libsparkcrypto.lib.so
+	vfs_cbe.lib.so
 	vfs_cbe.sh
-
-	vfs.lib.so libc.lib.so
+	vfs.lib.so
+	vfs_pipe.lib.so
+	posix.lib.so
+	libc.lib.so
+	log_terminal
+	fs_rom
+	report_rom
+	init
+	core
+	timer
+	ld.lib.so
 }
 
 append boot_modules [cbe_image_file]
