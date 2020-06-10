@@ -1000,7 +1000,7 @@ class Vfs_cbe::Wrapper
 						Cbe::Request::Operation::WRITE,
 						Cbe::Request::Success::FALSE,
 						_helper_read_request.cbe_request.block_number(),
-						_helper_read_request.cbe_request.offset(),
+						(uint64_t) &_helper_write_request.block_data,
 						_helper_read_request.cbe_request.count(),
 						_helper_read_request.cbe_request.key_id(),
 						_helper_read_request.cbe_request.tag());
