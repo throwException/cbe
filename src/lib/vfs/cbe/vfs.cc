@@ -636,6 +636,7 @@ class Vfs_cbe::Wrapper
 			Cbe::Request cbe_request { };
 			uint32_t     snap_id     { 0 };
 
+			uint64_t offset { 0 };
 			uint64_t helper_offset { 0 };
 
 			bool pending()     const { return state == PENDING; }
@@ -753,6 +754,7 @@ class Vfs_cbe::Wrapper
 				_frontend_request.state = Frontend_request::State::PENDING;
 			}
 
+			_frontend_request.offset = offset;
 			_frontend_request.cbe_request = Cbe::Request(
 				op,
 				Cbe::Request::Success::FALSE,
@@ -772,7 +774,7 @@ class Vfs_cbe::Wrapper
 					            " count: ", _frontend_request.count, ")");
 				} else {
 					Genode::log("Req: ",
-					            "off: ", offset, " count: ", count,
+					            "off: ", offset, " bytes: ", count,
 					            " (front req: ", _frontend_request.cbe_request, ")");
 				}
 			}
