@@ -85,6 +85,7 @@ is
       Tag_Decrypt,
       Tag_Encrypt,
       Tag_Sync_SB_Cache_Flush,
+      Tag_Sync_SB_TA_Encrypt_Key,
       Tag_Sync_SB_Write_SB,
       Tag_Sync_SB_Sync,
       Tag_VBD_Cache,
@@ -172,6 +173,7 @@ is
       when Tag_Decrypt => "Decrypt",
       when Tag_Encrypt => "Encrypt",
       when Tag_Sync_SB_Cache_Flush => "Sync_SB_Cache_Flush",
+      when Tag_Sync_SB_TA_Encrypt_Key => "Tag_Sync_SB_TA_Encrypt_Key",
       when Tag_Sync_SB_Write_SB => "Sync_SB_Write_SB",
       when Tag_Sync_SB_Sync => "Sync_SB_Sync",
       when Tag_VBD_Cache => "VBD_Cache",
@@ -398,6 +400,7 @@ is
    function Has_Tag_Decrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_Encrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_Sync_SB_Cache_Flush (Obj : Object_Type) return Boolean;
+   function Has_Tag_Sync_SB_TA_Encrypt_Key (Obj : Object_Type) return Boolean;
    function Has_Tag_Sync_SB_Write_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_Sync_SB_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean;

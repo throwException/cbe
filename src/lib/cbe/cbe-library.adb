@@ -1180,7 +1180,8 @@ is
                      Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
 
                      Sync_Superblock.Submit_Request (
-                        Obj.Sync_SB_Obj, 1, Obj.Cur_SB, Obj.Cur_Gen);
+                        Obj.Sync_SB_Obj, 1, Obj.Superblock, Obj.Cur_SB,
+                        Obj.Cur_Gen);
 
                      pragma Debug (Debug.Print_String (
                         "Write_Stalled Sync_Request"));
@@ -1918,6 +1919,7 @@ is
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Superblock,
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
@@ -1956,6 +1958,7 @@ is
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Superblock,
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
@@ -1988,6 +1991,7 @@ is
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
+               Obj.Superblock,
                Obj.Cur_SB,
                Obj.Cur_Gen);
 
@@ -2949,6 +2953,17 @@ is
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;
 
+            when Primitive.Tag_Sync_SB_TA_Encrypt_Key =>
+
+               Sync_Superblock.
+                  Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
+                     Obj.Sync_SB_Obj, Prim,
+                     Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
+                        Obj.TA, Prim));
+
+               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+               Progress := True;
+
             when others =>
 
                raise Program_Error;
@@ -3379,6 +3394,16 @@ is
                Cache.Submit_Primitive_Without_Data (
                   Obj.Cache_Obj, Prim);
 
+            elsif Primitive.Has_Tag_Sync_SB_TA_Encrypt_Key (Prim) then
+
+               exit Loop_Sync_SB_Generated_Prims when
+                  not Trust_Anchor.Primitive_Acceptable (Obj.TA);
+
+               Trust_Anchor.Submit_Primitive_Key_Value_Plaintext (
+                  Obj.TA, Prim,
+                  Sync_Superblock.Peek_Generated_Key_Value_Plaintext (
+                     Obj.Sync_SB_Obj, Prim));
+
             elsif Primitive.Has_Tag_Sync_SB_Write_SB (Prim) then
 
                exit Loop_Sync_SB_Generated_Prims when
@@ -3389,7 +3414,9 @@ is
                   SB_Data : Block_Data_Type;
                   Data_Idx : Block_IO.Data_Index_Type;
                begin
-                  Block_Data_From_Superblock (SB_Data, Obj.Superblock);
+                  Block_Data_From_Superblock_Ciphertext (SB_Data,
+                     Sync_Superblock.Peek_Generated_Superblock_Ciphertext (
+                        Obj.Sync_SB_Obj, Prim));
 
                   Block_IO.Submit_Primitive (
                      Obj.IO_Obj, Primitive.Tag_Sync_SB_Write_SB, Prim,

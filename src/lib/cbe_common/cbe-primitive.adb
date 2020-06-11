@@ -348,6 +348,9 @@ is
    function Has_Tag_Sync_SB_Cache_Flush (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Sync_SB_Cache_Flush);
 
+   function Has_Tag_Sync_SB_TA_Encrypt_Key (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_Sync_SB_TA_Encrypt_Key);
+
    function Has_Tag_Sync_SB_Write_SB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Sync_SB_Write_SB);
 
