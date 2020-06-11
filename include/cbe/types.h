@@ -539,10 +539,10 @@ namespace Cbe {
 		{
 			using namespace Genode;
 			Genode::print(out, "[", id.value, ", ");
-			for (char const c : value) {
-				Genode::print(out, Hex(c, Hex::OMIT_PREFIX, Hex::PAD));
+			for (uint32_t i = 0; i < 4; i++) {
+				Genode::print(out, Hex(value[i], Hex::OMIT_PREFIX, Hex::PAD));
 			}
-			Genode::print(out, "]");
+			Genode::print(out, "...]");
 		}
 	} __attribute__((packed));
 
@@ -692,6 +692,8 @@ namespace Cbe {
 		void print(Genode::Output &out) const
 		{
 			Genode::print(out,
+			              "current_key: ", current_key, " "
+			              "previous_key: ", previous_key, " "
 			              "last_sec_gen: ", last_secured_generation, " "
 			              "curr_snap: ", curr_snap, " "
 			              "snap: (gen: ", snapshots[curr_snap].gen, " "
