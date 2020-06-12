@@ -1178,6 +1178,8 @@ is
                         Obj.Cur_Gen);
 
                      Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+                     Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
+                        Obj.Cur_Gen;
 
                      Sync_Superblock.Submit_Request (
                         Obj.Sync_SB_Obj, 1, Obj.Superblock, Obj.Cur_SB,
@@ -1916,6 +1918,9 @@ is
                Obj.Cur_Gen);
 
             Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
+            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
+               Obj.Cur_Gen;
+
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
@@ -1954,6 +1959,8 @@ is
 
             Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
             Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Keep := True;
+            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
+               Obj.Cur_Gen;
 
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
@@ -3312,9 +3319,6 @@ is
             end if;
 
             Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
-
-            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
-               Obj.Cur_Gen;
 
             Obj.Cur_Gen := Obj.Cur_Gen + 1;
 
