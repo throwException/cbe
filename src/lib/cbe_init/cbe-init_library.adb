@@ -130,9 +130,18 @@ is
                   Block_IO.Submit_Primitive (
                      Obj.Blk_IO, Primitive.Tag_SB_Init_Blk_IO, Prim, Data_Idx);
 
-                  Blk_IO_Buf (Data_Idx) :=
-                     Superblock_Initializer.Peek_Generated_Data (
-                        Obj.SB_Init, Prim);
+                  case Primitive.Operation (Prim) is
+                  when Sync =>
+
+                     null;
+
+                  when others =>
+
+                     Blk_IO_Buf (Data_Idx) :=
+                        Superblock_Initializer.Peek_Generated_Data (
+                           Obj.SB_Init, Prim);
+
+                  end case;
 
                   Superblock_Initializer.Drop_Generated_Primitive (
                      Obj.SB_Init, Prim);

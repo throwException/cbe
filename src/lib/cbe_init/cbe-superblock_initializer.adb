@@ -308,6 +308,22 @@ is
 
       when Write_Request_Done =>
 
+         Obj.Generated_Prim :=
+            Primitive.Valid_Object_No_Pool_Idx (
+               Sync, False, Primitive.Tag_SB_Init_Blk_IO,
+               Block_Number_Type (Obj.SB_Slot_Idx), 0);
+
+         Obj.SB_Slot_State := Sync_Request_Started;
+         Obj.Execute_Progress := True;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", write done"));
+
+      when Sync_Request_Done =>
+
          Obj.SB_Slot_State := Done;
          Obj.Execute_Progress := True;
 
@@ -315,7 +331,7 @@ is
             Debug.Print_String (
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
-               ", done"));
+               ", sync done"));
 
       when Done =>
 
@@ -349,6 +365,7 @@ is
    return Primitive.Object_Type
    is (
       case Obj.SB_Slot_State is
+      when Sync_Request_Started => Obj.Generated_Prim,
       when Write_Request_Started => Obj.Generated_Prim,
       when VBD_Request_Started => Obj.Generated_Prim,
       when FT_Request_Started => Obj.Generated_Prim,
@@ -513,6 +530,19 @@ is
    is
    begin
       case Obj.SB_Slot_State is
+      when Sync_Request_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := Sync_Request_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", sync dropped"));
+
       when Write_Request_Started =>
 
          if not Primitive.Equal (Obj.Generated_Prim, Prim) then
@@ -604,6 +634,19 @@ is
    is
    begin
       case Obj.SB_Slot_State is
+      when Sync_Request_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := Sync_Request_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", sync done"));
+
       when Write_Request_Dropped =>
 
          if not Primitive.Equal (Obj.Generated_Prim, Prim) then

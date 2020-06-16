@@ -142,6 +142,9 @@ private
       Write_Request_Started,
       Write_Request_Dropped,
       Write_Request_Done,
+      Sync_Request_Started,
+      Sync_Request_Dropped,
+      Sync_Request_Done,
       Done);
 
    type Object_Type is record
