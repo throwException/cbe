@@ -14,6 +14,8 @@ exec rm -rf var/libcache/cbe_dump_cxx
 exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
 
+set dd [installed_command dd]
+
 proc cbe_image_file { } {
 	return "cbe_block.img"
 }
@@ -152,7 +154,7 @@ append config {
 install_config $config
 
 exec rm -rf bin/[cbe_image_file]
-exec truncate -s [cbe_image_size_mb]M bin/[cbe_image_file]
+catch { exec $dd if=/dev/urandom of=bin/[cbe_image_file] bs=1M count=[cbe_image_size_mb] }
 
 append boot_modules {
 	core init timer cbe_tester
