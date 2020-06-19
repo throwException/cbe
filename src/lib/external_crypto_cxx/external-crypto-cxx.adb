@@ -24,12 +24,20 @@ is
 
    procedure Add_Key (
       Obj      : in out External.Crypto.Object_Type;
-      Key_Id   :        CXX_Key_Id_Type;
+      Key_ID   :        CXX_Key_ID_Type;
       Key_Data :        External.Crypto.Key_Data_Type)
    is
    begin
-      External.Crypto.Add_Key (Obj, CBE.Key_ID_Type (Key_Id), Key_Data);
+      External.Crypto.Add_Key (Obj, CBE.Key_ID_Type (Key_ID), Key_Data);
    end Add_Key;
+
+   procedure Remove_Key (
+      Obj    : in out External.Crypto.Object_Type;
+      Key_ID :        CXX_Key_ID_Type)
+   is
+   begin
+      External.Crypto.Remove_Key (Obj, CBE.Key_ID_Type (Key_ID));
+   end Remove_Key;
 
    procedure Execute (
       Obj     : in out External.Crypto.Object_Type;

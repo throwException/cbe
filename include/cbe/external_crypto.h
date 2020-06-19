@@ -63,7 +63,14 @@ class External::Crypto : public Cbe::Spark_object<16592>
 	 * \param id   id of the given key
 	 * \param key  key data
 	 */
-	void add_key(unsigned id, Key_data const &key);
+	void add_key(Cbe::Key::Id id, Key_data const &key);
+
+	/**
+	 * Remove key material
+	 *
+	 * \param id   id of the given key
+	 */
+	void remove_key(Cbe::Key::Id id);
 
 	/**
 	 *

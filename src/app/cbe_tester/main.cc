@@ -1792,12 +1792,31 @@ class Cbe::Main
 					data.value, key.value,
 					sizeof(data.value) / sizeof(data.value[0]));
 
-				_crypto.add_key(key.id.value, data);
+				_crypto.add_key(key.id, data);
 				request.success (Cbe::Request::Success::TRUE);
 				if (_verbose_back_end_crypto) {
 					log("    add key: id " , (unsigned)key.id.value);
 				}
 				_cbe->crypto_add_key_completed(request);
+				progress |= true;
+			}
+
+			/* remove keys */
+			while (true) {
+				Key::Id key_id;
+				Cbe::Request request =
+					_cbe->crypto_remove_key_required(key_id);
+
+				if (!request.valid()) {
+					break;
+				}
+				_cbe->crypto_remove_key_requested(request);
+				_crypto.remove_key(key_id);
+				request.success (Cbe::Request::Success::TRUE);
+				if (_verbose_back_end_crypto) {
+					log("    remove key: id " , (unsigned)key_id.value);
+				}
+				_cbe->crypto_remove_key_completed(request);
 				progress |= true;
 			}
 

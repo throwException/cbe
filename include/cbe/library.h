@@ -49,6 +49,7 @@ class Cbe::Library : public Cbe::Spark_object<338600>
 		void _supply_client_data(Time::Timestamp const, Request const &, Block_data const &, bool &);
 
 		void _crypto_add_key_required(Request &, Key &) const;
+		void _crypto_remove_key_required(Request &, Key::Id &) const;
 
 		void _crypto_cipher_data_required(Request &, Crypto_plain_buffer::Index &) const;
 		void _crypto_plain_data_required(Request &, Crypto_cipher_buffer::Index &) const;
@@ -336,6 +337,17 @@ class Cbe::Library : public Cbe::Spark_object<338600>
 	void crypto_add_key_requested(Request const &req);
 
 	void crypto_add_key_completed(Request const &req);
+
+	Request crypto_remove_key_required(Key::Id &key_id) const
+	{
+		Request result { };
+		_crypto_remove_key_required(result, key_id);
+		return result;
+	}
+
+	void crypto_remove_key_requested(Request const &req);
+
+	void crypto_remove_key_completed(Request const &req);
 
 	/**
 	 * CBE requests encrytion

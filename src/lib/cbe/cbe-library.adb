@@ -680,6 +680,65 @@ is
    end Supply_Client_Data;
 
    --
+   --  Crypto_Remove_Key_Required
+   --
+   procedure Crypto_Remove_Key_Required (
+      Obj    :     Object_Type;
+      Req    : out Request.Object_Type;
+      Key_ID : out Key_ID_Type)
+   is
+      Item_Index : Crypto.Item_Index_Type;
+      Prim       : Primitive.Object_Type;
+   begin
+
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+      if not Primitive.Valid (Prim) or else
+         not Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim)
+      then
+         Key_ID := Key_ID_Invalid;
+         Req := Request.Invalid_Object;
+         return;
+      end if;
+
+      Key_ID := Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index);
+      Req := Request.Valid_Object (
+         Op     => Read,
+         Succ   => False,
+         Blk_Nr => 0,
+         Off    => 0,
+         Cnt    => 1,
+         Key    => 0,
+         Tg     => Request.Tag_Type (Item_Index));
+
+   end Crypto_Remove_Key_Required;
+
+   --
+   --  Crypto_Remove_Key_Requested
+   --
+   procedure Crypto_Remove_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        Request.Object_Type)
+   is
+   begin
+      Crypto.Drop_Generated_Primitive (
+         Obj.Crypto_Obj, Crypto.Item_Index_Type (Request.Tag (Req)));
+   end Crypto_Remove_Key_Requested;
+
+   --
+   --  Crypto_Remove_Key_Completed
+   --
+   procedure Crypto_Remove_Key_Completed (
+      Obj : in out Object_Type;
+      Req :        Request.Object_Type)
+   is
+   begin
+      Crypto.Mark_Completed_Primitive (
+         Obj.Crypto_Obj,
+         Crypto.Item_Index_Type (Request.Tag (Req)),
+         Request.Success (Req));
+   end Crypto_Remove_Key_Completed;
+
+   --
    --  Crypto_Add_Key_Required
    --
    procedure Crypto_Add_Key_Required (

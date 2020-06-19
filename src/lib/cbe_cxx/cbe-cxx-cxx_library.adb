@@ -269,6 +269,35 @@ is
       Library.Crypto_Add_Key_Completed (Obj, CXX_Request_To_SPARK (Req));
    end Crypto_Add_Key_Completed;
 
+   procedure Crypto_Remove_Key_Required (
+      Obj    :     Library.Object_Type;
+      Req    : out CXX_Request_Type;
+      Key_ID : out CXX_Key_ID_Type)
+   is
+      SPARK_Req : Request.Object_Type;
+      SPARK_Key_ID : Key_ID_Type;
+   begin
+      Library.Crypto_Remove_Key_Required (Obj, SPARK_Req, SPARK_Key_ID);
+      Req := CXX_Request_From_SPARK (SPARK_Req);
+      Key_ID := CXX_Key_ID_Type (SPARK_Key_ID);
+   end Crypto_Remove_Key_Required;
+
+   procedure Crypto_Remove_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   is
+   begin
+      Library.Crypto_Remove_Key_Requested (Obj, CXX_Request_To_SPARK (Req));
+   end Crypto_Remove_Key_Requested;
+
+   procedure Crypto_Remove_Key_Completed (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   is
+   begin
+      Library.Crypto_Remove_Key_Completed (Obj, CXX_Request_To_SPARK (Req));
+   end Crypto_Remove_Key_Completed;
+
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Library.Object_Type;
       Req        : out CXX_Request_Type;

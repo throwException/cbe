@@ -113,6 +113,13 @@ is
       Plain_Data :    out Plain_Data_Type;
       Success    :    out Boolean);
 
+   --
+   --  Remove_Key
+   --
+   procedure Remove_Key (
+      Obj    : in out Object_Type;
+      Key_ID :        CBE.Key_ID_Type);
+
 private
 
    Nr_Of_Jobs : constant := 2;
@@ -138,6 +145,11 @@ private
       ID    : CBE.Key_ID_Type;
       Valid : Boolean;
    end record;
+
+   --
+   --  Key_Invalidate
+   --
+   procedure Key_Invalidate (Key : out Key_Type);
 
    type Keys_Type is array (Keys_Index_Type) of Key_Type;
 

@@ -12,6 +12,18 @@ package body External.Crypto
 with SPARK_Mode
 is
    --
+   --  Key_Invalidate
+   --
+   procedure Key_Invalidate (Key : out Key_Type)
+   is
+      use CBE;
+   begin
+      Key.Data := (others => 0);
+      Key.ID := Key_ID_Invalid;
+      Key.Valid := False;
+   end Key_Invalidate;
+
+   --
    --  Initialize_Object
    --
    procedure Initialize_Object (Obj : out Object_Type)
@@ -68,6 +80,25 @@ is
          Valid => True);
 
    end Add_Key;
+
+   --
+   --  Remove_Key
+   --
+   procedure Remove_Key (
+      Obj    : in out Object_Type;
+      Key_ID :        CBE.Key_ID_Type)
+   is
+      use CBE;
+   begin
+      Find_Matching_Key :
+      for Idx in Obj.Keys'Range loop
+         if Obj.Keys (Idx).ID = Key_ID then
+            Key_Invalidate (Obj.Keys (Idx));
+            return;
+         end if;
+      end loop Find_Matching_Key;
+      raise Program_Error;
+   end Remove_Key;
 
    --
    --  Key_Idx_For_Job

@@ -282,6 +282,10 @@ is
    function Has_Tag_SB_Ctrl_Crypto_Add_Key (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Crypto_Add_Key);
 
+   function Has_Tag_SB_Ctrl_Crypto_Remove_Key (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_Crypto_Remove_Key);
+
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Write_SB);
 

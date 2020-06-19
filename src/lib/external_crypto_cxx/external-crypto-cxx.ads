@@ -18,7 +18,7 @@ is
 
    type CXX_Byte_Type     is range 0 .. 255 with Size => 8;
    type CXX_Key_Slot_Type is range 0 .. 2**32 - 1 with Size => 4 * 8;
-   type CXX_Key_Id_Type   is range 0 .. 2**32 - 1 with Size => 4 * 8;
+   type CXX_Key_ID_Type   is range 0 .. 2**32 - 1 with Size => 4 * 8;
    type CXX_Key_Data_Type
    is array (0 .. 31) of CXX_Byte_Type with Size => 32 * 8;
 
@@ -43,12 +43,21 @@ is
 
    procedure Add_Key (
       Obj      : in out External.Crypto.Object_Type;
-      Key_Id   :        CXX_Key_Id_Type;
+      Key_ID   :        CXX_Key_ID_Type;
       Key_Data :        External.Crypto.Key_Data_Type)
    with
       Export,
       Convention    => C,
-      External_Name => "_ZN8External6Crypto7add_keyEjRKNS0_8Key_dataE";
+      External_Name =>
+         "_ZN8External6Crypto7add_keyEN3Cbe3Key2IdERKNS0_8Key_dataE";
+
+   procedure Remove_Key (
+      Obj    : in out External.Crypto.Object_Type;
+      Key_ID :        CXX_Key_ID_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name => "_ZN8External6Crypto10remove_keyEN3Cbe3Key2IdE";
 
    procedure Execute (
       Obj     : in out External.Crypto.Object_Type;

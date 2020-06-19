@@ -64,6 +64,7 @@ is
       Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step,
       Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step,
       Tag_SB_Ctrl_Crypto_Add_Key,
+      Tag_SB_Ctrl_Crypto_Remove_Key,
       Tag_SB_Ctrl_Blk_IO_Write_SB,
       Tag_SB_Ctrl_Blk_IO_Sync,
       Tag_VBD_Rkg_Cache,
@@ -150,6 +151,7 @@ is
       when Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step => "SB_Ctrl_VBD_Rkg_VBD_Ext_Step",
       when Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step => "SB_Ctrl_FT_Rszg_FT_Ext_Step",
       when Tag_SB_Ctrl_Crypto_Add_Key => "SB_Ctrl_Crypto_Add_Key",
+      when Tag_SB_Ctrl_Crypto_Remove_Key => "SB_Ctrl_Crypto_Remove_Key",
       when Tag_SB_Ctrl_Blk_IO_Sync => "SB_Ctrl_Blk_IO_Sync",
       when Tag_VBD_Rkg_Cache => "VBD_Rkg_Cache",
       when Tag_FT_Rszg_Cache => "FT_Rszg_Cache",
@@ -372,6 +374,9 @@ is
    return Boolean;
 
    function Has_Tag_SB_Ctrl_Crypto_Add_Key (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_Crypto_Remove_Key (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Cache (Obj : Object_Type) return Boolean;

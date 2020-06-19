@@ -252,6 +252,35 @@ is
       External_Name =>
          "_ZN3Cbe7Library24crypto_add_key_completedERKNS_7RequestE";
 
+   procedure Crypto_Remove_Key_Required (
+      Obj    :     Library.Object_Type;
+      Req    : out CXX_Request_Type;
+      Key_ID : out CXX_Key_ID_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZNK3Cbe7Library27_crypto_remove_key_requiredERNS_7RequestERNS_" &
+         "3Key2IdE";
+
+   procedure Crypto_Remove_Key_Requested (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library27crypto_remove_key_requestedERKNS_7RequestE";
+
+   procedure Crypto_Remove_Key_Completed (
+      Obj : in out Library.Object_Type;
+      Req :        CXX_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library27crypto_remove_key_completedERKNS_7RequestE";
+
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Library.Object_Type;
       Req        : out CXX_Request_Type;
