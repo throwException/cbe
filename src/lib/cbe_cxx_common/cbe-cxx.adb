@@ -73,6 +73,7 @@ is
       when  8 => return CXX_Request_Valid_To_SPARK (Input, Extend_FT);
       when  9 => return CXX_Request_Valid_To_SPARK (Input, Decrypt_Keys);
       when 10 => return CXX_Request_Valid_To_SPARK (Input, Resume_Rekeying);
+      when 11 => return CXX_Request_Valid_To_SPARK (Input, Deinitialize);
       when others => raise Program_Error;
       end case;
    end CXX_Request_To_SPARK;

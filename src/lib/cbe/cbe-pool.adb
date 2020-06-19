@@ -37,7 +37,9 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
-            when Rekey | Extend_VBD | Extend_FT | Decrypt_Keys =>
+            when
+               Rekey | Extend_VBD | Extend_FT | Decrypt_Keys | Deinitialize
+            =>
 
                Obj.Items (Idx).State := Submitted;
                Obj.Items (Idx).Req   := Req;
@@ -247,7 +249,8 @@ is
                Rekey_VBA_Pending |
                VBD_Extension_Step_Pending |
                FT_Extension_Step_Pending |
-               Decrypt_Keys_Pending
+               Decrypt_Keys_Pending |
+               Deinitialize_SB_Ctrl_Pending
             =>
 
                return Itm.Prim;
@@ -349,6 +352,9 @@ is
             return;
          when Decrypt_Keys_Pending =>
             Obj.Items (Idx).State := Decrypt_Keys_In_Progress;
+            return;
+         when Deinitialize_SB_Ctrl_Pending =>
+            Obj.Items (Idx).State := Deinitialize_SB_Ctrl_In_Progress;
             return;
          when others =>
             raise Program_Error;
@@ -767,6 +773,50 @@ is
    end Execute_Decrypt_Keys;
 
    --
+   --  Execute_Deinitialize
+   --
+   procedure Execute_Deinitialize (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Items (Idx).State is
+      when Submitted =>
+
+         Items (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Deinitialize,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Items (Idx).State := Deinitialize_SB_Ctrl_Pending;
+         Progress := True;
+
+      when Deinitialize_SB_Ctrl_Complete =>
+
+         if not Primitive.Success (Items (Idx).Prim) then
+            raise Program_Error;
+         end if;
+
+         Request.Success (Items (Idx).Req, True);
+         Items (Idx).State := Complete;
+         Index_Queue.Dequeue (Indices, Idx);
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Deinitialize;
+
+   --
    --  Execute
    --
    procedure Execute (
@@ -798,6 +848,10 @@ is
             when Decrypt_Keys =>
 
                Execute_Decrypt_Keys (Obj.Items, Obj.Indices, Idx, Progress);
+
+            when Deinitialize =>
+
+               Execute_Deinitialize (Obj.Items, Obj.Indices, Idx, Progress);
 
             when others =>
 
@@ -853,6 +907,20 @@ is
 
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Decrypt_Keys_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when Deinitialize =>
+
+         case Obj.Items (Idx).State is
+         when Deinitialize_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Deinitialize_SB_Ctrl_Complete;
 
          when others =>
 
@@ -1025,6 +1093,7 @@ is
          Extend_VBD |
          Extend_FT |
          Decrypt_Keys |
+         Deinitialize |
          Resume_Rekeying
       =>
          1);

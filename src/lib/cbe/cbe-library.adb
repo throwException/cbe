@@ -398,11 +398,9 @@ is
    begin
 
       case Request.Operation (Req) is
-      when Read | Write | Rekey | Extend_VBD | Extend_FT =>
-
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
-
-      when Sync =>
+      when
+         Read | Write | Sync | Rekey | Extend_VBD | Extend_FT | Deinitialize
+      =>
 
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
@@ -424,7 +422,9 @@ is
 
       case Request.Operation (Req) is
 
-      when Read | Write | Sync | Rekey | Extend_VBD | Extend_FT =>
+      when
+         Read | Write | Sync | Rekey | Extend_VBD | Extend_FT | Deinitialize
+      =>
          return Req;
 
       when
@@ -2182,7 +2182,8 @@ is
 
             when
                Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
-               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey
+               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
+               Primitive.Tag_Pool_SB_Ctrl_Deinitialize
             =>
 
                Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
@@ -2910,7 +2911,10 @@ is
             exit Loop_Completed_Prims when not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_Pool_SB_Ctrl_Init_Rekey =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
+               Primitive.Tag_Pool_SB_Ctrl_Deinitialize
+            =>
 
                Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,

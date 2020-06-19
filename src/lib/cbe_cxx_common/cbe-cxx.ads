@@ -130,7 +130,8 @@ is
       when Extend_VBD       => 7,
       when Extend_FT        => 8,
       when Decrypt_Keys     => 9,
-      when Resume_Rekeying  => 10);
+      when Resume_Rekeying  => 10,
+      when Deinitialize     => 11);
 
    function CXX_Request_Valid_To_SPARK (
       Req : CXX_Request_Type;

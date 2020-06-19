@@ -361,6 +361,7 @@ private
 
    type Job_Operation_Type is (
       Invalid,
+      Deinitialize,
       VBD_Extension_Step,
       FT_Extension_Step,
       Initialize_Rekeying,
@@ -408,6 +409,9 @@ private
       Remove_Previous_Key_At_Crypto_Module_Pending,
       Remove_Previous_Key_At_Crypto_Module_In_Progress,
       Remove_Previous_Key_At_Crypto_Module_Completed,
+      Remove_Current_Key_At_Crypto_Module_Pending,
+      Remove_Current_Key_At_Crypto_Module_In_Progress,
+      Remove_Current_Key_At_Crypto_Module_Completed,
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,
@@ -498,6 +502,15 @@ private
    procedure Execute_Decrypt_Keys (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Deinitialize
+   --
+   procedure Execute_Deinitialize (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            :        Superblock_Type;
       Progress      : in out Boolean);
 
    --

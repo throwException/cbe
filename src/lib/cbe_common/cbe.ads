@@ -88,6 +88,7 @@ is
    type Key_ID_Type is range 0 .. 2**32 - 1;
 
    type Request_Operation_Type is (
+      Deinitialize,
       Read,
       Write,
       Sync,

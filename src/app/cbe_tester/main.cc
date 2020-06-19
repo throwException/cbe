@@ -131,6 +131,7 @@ struct Cbe::Block_session_component
 			CREATE_SNAPSHOT,
 			DISCARD_SNAPSHOT,
 			REKEY,
+			DEINITIALIZE,
 			EXTEND_VBD,
 			EXTEND_FT,
 			INITIALIZE,
@@ -291,6 +292,13 @@ struct Cbe::Block_session_component
 		_test_queue.enqueue(test);
 	}
 
+	void _read_deinitialize_node()
+	{
+		Test &test = *new (_alloc) Test;
+		test.type = Test::DEINITIALIZE;
+		_test_queue.enqueue(test);
+	}
+
 	void _read_extend_vbd_node(Xml_node const &node)
 	{
 		struct Bad_extend_vbd_node : Exception { };
@@ -343,6 +351,8 @@ struct Cbe::Block_session_component
 					_read_discard_snapshot_node(sub_node);
 				} else if (sub_node.has_type("rekey")) {
 					_read_rekey_node();
+				} else if (sub_node.has_type("deinitialize")) {
+					_read_deinitialize_node();
 				} else if (sub_node.has_type("extend-vbd")) {
 					_read_extend_vbd_node(sub_node);
 				} else if (sub_node.has_type("extend-ft")) {
@@ -621,17 +631,17 @@ struct Cbe::Block_session_component
 	}
 
 	template <typename FN>
-	void with_rekey(FN const &fn)
+	void with_deinitialize(FN const &fn)
 	{
 		if (_test_in_progress.constructed()) {
 			return;
 		}
 		bool head_available { false };
-		bool head_is_snap_discard { false };
+		bool head_has_correct_type { false };
 		_test_queue.head([&] (Test &test) {
 			head_available = true;
-			if (test.type == Test::REKEY) {
-				head_is_snap_discard = true;
+			if (test.type == Test::DEINITIALIZE) {
+				head_has_correct_type = true;
 			}
 		});
 		if (!head_available) {
@@ -642,7 +652,52 @@ struct Cbe::Block_session_component
 				_env.parent().exit(0);
 			}
 		}
-		if (!head_is_snap_discard) {
+		if (!head_has_correct_type) {
+			return;
+		}
+		_test_queue.dequeue([&] (Test &test) {
+			_test_in_progress.construct(test);
+			destroy(_alloc, &test);
+		});
+		log("deinitialize started");
+
+		fn();
+	}
+
+	void deinitialize_done(bool success)
+	{
+		if (success) {
+			log("deinitialize succeeded");
+		} else {
+			_nr_of_failed_tests++;
+			log("deinitialize failed");
+		}
+		_test_in_progress.destruct();
+	}
+
+	template <typename FN>
+	void with_rekey(FN const &fn)
+	{
+		if (_test_in_progress.constructed()) {
+			return;
+		}
+		bool head_available { false };
+		bool head_has_correct_type { false };
+		_test_queue.head([&] (Test &test) {
+			head_available = true;
+			if (test.type == Test::REKEY) {
+				head_has_correct_type = true;
+			}
+		});
+		if (!head_available) {
+			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
+			if (_nr_of_failed_tests > 0) {
+				_env.parent().exit(-1);
+			} else {
+				_env.parent().exit(0);
+			}
+		}
+		if (!head_has_correct_type) {
 			return;
 		}
 		_test_queue.dequeue([&] (Test &test) {
@@ -769,6 +824,7 @@ struct Cbe::Block_session_component
 			result |= test.type == Test::CREATE_SNAPSHOT;
 			result |= test.type == Test::DISCARD_SNAPSHOT;
 			result |= test.type == Test::REKEY;
+			result |= test.type == Test::DEINITIALIZE;
 			result |= test.type == Test::EXTEND_VBD;
 			result |= test.type == Test::EXTEND_FT;
 		});
@@ -986,6 +1042,7 @@ class Cbe::Main
 		bool                                    _discard_snapshot        { false };
 		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
 		bool                                    _rekey                   { false };
+		bool                                    _deinitialize            { false };
 		bool                                    _extend_vbd              { false };
 		Extend_vbd                              _extend_vbd_obj          { 0 };
 		bool                                    _extend_ft               { false };
@@ -1369,7 +1426,7 @@ class Cbe::Main
 			 * Acknowledge finished Block session requests.
 			 */
 
-			if (!_rekey && !_extend_vbd && !_extend_ft) {
+			if (!_rekey && !_deinitialize && !_extend_vbd && !_extend_ft) {
 
 				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
 
@@ -1440,6 +1497,55 @@ class Cbe::Main
 					_block_session->discard_snapshot_done(true);
 					_discard_snapshot_obj = { 0, 0 };
 					_discard_snapshot = false;
+
+					if (_block_session->cbe_request_next()) {
+						_state = CBE;
+					} else {
+						_state = INVALID;
+					}
+					progress |= true;
+				}
+			}
+
+			if (!_deinitialize) {
+				_block_session->with_deinitialize([&] () {
+
+					struct Deinitialize_request_not_acceptable { };
+					if (!_cbe->client_request_acceptable()) {
+						throw Deinitialize_request_not_acceptable();
+					}
+
+					Cbe::Request req(
+						Cbe::Request::Operation::DEINITIALIZE,
+						Cbe::Request::Success::FALSE,
+						0,
+						0,
+						0,
+						0,
+						0);
+
+					_cbe->submit_client_request(req, 0);
+					_deinitialize = true;
+					progress |= true;
+				});
+			}
+
+			if (_deinitialize) {
+
+				Cbe::Request const &req = _cbe->peek_completed_client_request();
+				if (req.valid()) {
+
+					struct Unexpected_request : Genode::Exception { };
+					if (req.operation() != Cbe::Request::Operation::DEINITIALIZE)
+					{
+						throw Unexpected_request();
+					}
+					_block_session->deinitialize_done(
+						req.success() ==
+							Cbe::Request::Success::TRUE ? true : false);
+
+					_deinitialize = false;
+					_cbe->drop_completed_client_request(req);
 
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;

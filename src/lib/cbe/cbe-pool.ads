@@ -164,6 +164,9 @@ private
       Decrypt_Keys_Pending,
       Decrypt_Keys_In_Progress,
       Decrypt_Keys_Complete,
+      Deinitialize_SB_Ctrl_Pending,
+      Deinitialize_SB_Ctrl_In_Progress,
+      Deinitialize_SB_Ctrl_Complete,
       Complete);
 
    type Item_Type is record
@@ -231,6 +234,15 @@ private
    --  Execute_Decrypt_Keys
    --
    procedure Execute_Decrypt_Keys (
+      Items    : in out Items_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Deinitialize
+   --
+   procedure Execute_Deinitialize (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
