@@ -156,6 +156,25 @@ is
    end Submit_Primitive_Key;
 
    --
+   --  Submit_Primitive_Key_ID
+   --
+   procedure Submit_Primitive_Key_ID (
+      Obj    : in out Object_Type;
+      Prim   :        Primitive.Object_Type;
+      Key_ID :        Key_ID_Type)
+   is
+   begin
+      For_Items :
+      for Item_Idx in Obj.Items'Range loop
+         if Item.Invalid (Obj.Items (Item_Idx)) then
+            Obj.Items (Item_Idx) := Item.Pending_Object (Prim, Key_ID);
+            return;
+         end if;
+      end loop For_Items;
+      raise Program_Error;
+   end Submit_Primitive_Key_ID;
+
+   --
    --  Submit_Primitive
    --
    procedure Submit_Primitive (

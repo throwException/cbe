@@ -130,6 +130,14 @@ is
    return Hash_Type;
 
    --
+   --  Peek_Generated_Key_ID
+   --
+   function Peek_Generated_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type;
+
+   --
    --  Peek_Generated_Plain_Key
    --
    function Peek_Generated_Key_Value_Plaintext (
@@ -397,6 +405,9 @@ private
       Add_Current_Key_At_Crypto_Module_Pending,
       Add_Current_Key_At_Crypto_Module_In_Progress,
       Add_Current_Key_At_Crypto_Module_Completed,
+      Remove_Previous_Key_At_Crypto_Module_Pending,
+      Remove_Previous_Key_At_Crypto_Module_In_Progress,
+      Remove_Previous_Key_At_Crypto_Module_Completed,
       Write_SB_Pending,
       Write_SB_In_Progress,
       Write_SB_Completed,

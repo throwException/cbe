@@ -2799,6 +2799,13 @@ is
                not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
 
             case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_Crypto_Remove_Key =>
+
+               Crypto.Submit_Primitive_Key_ID (
+                  Obj.Crypto_Obj, Prim,
+                  Superblock_Control.Peek_Generated_Key_ID (
+                     Obj.SB_Ctrl, Prim));
+
             when Primitive.Tag_SB_Ctrl_Crypto_Add_Key =>
 
                Crypto.Submit_Primitive_Key (
@@ -3535,7 +3542,8 @@ is
             --  filter those out through their tags.
             --
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_Crypto_Add_Key =>
+            when Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
+                 Primitive.Tag_SB_Ctrl_Crypto_Remove_Key =>
 
                Superblock_Control.Mark_Generated_Prim_Complete (
                   Obj.SB_Ctrl, Prim);

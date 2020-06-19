@@ -63,6 +63,14 @@ is
       Key  :        Key_Plaintext_Type);
 
    --
+   --  Submit_Primitive_Key_ID
+   --
+   procedure Submit_Primitive_Key_ID (
+      Obj    : in out Object_Type;
+      Prim   :        Primitive.Object_Type;
+      Key_ID :        Key_ID_Type);
+
+   --
    --  Submit_Completed_Primitive
    --
    procedure Submit_Completed_Primitive (

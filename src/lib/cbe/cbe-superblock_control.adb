@@ -1363,7 +1363,7 @@ is
 
          SB.Snapshots := Job.Snapshots;
 
-         Declare_Max_VBA :
+         Declare_Max_Nr_Of_Leafs :
          declare
             Max_Nr_Of_Leafs : Tree_Number_Of_Leafs_Type := 0;
          begin
@@ -1382,15 +1382,50 @@ is
             if SB.Rekeying_VBA <
                   Virtual_Block_Address_Type (Max_Nr_Of_Leafs - 1)
             then
+
                SB.Rekeying_VBA := SB.Rekeying_VBA + 1;
                Job.Request_Finished := False;
+
+               SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
+               Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
+               Job.Key_Plaintext := SB.Current_Key;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Primitive_Operation_Type'First,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+                  Blk_Nr => Block_Number_Type'First,
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Job.State := Encrypt_Current_Key_Pending;
+               Progress := True;
+
             else
-               SB.Previous_Key := Key_Plaintext_Invalid;
-               SB.State := Normal;
-               Job.Request_Finished := True;
+
+               Job.Prev_Key_Plaintext.ID := SB.Previous_Key.ID;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Primitive_Operation_Type'First,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_SB_Ctrl_Crypto_Remove_Key,
+                  Blk_Nr => Block_Number_Type'First,
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Job.State := Remove_Previous_Key_At_Crypto_Module_Pending;
+               Progress := True;
+
             end if;
 
-         end Declare_Max_VBA;
+         end Declare_Max_Nr_Of_Leafs;
+
+      when Remove_Previous_Key_At_Crypto_Module_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Previous_Key := Key_Plaintext_Invalid;
+         SB.State := Normal;
+         Job.Request_Finished := True;
 
          SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
 
@@ -1634,7 +1669,8 @@ is
             when
                Add_Key_At_Crypto_Module_Pending |
                Add_Current_Key_At_Crypto_Module_Pending |
-               Add_Previous_Key_At_Crypto_Module_Pending
+               Add_Previous_Key_At_Crypto_Module_Pending |
+               Remove_Previous_Key_At_Crypto_Module_Pending
             =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
@@ -2306,6 +2342,38 @@ is
    end Peek_Generated_Key_Plaintext;
 
    --
+   --  Peek_Generated_Key_ID
+   --
+   function Peek_Generated_Key_ID (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Remove_Previous_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Prev_Key_Plaintext.ID;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Key_ID;
+
+   --
    --  Peek_Generated_Key_Value_Plaintext
    --
    function Peek_Generated_Key_Value_Plaintext (
@@ -2509,6 +2577,15 @@ is
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
                Ctrl.Jobs (Idx).State := Add_Key_At_Crypto_Module_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Remove_Previous_Key_At_Crypto_Module_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State :=
+                  Remove_Previous_Key_At_Crypto_Module_In_Progress;
                return;
             end if;
             raise Program_Error;
@@ -2902,6 +2979,18 @@ is
 
                Ctrl.Jobs (Idx).State :=
                   Add_Previous_Key_At_Crypto_Module_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when Remove_Previous_Key_At_Crypto_Module_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State :=
+                  Remove_Previous_Key_At_Crypto_Module_Completed;
                Ctrl.Jobs (Idx).Generated_Prim := Prim;
                return;
 
