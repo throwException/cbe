@@ -248,9 +248,9 @@ is
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_FT_Ext_Step);
 
-   function Has_Tag_Pool_SB_Ctrl_Decrypt_Keys (Obj : Object_Type)
+   function Has_Tag_Pool_SB_Ctrl_Initialize (Obj : Object_Type)
    return Boolean
-   is (Obj.Tag = Tag_Pool_SB_Ctrl_Decrypt_Keys);
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Initialize);
 
    function Has_Tag_Pool_SB_Ctrl_Deinitialize (Obj : Object_Type)
    return Boolean
@@ -292,6 +292,9 @@ is
 
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Write_SB);
+
+   function Has_Tag_SB_Ctrl_Blk_IO_Read_SB (Obj : Object_Type) return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Read_SB);
 
    function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_Blk_IO_Sync);

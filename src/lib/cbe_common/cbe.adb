@@ -249,6 +249,13 @@ is
    return Boolean
    is (SB.Last_Secured_Generation /= Generation_Type'Last);
 
+   --
+   --  Superblock_Ciphertext_Valid
+   --
+   function Superblock_Ciphertext_Valid (SB : Superblock_Ciphertext_Type)
+   return Boolean
+   is (SB.Last_Secured_Generation /= Generation_Type'Last);
+
    function Superblock_Invalid
    return Superblock_Type
    is
@@ -525,6 +532,28 @@ is
       return Result;
    end Hash_From_Block_Data;
 
+   --
+   --  Key_Ciphertext_From_Block_Data
+   --
+   procedure Key_Ciphertext_From_Block_Data (
+      Key      : out Key_Ciphertext_Type;
+      Data     :     Block_Data_Type;
+      Data_Off :     Block_Data_Index_Type)
+   is
+      Key_Off : Block_Data_Index_Type := Data_Off;
+   begin
+      Declare_Value_Off : declare
+         Value_Off : Block_Data_Index_Type;
+      begin
+         For_Value_Items : for Idx in Key.Value'Range loop
+            Value_Off := Key_Off + Block_Data_Index_Type (Idx);
+            Key.Value (Idx) := Data (Value_Off);
+         end loop For_Value_Items;
+      end Declare_Value_Off;
+      Key_Off := Key_Off + Key_Value_Size_Bytes;
+      Key.ID := Key_ID_Type (Unsigned_32_From_Block_Data (Data, Key_Off));
+   end Key_Ciphertext_From_Block_Data;
+
    procedure Key_Plaintext_From_Block_Data (
       Key      : out Key_Plaintext_Type;
       Data     :     Block_Data_Type;
@@ -596,6 +625,105 @@ is
          Snapshot_From_Block_Data (Snaps (Idx), Data, Snaps_Off);
       end loop For_Snaps;
    end Snapshots_From_Block_Data;
+
+   --
+   --  Superblock_Ciphertext_From_Block_Data
+   --
+   procedure Superblock_Ciphertext_From_Block_Data (
+      SB   : out Superblock_Ciphertext_Type;
+      Data :     Block_Data_Type)
+   is
+      Off : Block_Data_Index_Type := 0;
+   begin
+      SB.State := SB_State_From_Block_Data (Data, Off);
+      Off := Off + 1;
+
+      SB.Rekeying_VBA :=
+         Virtual_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Resizing_Nr_Of_PBAs :=
+         Number_Of_Blocks_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Resizing_Nr_Of_Leaves :=
+         Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      Key_Ciphertext_From_Block_Data (SB.Previous_Key, Data, Off);
+      Off := Off + Key_Storage_Size_Bytes;
+
+      Key_Ciphertext_From_Block_Data (SB.Current_Key, Data, Off);
+      Off := Off + Key_Storage_Size_Bytes;
+
+      Snapshots_From_Block_Data (SB.Snapshots, Data, Off);
+      Off := Off + Superblock_Snapshots_Storage_Size_Bytes;
+
+      SB.Last_Secured_Generation :=
+         Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Curr_Snap :=
+         Snapshots_Index_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Degree :=
+         Tree_Degree_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.First_PBA :=
+         Physical_Block_Address_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Nr_Of_PBAs :=
+         Number_Of_Blocks_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Free_Gen :=
+         Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Free_Number := Physical_Block_Address_Type (
+         Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Free_Hash := Hash_From_Block_Data (Data, Off);
+      Off := Off + Hash_Size_Bytes;
+
+      SB.Free_Max_Level :=
+         Tree_Level_Index_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Free_Degree :=
+         Tree_Degree_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Free_Leafs :=
+         Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Gen :=
+         Generation_Type (Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Number := Physical_Block_Address_Type (
+         Unsigned_64_From_Block_Data (Data, Off));
+      Off := Off + 8;
+
+      SB.Meta_Hash := Hash_From_Block_Data (Data, Off);
+      Off := Off + Hash_Size_Bytes;
+
+      SB.Meta_Max_Level :=
+         Tree_Level_Index_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Meta_Degree :=
+         Tree_Degree_Type (Unsigned_32_From_Block_Data (Data, Off));
+      Off := Off + 4;
+
+      SB.Meta_Leafs :=
+         Tree_Number_Of_Leafs_Type (Unsigned_64_From_Block_Data (Data, Off));
+   end Superblock_Ciphertext_From_Block_Data;
 
    --
    --  Superblock_From_Block_Data

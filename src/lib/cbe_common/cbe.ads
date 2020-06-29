@@ -88,6 +88,7 @@ is
    type Key_ID_Type is range 0 .. 2**32 - 1;
 
    type Request_Operation_Type is (
+      Initialize,
       Deinitialize,
       Read,
       Write,
@@ -97,7 +98,6 @@ is
       Rekey,
       Extend_VBD,
       Extend_FT,
-      Decrypt_Keys,
       Resume_Rekeying);
 
    type Primitive_Operation_Type is (Read, Write, Sync);
@@ -387,6 +387,12 @@ is
    function Superblock_Ciphertext_Invalid
    return Superblock_Ciphertext_Type;
 
+   --
+   --  Superblock_Ciphertext_Valid
+   --
+   function Superblock_Ciphertext_Valid (SB : Superblock_Ciphertext_Type)
+   return Boolean;
+
    function Superblock_Invalid
    return Superblock_Type;
 
@@ -533,6 +539,13 @@ is
       SB   : out Superblock_Type;
       Data :     Block_Data_Type);
 
+   --
+   --  Superblock_Ciphertext_From_Block_Data
+   --
+   procedure Superblock_Ciphertext_From_Block_Data (
+      SB   : out Superblock_Ciphertext_Type;
+      Data :     Block_Data_Type);
+
    generic
       type T is (<>);
    function Advance_Index (I : T) return T;
@@ -557,6 +570,14 @@ private
 
    procedure Key_Plaintext_From_Block_Data (
       Key      : out Key_Plaintext_Type;
+      Data     :     Block_Data_Type;
+      Data_Off :     Block_Data_Index_Type);
+
+   --
+   --  Key_Ciphertext_From_Block_Data
+   --
+   procedure Key_Ciphertext_From_Block_Data (
+      Key      : out Key_Ciphertext_Type;
       Data     :     Block_Data_Type;
       Data_Off :     Block_Data_Index_Type);
 

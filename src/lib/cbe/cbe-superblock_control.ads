@@ -48,15 +48,6 @@ is
       Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    --
-   --  Submit_Primitive_Decrypt_Keys
-   --
-   procedure Submit_Primitive_Decrypt_Keys (
-      Ctrl     : in out Control_Type;
-      Prim     :        Primitive.Object_Type;
-      Prev_Key :        Key_Ciphertext_Type;
-      Curr_Key :        Key_Ciphertext_Type);
-
-   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Ctrl : Control_Type)
@@ -335,6 +326,14 @@ is
       Key_Value :        Key_Value_Plaintext_Type);
 
    --
+   --  Mark_Generated_Prim_Complete_Blk_Data
+   --
+   procedure Mark_Generated_Prim_Complete_Blk_Data (
+      Ctrl     : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Blk_Data :        Block_Data_Type);
+
+   --
    --  Mark_Generated_Prim_Complete_Key_Value_Ciphertext
    --
    procedure Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
@@ -361,15 +360,21 @@ private
 
    type Job_Operation_Type is (
       Invalid,
+      Initialize,
       Deinitialize,
       VBD_Extension_Step,
       FT_Extension_Step,
       Initialize_Rekeying,
-      Rekey_VBA,
-      Decrypt_Keys);
+      Rekey_VBA);
 
    type Job_State_Type is (
       Submitted,
+      Read_SB_Pending,
+      Read_SB_In_Progress,
+      Read_SB_Completed,
+      Read_Current_SB_Pending,
+      Read_Current_SB_In_Progress,
+      Read_Current_SB_Completed,
       Rekey_VBA_In_VBD_Pending,
       Rekey_VBA_In_VBD_In_Progress,
       Rekey_VBA_In_VBD_Completed,
@@ -430,6 +435,9 @@ private
       Generated_Prim : Primitive.Object_Type;
       Key_Plaintext : Key_Plaintext_Type;
       SB_Ciphertext : Superblock_Ciphertext_Type;
+      SB_Idx : Superblocks_Index_Type;
+      SB_Found : Boolean;
+      Read_SB_Idx : Superblocks_Index_Type;
       Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
       Generation : Generation_Type;
       Hash : Hash_Type;
@@ -440,8 +448,6 @@ private
       FT_Root : Type_1_Node_Type;
       FT_Max_Lvl_Idx : Tree_Level_Index_Type;
       FT_Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
-      Prev_Key_Ciphertext : Key_Ciphertext_Type;
-      Curr_Key_Ciphertext : Key_Ciphertext_Type;
       Prev_Key_Plaintext : Key_Plaintext_Type;
       Curr_Key_Plaintext : Key_Plaintext_Type;
    end record;
@@ -497,12 +503,15 @@ private
       Progress      : in out Boolean);
 
    --
-   --  Execute_Decrypt_Keys
+   --  Execute_Initialize
    --
-   procedure Execute_Decrypt_Keys (
-      Job           : in out Job_Type;
-      Job_Idx       :        Jobs_Index_Type;
-      Progress      : in out Boolean);
+   procedure Execute_Initialize (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      SB       : in out Superblock_Type;
+      SB_Idx   : in out Superblocks_Index_Type;
+      Curr_Gen : in out Generation_Type;
+      Progress : in out Boolean);
 
    --
    --  Execute_Deinitialize
@@ -526,5 +535,12 @@ private
    procedure Init_SB_Ciphertext_Without_Key_Values (
       SB_Plain  :     Superblock_Type;
       SB_Cipher : out Superblock_Ciphertext_Type);
+
+   --
+   --  Init_SB_Plaintext_Without_Key_Values
+   --
+   procedure Init_SB_Plaintext_Without_Key_Values (
+      SB_Cipher :     Superblock_Ciphertext_Type;
+      SB_Plain  : out Superblock_Type);
 
 end CBE.Superblock_Control;

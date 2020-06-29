@@ -54,7 +54,7 @@ is
       Tag_Pool_SB_Ctrl_Rekey_VBA,
       Tag_Pool_SB_Ctrl_VBD_Ext_Step,
       Tag_Pool_SB_Ctrl_FT_Ext_Step,
-      Tag_Pool_SB_Ctrl_Decrypt_Keys,
+      Tag_Pool_SB_Ctrl_Initialize,
       Tag_Pool_SB_Ctrl_Deinitialize,
       Tag_SB_Ctrl_TA_Create_Key,
       Tag_SB_Ctrl_TA_Secure_SB,
@@ -67,6 +67,7 @@ is
       Tag_SB_Ctrl_Crypto_Add_Key,
       Tag_SB_Ctrl_Crypto_Remove_Key,
       Tag_SB_Ctrl_Blk_IO_Write_SB,
+      Tag_SB_Ctrl_Blk_IO_Read_SB,
       Tag_SB_Ctrl_Blk_IO_Sync,
       Tag_VBD_Rkg_Cache,
       Tag_FT_Rszg_Cache,
@@ -142,7 +143,7 @@ is
       when Tag_Pool_SB_Ctrl_Rekey_VBA => "Pool_SB_Ctrl_Rekey_VBA",
       when Tag_Pool_SB_Ctrl_VBD_Ext_Step => "Pool_SB_Ctrl_VBD_Ext_Step",
       when Tag_Pool_SB_Ctrl_FT_Ext_Step => "Pool_SB_Ctrl_FT_Ext_Step",
-      when Tag_Pool_SB_Ctrl_Decrypt_Keys => "Pool_SB_Ctrl_Decrypt_Keys",
+      when Tag_Pool_SB_Ctrl_Initialize => "Pool_SB_Ctrl_Initialize",
       when Tag_Pool_SB_Ctrl_Deinitialize => "Pool_SB_Ctrl_Deinitialize",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
       when Tag_SB_Ctrl_TA_Secure_SB => "SB_Ctrl_TA_Secure_SB",
@@ -167,6 +168,7 @@ is
       when Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
          "VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blk",
       when Tag_SB_Ctrl_Blk_IO_Write_SB => "SB_Ctrl_Blk_IO_Write_SB",
+      when Tag_SB_Ctrl_Blk_IO_Read_SB => "SB_Ctrl_Blk_IO_Read_SB",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
       when Tag_Write_Back => "Write_Back",
@@ -357,7 +359,7 @@ is
    function Has_Tag_Pool_SB_Ctrl_FT_Ext_Step (Obj : Object_Type)
    return Boolean;
 
-   function Has_Tag_Pool_SB_Ctrl_Decrypt_Keys (Obj : Object_Type)
+   function Has_Tag_Pool_SB_Ctrl_Initialize (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_Pool_SB_Ctrl_Deinitialize (Obj : Object_Type)
@@ -383,6 +385,7 @@ is
    return Boolean;
 
    function Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Obj : Object_Type) return Boolean;
+   function Has_Tag_SB_Ctrl_Blk_IO_Read_SB (Obj : Object_Type) return Boolean;
    function Has_Tag_SB_Ctrl_Blk_IO_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Rkg_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Rszg_Cache (Obj : Object_Type) return Boolean;

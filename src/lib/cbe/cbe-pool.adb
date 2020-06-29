@@ -37,8 +37,15 @@ is
          if Obj.Items (Idx).State = Invalid then
 
             case Request.Operation (Req) is
+            when Initialize =>
+
+               raise Program_Error;
+
             when
-               Rekey | Extend_VBD | Extend_FT | Decrypt_Keys | Deinitialize
+               Rekey |
+               Extend_VBD |
+               Extend_FT |
+               Deinitialize
             =>
 
                Obj.Items (Idx).State := Submitted;
@@ -52,7 +59,7 @@ is
                Obj.Items (Idx).Req   := Request.Valid_Object (
                   Op     => Rekey,
                   Succ   => False,
-                  Blk_Nr => Block_Number_Type (0),
+                  Blk_Nr => 0,
                   Off    => 0,
                   Cnt    => 0,
                   Key    => 0,
@@ -70,7 +77,8 @@ is
                   Prim                    => Primitive.Invalid_Object,
                   Request_Finished        => Boolean'First,
                   Nr_Of_Requests_Preponed => 0,
-                  Nr_Of_Prims_Completed   => 0);
+                  Nr_Of_Prims_Completed   => 0,
+                  SB_State                => Superblock_State_Type'First);
 
                Request.Success (Obj.Items (Idx).Req, True);
                Index_Queue.Enqueue (Obj.Indices, Idx);
@@ -249,7 +257,7 @@ is
                Rekey_VBA_Pending |
                VBD_Extension_Step_Pending |
                FT_Extension_Step_Pending |
-               Decrypt_Keys_Pending |
+               Initialize_SB_Ctrl_Pending |
                Deinitialize_SB_Ctrl_Pending
             =>
 
@@ -350,8 +358,8 @@ is
          when FT_Extension_Step_Pending =>
             Obj.Items (Idx).State := FT_Extension_Step_In_Progress;
             return;
-         when Decrypt_Keys_Pending =>
-            Obj.Items (Idx).State := Decrypt_Keys_In_Progress;
+         when Initialize_SB_Ctrl_Pending =>
+            Obj.Items (Idx).State := Initialize_SB_Ctrl_In_Progress;
             return;
          when Deinitialize_SB_Ctrl_Pending =>
             Obj.Items (Idx).State := Deinitialize_SB_Ctrl_In_Progress;
@@ -730,9 +738,9 @@ is
    end Execute_Rekey;
 
    --
-   --  Execute_Decrypt_Keys
+   --  Execute_Initialize
    --
-   procedure Execute_Decrypt_Keys (
+   procedure Execute_Initialize (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
@@ -746,23 +754,75 @@ is
          Items (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
-            Tg     => Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Initialize,
             Pl_Idx => Idx,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := Decrypt_Keys_Pending;
+         Items (Idx).State := Initialize_SB_Ctrl_Pending;
          Progress := True;
 
-      when Decrypt_Keys_Complete =>
+      when Initialize_SB_Ctrl_Complete =>
 
          if not Primitive.Success (Items (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         Items (Idx).State := Complete;
-         Index_Queue.Dequeue (Indices, Idx);
-         Progress := True;
+         case Items (Idx).SB_State is
+         when Normal =>
+
+            Index_Queue.Dequeue (Indices, Idx);
+            Items (Idx) := Item_Invalid;
+            Progress := True;
+
+         when Rekeying =>
+
+            Items (Idx).State := Submitted_Resume_Rekeying;
+            Items (Idx).Req   := Request.Valid_Object (
+               Op     => Rekey,
+               Succ   => False,
+               Blk_Nr => 0,
+               Off    => 0,
+               Cnt    => 0,
+               Key    => 0,
+               Tg     => 0);
+
+            Index_Queue.Enqueue (Indices, Idx);
+            Progress := True;
+
+         when Extending_VBD =>
+
+            Items (Idx).State := Submitted;
+            Items (Idx).Req   :=
+               Request.Valid_Object (
+                  Op     => Extend_VBD,
+                  Succ   => False,
+                  Blk_Nr => 0,
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+
+            Index_Queue.Enqueue (Indices, Idx);
+            Progress := True;
+
+         when Extending_FT =>
+
+            Items (Idx).State := Submitted;
+            Items (Idx).Req   :=
+               Request.Valid_Object (
+                  Op     => Extend_FT,
+                  Succ   => False,
+                  Blk_Nr => 0,
+                  Off    => 0,
+                  Cnt    => 0,
+                  Key    => 0,
+                  Tg     => 0);
+
+            Index_Queue.Enqueue (Indices, Idx);
+            Progress := True;
+
+         end case;
 
       when others =>
 
@@ -770,7 +830,7 @@ is
 
       end case;
 
-   end Execute_Decrypt_Keys;
+   end Execute_Initialize;
 
    --
    --  Execute_Deinitialize
@@ -845,9 +905,9 @@ is
 
                Execute_Extend_FT (Obj.Items, Obj.Indices, Idx, Progress);
 
-            when Decrypt_Keys =>
+            when Initialize =>
 
-               Execute_Decrypt_Keys (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Initialize (Obj.Items, Obj.Indices, Idx, Progress);
 
             when Deinitialize =>
 
@@ -866,6 +926,47 @@ is
    end Execute;
 
    --
+   --  Mark_Generated_Primitive_Complete_SB_State
+   --
+   procedure Mark_Generated_Primitive_Complete_SB_State (
+      Obj      : in out Object_Type;
+      Idx      :        Pool_Index_Type;
+      Success  :        Boolean;
+      SB_State :        Superblock_State_Type)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) or else
+         Index_Queue.Head (Obj.Indices) /= Idx
+      then
+         raise Program_Error;
+      end if;
+
+      case Request.Operation (Obj.Items (Idx).Req) is
+      when Initialize =>
+
+         case Obj.Items (Idx).State is
+         when Initialize_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Items (Idx).Prim, Success);
+            Obj.Items (Idx).State := Initialize_SB_Ctrl_Complete;
+            Obj.Items (Idx).SB_State := SB_State;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Mark_Generated_Primitive_Complete_SB_State;
+
+   --
    --  Mark_Generated_Primitive_Complete
    --
    procedure Mark_Generated_Primitive_Complete (
@@ -882,10 +983,6 @@ is
       end if;
 
       case Request.Operation (Obj.Items (Idx).Req) is
-      when Extend_VBD | Extend_FT | Resume_Rekeying =>
-
-         raise Program_Error;
-
       when Rekey =>
 
          case Obj.Items (Idx).State is
@@ -893,20 +990,6 @@ is
 
             Primitive.Success (Obj.Items (Idx).Prim, Success);
             Obj.Items (Idx).State := Rekey_Init_Complete;
-
-         when others =>
-
-            raise Program_Error;
-
-         end case;
-
-      when Decrypt_Keys =>
-
-         case Obj.Items (Idx).State is
-         when Decrypt_Keys_In_Progress =>
-
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Decrypt_Keys_Complete;
 
          when others =>
 
@@ -946,6 +1029,10 @@ is
             Obj.Items (Idx).State := Complete;
             Index_Queue.Dequeue (Obj.Indices, Idx);
          end if;
+
+      when others =>
+
+         raise Program_Error;
 
       end case;
 
@@ -1092,7 +1179,7 @@ is
          Rekey |
          Extend_VBD |
          Extend_FT |
-         Decrypt_Keys |
+         Initialize |
          Deinitialize |
          Resume_Rekeying
       =>
@@ -1110,15 +1197,37 @@ is
       Prim                    => Primitive.Invalid_Object,
       Request_Finished        => Boolean'First,
       Nr_Of_Requests_Preponed => 0,
-      Nr_Of_Prims_Completed   => 0);
+      Nr_Of_Prims_Completed   => 0,
+      SB_State                => Superblock_State_Type'First);
 
    --
    --  Initialized_Object
    --
    function Initialized_Object
    return Object_Type
-   is (
-      Items   => (others => Item_Invalid),
-      Indices => Index_Queue.Empty_Queue);
+   is
+      Obj : Object_Type;
+      Idx : constant Pool_Index_Type := Pool_Index_Type'First;
+   begin
+
+      Obj := (
+         Items   => (others => Item_Invalid),
+         Indices => Index_Queue.Empty_Queue);
+
+      Obj.Items (Idx).State := Submitted;
+      Obj.Items (Idx).Req   :=
+         Request.Valid_Object (
+            Op     => Initialize,
+            Succ   => False,
+            Blk_Nr => 0,
+            Off    => 0,
+            Cnt    => 0,
+            Key    => 0,
+            Tg     => 0);
+
+      Index_Queue.Enqueue (Obj.Indices, Idx);
+      return Obj;
+
+   end Initialized_Object;
 
 end CBE.Pool;

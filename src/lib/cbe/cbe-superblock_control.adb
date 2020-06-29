@@ -113,15 +113,16 @@ is
             Nr_Of_Blks => Number_Of_Blocks_Type'First,
             Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             SB_Ciphertext => Superblock_Ciphertext_Invalid,
+            SB_Idx => Superblocks_Index_Type'First,
+            SB_Found => Boolean'First,
+            Read_SB_Idx => Superblocks_Index_Type'First,
             Request_Finished => Boolean'First,
             Snapshots => (others => Snapshot_Invalid),
             FT_Root => Type_1_Node_Invalid,
             FT_Max_Lvl_Idx => Tree_Level_Index_Type'First,
             FT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             Prev_Key_Plaintext => Key_Plaintext_Invalid,
-            Curr_Key_Plaintext => Key_Plaintext_Invalid,
-            Prev_Key_Ciphertext => Key_Ciphertext_Invalid,
-            Curr_Key_Ciphertext => Key_Ciphertext_Invalid);
+            Curr_Key_Plaintext => Key_Plaintext_Invalid);
       end loop Initialize_Each_Job;
    end Initialize_Control;
 
@@ -198,6 +199,13 @@ is
                Ctrl.Jobs (Idx).Submitted_Prim := Prim;
                return;
 
+            when Primitive.Tag_Pool_SB_Ctrl_Initialize =>
+
+               Ctrl.Jobs (Idx).Operation := Initialize;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               return;
+
             when Primitive.Tag_Pool_SB_Ctrl_Deinitialize =>
 
                Ctrl.Jobs (Idx).Operation := Deinitialize;
@@ -215,51 +223,6 @@ is
 
       raise Program_Error;
    end Submit_Primitive;
-
-   --
-   --  Submit_Primitive_Decrypt_Keys
-   --
-   procedure Submit_Primitive_Decrypt_Keys (
-      Ctrl : in out Control_Type;
-      Prim     :        Primitive.Object_Type;
-      Prev_Key :        Key_Ciphertext_Type;
-      Curr_Key :        Key_Ciphertext_Type)
-   is
-   begin
-      Find_Invalid_Job :
-      for Idx in Ctrl.Jobs'Range loop
-         if Ctrl.Jobs (Idx).Operation = Invalid then
-            case Primitive.Tag (Prim) is
-            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
-
-               Ctrl.Jobs (Idx).Operation := Decrypt_Keys;
-               Ctrl.Jobs (Idx).State := Submitted;
-               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
-               Ctrl.Jobs (Idx).Curr_Key_Ciphertext := Curr_Key;
-               Ctrl.Jobs (Idx).Prev_Key_Ciphertext := Prev_Key;
-               Ctrl.Jobs (Idx).Curr_Key_Plaintext.ID :=
-                  Ctrl.Jobs (Idx).Curr_Key_Ciphertext.ID;
-               Ctrl.Jobs (Idx).Operation := Decrypt_Keys;
-               Ctrl.Jobs (Idx).State := Submitted;
-               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
-               Ctrl.Jobs (Idx).Curr_Key_Ciphertext := Curr_Key;
-               Ctrl.Jobs (Idx).Prev_Key_Ciphertext := Prev_Key;
-               Ctrl.Jobs (Idx).Curr_Key_Plaintext.ID :=
-                  Ctrl.Jobs (Idx).Curr_Key_Ciphertext.ID;
-               Ctrl.Jobs (Idx).Prev_Key_Plaintext.ID :=
-                  Ctrl.Jobs (Idx).Prev_Key_Ciphertext.ID;
-               return;
-
-            when others =>
-
-               raise Program_Error;
-
-            end case;
-         end if;
-      end loop Find_Invalid_Job;
-
-      raise Program_Error;
-   end Submit_Primitive_Decrypt_Keys;
 
    --
    --  Peek_Completed_Primitive
@@ -316,7 +279,7 @@ is
       Find_Corresponding_Job :
       for Idx in Ctrl.Jobs'Range loop
          case Ctrl.Jobs (Idx).Operation is
-         when Decrypt_Keys =>
+         when Initialize =>
 
             if Ctrl.Jobs (Idx).State = Completed and then
                Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
@@ -345,7 +308,7 @@ is
       Find_Corresponding_Job :
       for Idx in Ctrl.Jobs'Range loop
          case Ctrl.Jobs (Idx).Operation is
-         when Decrypt_Keys =>
+         when Initialize =>
 
             if Ctrl.Jobs (Idx).State = Completed and then
                Primitive.Equal (Prim, Ctrl.Jobs (Idx).Submitted_Prim)
@@ -442,6 +405,44 @@ is
       SB_Cipher.Meta_Leafs              := SB_Plain.Meta_Leafs;
 
    end Init_SB_Ciphertext_Without_Key_Values;
+
+   --
+   --  Init_SB_Plaintext_Without_Key_Values
+   --
+   procedure Init_SB_Plaintext_Without_Key_Values (
+      SB_Cipher :     Superblock_Ciphertext_Type;
+      SB_Plain  : out Superblock_Type)
+   is
+   begin
+
+      SB_Plain.State                   := SB_Cipher.State;
+      SB_Plain.Rekeying_VBA            := SB_Cipher.Rekeying_VBA;
+      SB_Plain.Resizing_Nr_Of_PBAs     := SB_Cipher.Resizing_Nr_Of_PBAs;
+      SB_Plain.Resizing_Nr_Of_Leaves   := SB_Cipher.Resizing_Nr_Of_Leaves;
+      SB_Plain.First_PBA               := SB_Cipher.First_PBA;
+      SB_Plain.Nr_Of_PBAs              := SB_Cipher.Nr_Of_PBAs;
+      SB_Plain.Previous_Key.Value      := (others => Byte_Type'First);
+      SB_Plain.Previous_Key.ID         := SB_Cipher.Previous_Key.ID;
+      SB_Plain.Current_Key.Value       := (others => Byte_Type'First);
+      SB_Plain.Current_Key.ID          := SB_Cipher.Current_Key.ID;
+      SB_Plain.Snapshots               := SB_Cipher.Snapshots;
+      SB_Plain.Last_Secured_Generation := SB_Cipher.Last_Secured_Generation;
+      SB_Plain.Curr_Snap               := SB_Cipher.Curr_Snap;
+      SB_Plain.Degree                  := SB_Cipher.Degree;
+      SB_Plain.Free_Gen                := SB_Cipher.Free_Gen;
+      SB_Plain.Free_Number             := SB_Cipher.Free_Number;
+      SB_Plain.Free_Hash               := SB_Cipher.Free_Hash;
+      SB_Plain.Free_Max_Level          := SB_Cipher.Free_Max_Level;
+      SB_Plain.Free_Degree             := SB_Cipher.Free_Degree;
+      SB_Plain.Free_Leafs              := SB_Cipher.Free_Leafs;
+      SB_Plain.Meta_Gen                := SB_Cipher.Meta_Gen;
+      SB_Plain.Meta_Number             := SB_Cipher.Meta_Number;
+      SB_Plain.Meta_Hash               := SB_Cipher.Meta_Hash;
+      SB_Plain.Meta_Max_Level          := SB_Cipher.Meta_Max_Level;
+      SB_Plain.Meta_Degree             := SB_Cipher.Meta_Degree;
+      SB_Plain.Meta_Leafs              := SB_Cipher.Meta_Leafs;
+
+   end Init_SB_Plaintext_Without_Key_Values;
 
    --
    --  Execute_VBD_Extension_Step
@@ -1132,16 +1133,108 @@ is
    end Execute_Deinitialize;
 
    --
-   --  Execute_Decrypt_Keys
+   --  Execute_Initialize
    --
-   procedure Execute_Decrypt_Keys (
-      Job           : in out Job_Type;
-      Job_Idx       :        Jobs_Index_Type;
-      Progress      : in out Boolean)
+   procedure Execute_Initialize (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      SB       : in out Superblock_Type;
+      SB_Idx   : in out Superblocks_Index_Type;
+      Curr_Gen : in out Generation_Type;
+      Progress : in out Boolean)
    is
    begin
       case Job.State is
       when Submitted =>
+
+         Job.SB_Found := False;
+         Job.Read_SB_Idx := 0;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB,
+            Blk_Nr => Block_Number_Type (Job.Read_SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Read_SB_Pending;
+         Progress := True;
+
+      when Read_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         if Superblock_Ciphertext_Valid (Job.SB_Ciphertext) then
+
+            Declare_SB_Generation :
+            declare
+               SB_Generation : constant Generation_Type :=
+                  Job.SB_Ciphertext.Snapshots (
+                     Newest_Snapshot_Idx (Job.SB_Ciphertext.Snapshots)).Gen;
+            begin
+
+               if Job.SB_Found then
+
+                  if Job.Generation > SB_Generation then
+
+                     Job.Generation := SB_Generation;
+                     Job.SB_Idx := Job.Read_SB_Idx;
+
+                  elsif Job.Generation = SB_Generation then
+
+                     raise Program_Error;
+
+                  end if;
+
+               else
+
+                  Job.Generation := SB_Generation;
+                  Job.SB_Idx := Job.Read_SB_Idx;
+                  Job.SB_Found := True;
+
+               end if;
+
+            end Declare_SB_Generation;
+
+         end if;
+
+         if Job.Read_SB_Idx < Superblocks_Index_Type'Last then
+
+            Job.Read_SB_Idx := Job.Read_SB_Idx + 1;
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB,
+               Blk_Nr => Block_Number_Type (Job.Read_SB_Idx),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Read_SB_Pending;
+            Progress := True;
+
+         else
+
+            if not Job.SB_Found then
+               raise Program_Error;
+            end if;
+
+            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB,
+               Blk_Nr => Block_Number_Type (Job.SB_Idx),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+            Job.State := Read_Current_SB_Pending;
+            Progress := True;
+
+         end if;
+
+      when Read_Current_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
 
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
@@ -1159,30 +1252,7 @@ is
             raise Program_Error;
          end if;
 
-         if Job.Prev_Key_Ciphertext = Key_Ciphertext_Invalid then
-            Job.Prev_Key_Plaintext := Key_Plaintext_Invalid;
-            Job.State := Decrypt_Previous_Key_Completed;
-         else
-            Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
-               Op     => Primitive_Operation_Type'First,
-               Succ   => False,
-               Tg     => Primitive.Tag_SB_Ctrl_TA_Decrypt_Key,
-               Blk_Nr => Block_Number_Type'First,
-               Idx    => Primitive.Index_Type (Job_Idx));
-
-            Job.State := Decrypt_Previous_Key_Pending;
-         end if;
-
-         Progress := True;
-
-      when Decrypt_Previous_Key_Completed =>
-
-         if not Primitive.Success (Job.Generated_Prim) then
-            raise Program_Error;
-         end if;
-
-         Primitive.Success (Job.Submitted_Prim, True);
-
+         Job.Curr_Key_Plaintext.ID := Job.SB_Ciphertext.Current_Key.ID;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1199,19 +1269,46 @@ is
             raise Program_Error;
          end if;
 
-         if Job.Prev_Key_Plaintext = Key_Plaintext_Invalid then
-            Job.State := Add_Previous_Key_At_Crypto_Module_Completed;
-         else
+         case SB.State is
+         when Rekeying =>
+
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
                Op     => Primitive_Operation_Type'First,
                Succ   => False,
-               Tg     => Primitive.Tag_SB_Ctrl_Crypto_Add_Key,
+               Tg     => Primitive.Tag_SB_Ctrl_TA_Decrypt_Key,
                Blk_Nr => Block_Number_Type'First,
                Idx    => Primitive.Index_Type (Job_Idx));
 
-            Job.State := Add_Previous_Key_At_Crypto_Module_Pending;
+            Job.State := Decrypt_Previous_Key_Pending;
+            Progress := True;
+
+         when Normal | Extending_VBD | Extending_FT =>
+
+            Init_SB_Plaintext_Without_Key_Values (Job.SB_Ciphertext, SB);
+            SB.Current_Key.Value := Job.Curr_Key_Plaintext.Value;
+            SB_Idx := Job.SB_Idx;
+            Curr_Gen := Job.Generation + 1;
+
+            Primitive.Success (Job.Submitted_Prim, True);
+            Job.State := Completed;
+            Progress := True;
+
+         end case;
+
+      when Decrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
          end if;
 
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Crypto_Add_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Add_Previous_Key_At_Crypto_Module_Pending;
          Progress := True;
 
       when Add_Previous_Key_At_Crypto_Module_Completed =>
@@ -1220,6 +1317,13 @@ is
             raise Program_Error;
          end if;
 
+         Init_SB_Plaintext_Without_Key_Values (Job.SB_Ciphertext, SB);
+         SB.Current_Key.Value := Job.Curr_Key_Plaintext.Value;
+         SB.Previous_Key.Value := Job.Prev_Key_Plaintext.Value;
+         SB_Idx := Job.SB_Idx;
+         Curr_Gen := Job.Generation + 1;
+
+         Primitive.Success (Job.Submitted_Prim, True);
          Job.State := Completed;
          Progress := True;
 
@@ -1228,7 +1332,7 @@ is
          null;
 
       end case;
-   end Execute_Decrypt_Keys;
+   end Execute_Initialize;
 
    --
    --  Execute_Initialize_Rekeying
@@ -1687,9 +1791,10 @@ is
             Execute_FT_Extension_Step (
                Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
-         when Decrypt_Keys =>
+         when Initialize =>
 
-            Execute_Decrypt_Keys (Ctrl.Jobs (Idx), Idx, Progress);
+            Execute_Initialize (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
          when Deinitialize =>
 
@@ -2520,14 +2625,14 @@ is
          when Decrypt_Current_Key_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
-               return Ctrl.Jobs (Idx).Curr_Key_Ciphertext.Value;
+               return Ctrl.Jobs (Idx).SB_Ciphertext.Current_Key.Value;
             end if;
             raise Program_Error;
 
          when Decrypt_Previous_Key_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
-               return Ctrl.Jobs (Idx).Prev_Key_Ciphertext.Value;
+               return Ctrl.Jobs (Idx).SB_Ciphertext.Previous_Key.Value;
             end if;
             raise Program_Error;
 
@@ -2585,7 +2690,12 @@ is
          if Ctrl.Jobs (Idx).Operation /= Invalid then
 
             case Ctrl.Jobs (Idx).State is
-            when Sync_Blk_IO_Pending | Write_SB_Pending =>
+            when
+               Sync_Blk_IO_Pending |
+               Write_SB_Pending |
+               Read_SB_Pending |
+               Read_Current_SB_Pending
+            =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
 
@@ -2760,6 +2870,22 @@ is
             end if;
             raise Program_Error;
 
+         when Read_SB_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Read_SB_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Read_Current_SB_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Read_Current_SB_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when Sync_Blk_IO_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
@@ -2851,6 +2977,56 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Complete_VBD_Ext;
+
+   --
+   --  Mark_Generated_Prim_Complete_Blk_Data
+   --
+   procedure Mark_Generated_Prim_Complete_Blk_Data (
+      Ctrl     : in out Control_Type;
+      Prim     :        Primitive.Object_Type;
+      Blk_Data :        Block_Data_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Read_SB_In_Progress =>
+
+            if not Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Ctrl.Jobs (Idx).State := Read_SB_Completed;
+            Ctrl.Jobs (Idx).Generated_Prim := Prim;
+            Superblock_Ciphertext_From_Block_Data (
+               Ctrl.Jobs (Idx).SB_Ciphertext, Blk_Data);
+            return;
+
+         when Read_Current_SB_In_Progress =>
+
+            if not Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Ctrl.Jobs (Idx).State := Read_Current_SB_Completed;
+            Ctrl.Jobs (Idx).Generated_Prim := Prim;
+            Superblock_Ciphertext_From_Block_Data (
+               Ctrl.Jobs (Idx).SB_Ciphertext, Blk_Data);
+            return;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_Blk_Data;
 
    --
    --  Mark_Generated_Prim_Complete_FT_Ext

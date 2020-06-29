@@ -115,96 +115,6 @@ is
       Trust_Anchor.Initialize_Anchor (Obj.TA);
       VBD_Rekeying.Initialize_Rekeying (Obj.VBD_Rkg);
 
-      pragma Debug (Debug.Print_String ("Initial SB state: "));
-      pragma Debug (Debug.Dump_Superblock (Obj.Cur_SB, Obj.Superblock));
-
-      Declare_Decrypt_Keys_Request :
-      declare
-         Req : constant Request.Object_Type :=
-            Request.Valid_Object (
-               Op     => Decrypt_Keys,
-               Succ   => False,
-               Blk_Nr => Block_Number_Type (0),
-               Off    => 0,
-               Cnt    => 0,
-               Key    => 0,
-               Tg     => 0);
-      begin
-
-         if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
-            raise Program_Error;
-         end if;
-
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-      end Declare_Decrypt_Keys_Request;
-
-      if Obj.Superblock.State = Rekeying then
-
-         Declare_Resume_Rekeying_Request :
-         declare
-            Req : constant Request.Object_Type :=
-               Request.Valid_Object (
-                  Op     => Resume_Rekeying,
-                  Succ   => False,
-                  Blk_Nr => Block_Number_Type (0),
-                  Off    => 0,
-                  Cnt    => 0,
-                  Key    => 0,
-                  Tg     => 0);
-         begin
-
-            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
-               raise Program_Error;
-            end if;
-
-            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-         end Declare_Resume_Rekeying_Request;
-
-      elsif Obj.Superblock.State = Extending_VBD then
-
-         Declare_Resume_Extend_VBD_Request :
-         declare
-            Req : constant Request.Object_Type :=
-               Request.Valid_Object (
-                  Op     => Extend_VBD,
-                  Succ   => False,
-                  Blk_Nr => Block_Number_Type (0),
-                  Off    => 0,
-                  Cnt    => 0,
-                  Key    => 0,
-                  Tg     => 0);
-         begin
-
-            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
-               raise Program_Error;
-            end if;
-
-            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-         end Declare_Resume_Extend_VBD_Request;
-
-      elsif Obj.Superblock.State = Extending_FT then
-
-         Declare_Resume_Extend_FT_Request :
-         declare
-            Req : constant Request.Object_Type :=
-               Request.Valid_Object (
-                  Op     => Extend_FT,
-                  Succ   => False,
-                  Blk_Nr => Block_Number_Type (0),
-                  Off    => 0,
-                  Cnt    => 0,
-                  Key    => 0,
-                  Tg     => 0);
-         begin
-
-            if not Pool.Request_Acceptable (Obj.Request_Pool_Obj) then
-               raise Program_Error;
-            end if;
-
-            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-         end Declare_Resume_Extend_FT_Request;
-      end if;
-
    end Initialize_Object;
 
    procedure Create_Snapshot (
@@ -399,13 +309,19 @@ is
 
       case Request.Operation (Req) is
       when
-         Read | Write | Sync | Rekey | Extend_VBD | Extend_FT | Deinitialize
+         Read |
+         Write |
+         Sync |
+         Rekey |
+         Extend_VBD |
+         Extend_FT |
+         Deinitialize
       =>
 
          Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
       when
-         Create_Snapshot | Discard_Snapshot | Decrypt_Keys | Resume_Rekeying
+         Create_Snapshot | Discard_Snapshot | Initialize | Resume_Rekeying
       =>
          raise Program_Error;
 
@@ -423,12 +339,18 @@ is
       case Request.Operation (Req) is
 
       when
-         Read | Write | Sync | Rekey | Extend_VBD | Extend_FT | Deinitialize
+         Read |
+         Write |
+         Sync |
+         Rekey |
+         Extend_VBD |
+         Extend_FT |
+         Deinitialize
       =>
          return Req;
 
       when
-         Create_Snapshot | Discard_Snapshot | Decrypt_Keys | Resume_Rekeying
+         Create_Snapshot | Discard_Snapshot | Initialize | Resume_Rekeying
       =>
          return Request.Invalid_Object;
       end case;
@@ -2193,26 +2115,9 @@ is
 
                Progress := True;
 
-            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
+            when Primitive.Tag_Pool_SB_Ctrl_Initialize =>
 
-               Declare_Ciphertext_Keys :
-               declare
-                  Previous_Key : constant Key_Ciphertext_Type := (
-                     Value => Key_Value_Ciphertext_Type (
-                        Obj.Superblock.Previous_Key.Value),
-                     ID => Obj.Superblock.Previous_Key.ID);
-                  Current_Key : constant Key_Ciphertext_Type := (
-                     Value => Key_Value_Ciphertext_Type (
-                        Obj.Superblock.Current_Key.Value),
-                     ID => Obj.Superblock.Current_Key.ID);
-               begin
-                  Obj.Superblock.Previous_Key := Key_Plaintext_Invalid;
-                  Obj.Superblock.Current_Key  := Key_Plaintext_Invalid;
-
-                  Superblock_Control.Submit_Primitive_Decrypt_Keys (
-                     Obj.SB_Ctrl, Prim, Previous_Key,
-                     Current_Key);
-               end Declare_Ciphertext_Keys;
+               Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
 
                Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
@@ -2229,30 +2134,6 @@ is
          end Declare_SB_Ctrl_Prim;
 
       end loop Loop_Pool_Generated_SB_Ctrl_Prims;
-
-      Loop_Pool_Completed_Decrypt_Keys_Reqs :
-      loop
-         Declare_Completed_Decrypt_Keys_Req :
-         declare
-            Req : constant Request.Object_Type :=
-               Pool.Peek_Completed_Request (Obj.Request_Pool_Obj);
-         begin
-
-            exit Loop_Pool_Completed_Decrypt_Keys_Reqs when
-               not Request.Valid (Req);
-
-            case Request.Operation (Req) is
-            when Decrypt_Keys =>
-
-               Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
-
-            when others =>
-
-               exit Loop_Pool_Completed_Decrypt_Keys_Reqs;
-
-            end case;
-         end Declare_Completed_Decrypt_Keys_Req;
-      end loop Loop_Pool_Completed_Decrypt_Keys_Reqs;
 
    end Execute_Request_Pool;
 
@@ -2884,6 +2765,11 @@ is
 
                end Declare_Data_Idx;
 
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB =>
+
+               Block_IO.Submit_Primitive (
+                  Obj.IO_Obj, Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB, Prim);
+
             when Primitive.Tag_SB_Ctrl_Blk_IO_Sync =>
 
                Block_IO.Submit_Primitive (
@@ -2940,20 +2826,13 @@ is
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;
 
-            when Primitive.Tag_Pool_SB_Ctrl_Decrypt_Keys =>
+            when Primitive.Tag_Pool_SB_Ctrl_Initialize =>
 
-               Obj.Superblock.Previous_Key :=
-                  Superblock_Control.Peek_Completed_Previous_Key_Plaintext (
-                     Obj.SB_Ctrl, Prim);
-
-               Obj.Superblock.Current_Key :=
-                  Superblock_Control.Peek_Completed_Current_Key_Plaintext (
-                     Obj.SB_Ctrl, Prim);
-
-               Pool.Mark_Generated_Primitive_Complete (
+               Pool.Mark_Generated_Primitive_Complete_SB_State (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-                  Primitive.Success (Prim));
+                  Primitive.Success (Prim),
+                  Obj.Superblock.State);
 
                Superblock_Control.Drop_Completed_Primitive (Obj.SB_Ctrl, Prim);
                Progress := True;
@@ -3728,6 +3607,10 @@ is
                elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Prim) then
                   Superblock_Control.Mark_Generated_Prim_Complete (
                      Obj.SB_Ctrl, Prim);
+
+               elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Read_SB (Prim) then
+                  Superblock_Control.Mark_Generated_Prim_Complete_Blk_Data (
+                     Obj.SB_Ctrl, Prim, IO_Buf (Index));
 
                elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Sync (Prim) then
                   Superblock_Control.Mark_Generated_Prim_Complete (

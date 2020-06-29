@@ -117,6 +117,15 @@ is
       Request_Finished :        Boolean);
 
    --
+   --  Mark_Generated_Primitive_Complete_SB_State
+   --
+   procedure Mark_Generated_Primitive_Complete_SB_State (
+      Obj      : in out Object_Type;
+      Idx      :        Pool_Index_Type;
+      Success  :        Boolean;
+      SB_State :        Superblock_State_Type);
+
+   --
    --  Peek_Completed_Request
    --
    function Peek_Completed_Request (Obj : Pool.Object_Type)
@@ -161,9 +170,9 @@ private
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
-      Decrypt_Keys_Pending,
-      Decrypt_Keys_In_Progress,
-      Decrypt_Keys_Complete,
+      Initialize_SB_Ctrl_Pending,
+      Initialize_SB_Ctrl_In_Progress,
+      Initialize_SB_Ctrl_Complete,
       Deinitialize_SB_Ctrl_Pending,
       Deinitialize_SB_Ctrl_In_Progress,
       Deinitialize_SB_Ctrl_Complete,
@@ -177,6 +186,7 @@ private
       Request_Finished        : Boolean;
       Nr_Of_Requests_Preponed : Number_Of_Requests_Type;
       Nr_Of_Prims_Completed   : Number_Of_Primitives_Type;
+      SB_State                : Superblock_State_Type;
    end record;
 
    type Items_Type is array (Pool_Index_Type) of Item_Type;
@@ -231,9 +241,9 @@ private
       Progress : in out Boolean);
 
    --
-   --  Execute_Decrypt_Keys
+   --  Execute_Initialize
    --
-   procedure Execute_Decrypt_Keys (
+   procedure Execute_Initialize (
       Items    : in out Items_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

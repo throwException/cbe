@@ -141,9 +141,9 @@ namespace Cbe {
 				REKEY = 6,
 				EXTEND_VBD = 7,
 				EXTEND_FT = 8,
-				DECRYPT_KEYS = 9,
 				RESUME_REKEYING = 10,
 				DEINITIALIZE = 11,
+				INITIALIZE = 12,
 			};
 
 			enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
@@ -200,9 +200,9 @@ namespace Cbe {
 				case Operation::REKEY           : return true;
 				case Operation::EXTEND_VBD      : return true;
 				case Operation::EXTEND_FT       : return true;
-				case Operation::DECRYPT_KEYS    : return true;
 				case Operation::RESUME_REKEYING : return true;
 				case Operation::DEINITIALIZE    : return true;
+				case Operation::INITIALIZE      : return true;
 				}
 				return false;
 			}
@@ -221,9 +221,9 @@ namespace Cbe {
 			bool rekey()            const { return _operation == Operation::REKEY; }
 			bool extend_vbd()       const { return _operation == Operation::EXTEND_VBD; }
 			bool extend_ft()        const { return _operation == Operation::EXTEND_FT; }
-			bool decrypt_keys()     const { return _operation == Operation::DECRYPT_KEYS; }
 			bool resume_rekeying()  const { return _operation == Operation::RESUME_REKEYING; }
 			bool deinitialize()     const { return _operation == Operation::DEINITIALIZE; }
+			bool initialize()       const { return _operation == Operation::INITIALIZE; }
 
 			Operation        operation()    const { return _operation; }
 			Success          success()      const { return _success; }
@@ -858,9 +858,9 @@ char const *to_string(Cbe::Request::Operation op)
 	case Cbe::Request::Operation::REKEY: return "rekey";
 	case Cbe::Request::Operation::EXTEND_VBD: return "extend_vbd";
 	case Cbe::Request::Operation::EXTEND_FT: return "extend_ft";
-	case Cbe::Request::Operation::DECRYPT_KEYS: return "decrypt_keys";
 	case Cbe::Request::Operation::RESUME_REKEYING: return "resume_rekeying";
 	case Cbe::Request::Operation::DEINITIALIZE: return "deinitialize";
+	case Cbe::Request::Operation::INITIALIZE: return "initialize";
 	}
 	throw Unknown_operation_type();
 }
@@ -916,9 +916,9 @@ namespace Cbe {
 			case Cbe::Request::Operation::REKEY:            throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::EXTEND_VBD:       throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::EXTEND_FT:        throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::DECRYPT_KEYS:     throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::RESUME_REKEYING:  throw Operation_type_not_convertable();
 			case Cbe::Request::Operation::DEINITIALIZE:     throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::INITIALIZE:       throw Operation_type_not_convertable();
 			}
 			return Block::Operation::Type::INVALID;
 		};
