@@ -2241,6 +2241,14 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 			Snapshot_file_system &by_path(char const *path)
 			{
+				if (!path) {
+					throw Invalid_path();
+				}
+
+				if (path[0] == '/') {
+					path++;
+				}
+
 				uint32_t id { 0 };
 				Genode::ascii_to(path, id);
 				return _by_id(id);
@@ -2274,14 +2282,59 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 			bool const _root_dir { false };
 
+			Read_result _query_snapshots(file_size  index,
+			                             file_size &out_count,
+			                             Dirent    &out)
+			{
+				if (index >= _snap_reg.number_of_snapshots()) {
+					out_count = sizeof(Dirent);
+					out.type = Dirent_type::END;
+					return READ_OK;
+				}
+
+				try {
+					Snapshot_file_system const &fs = _snap_reg.by_index(index);
+					Genode::String<32> name { fs.snapshot_id() };
+
+					out = {
+						.fileno = (Genode::addr_t)this | index,
+						.type   = Dirent_type::DIRECTORY,
+						.rwx    = Node_rwx::rx(),
+						.name   = { name.string() },
+					};
+					out_count = sizeof(Dirent);
+					return READ_OK;
+				} catch (Snapshot_registry::Invalid_index) {
+					return READ_ERR_INVALID;
+				}
+			}
+
+			Read_result _query_root(file_size  index,
+			                        file_size &out_count,
+			                        Dirent    &out)
+			{
+				if (index == 0) {
+					out = {
+						.fileno = (Genode::addr_t)this,
+						.type   = Dirent_type::DIRECTORY,
+						.rwx    = Node_rwx::rx(),
+						.name   = { "snapshots" }
+					};
+				} else {
+					out.type = Dirent_type::END;
+				}
+
+				out_count = sizeof(Dirent);
+				return READ_OK;
+			}
+
 			Dir_vfs_handle(Directory_service &ds,
 			               File_io_service   &fs,
 			               Genode::Allocator &alloc,
-			               int                status_flags,
 			               Snapshot_registry const &snap_reg,
 			               bool root_dir)
 			:
-				Snap_vfs_handle(ds, fs, alloc, status_flags),
+				Snap_vfs_handle(ds, fs, alloc, 0),
 				_snap_reg(snap_reg), _root_dir(root_dir)
 			{ }
 
@@ -2298,38 +2351,14 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				Dirent &out = *(Dirent*)dst;
 
 				if (!_root_dir) {
-					if (index < _snap_reg.number_of_snapshots()) {
-						try {
-							Snapshot_file_system const &fs = _snap_reg.by_index(index);
-							Genode::String<32> name { fs.snapshot_id() };
 
-							out = {
-								.fileno = (Genode::addr_t)this | index,
-								.type   = Dirent_type::DIRECTORY,
-								.rwx    = Node_rwx::rx(),
-								.name   = { name.string() },
-							};
-						} catch (Snapshot_registry::Invalid_index) {
-							return READ_ERR_INVALID;
-						}
-					} else {
-						out.type = Dirent_type::END;
-					}
+					/* opended as "/snapshots" */
+					return _query_snapshots(index, out_count, out);
+
 				} else {
-					if (index == 0) {
-						out = {
-							.fileno = (Genode::addr_t)this,
-							.type   = Dirent_type::DIRECTORY,
-							.rwx    = Node_rwx::rx(),
-							.name   = { "snapshots" }
-						};
-					} else {
-						out.type = Dirent_type::END;
-					}
+					/* opened as "/" */
+					return _query_root(index, out_count, out);
 				}
-
-				out_count = sizeof(Dirent);
-				return READ_OK;
 			}
 
 			Write_result write(char const *, file_size, file_size &) override
@@ -2339,6 +2368,22 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 			bool read_ready() override { return true; }
 
+		};
+
+		struct Dir_snap_vfs_handle : Vfs::Vfs_handle
+		{
+			Vfs_handle &vfs_handle;
+
+			Dir_snap_vfs_handle(Directory_service &ds,
+			                    File_io_service   &fs,
+			                    Genode::Allocator &alloc,
+			                    Vfs::Vfs_handle   &vfs_handle)
+			: Vfs_handle(ds, fs, alloc, 0), vfs_handle(vfs_handle) { }
+
+			~Dir_snap_vfs_handle()
+			{
+				vfs_handle.close();
+			}
 		};
 
 		Snapshot_registry _snap_reg;
@@ -2403,7 +2448,6 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 			if (!path || path[0] != '/') {
 				return OPEN_ERR_UNACCESSIBLE;
 			}
-			path++;
 
 			try {
 				Snapshot_file_system &fs = _snap_reg.by_path(path);
@@ -2422,22 +2466,28 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				return OPENDIR_ERR_PERMISSION_DENIED;
 			}
 
-			bool const root = strcmp(path, "/") == 0;
-			if (_root_dir(path) || root) {
-
+			bool const top = _top_dir(path);
+			if (_root_dir(path) || top) {
 				_snap_reg.update(_vfs_env);
 
-				*out_handle = new (alloc) Dir_vfs_handle(*this, *this, alloc, 0, _snap_reg, root);
+				*out_handle = new (alloc) Dir_vfs_handle(*this, *this, alloc,
+				                                         _snap_reg, top);
 				return OPENDIR_OK;
 			} else {
-				path = _sub_path(path);
-				if (!path) {
+				char const *sub_path = _sub_path(path);
+				if (!sub_path) {
 					return OPENDIR_ERR_LOOKUP_FAILED;
 				}
-				path++;
 				try {
-					Snapshot_file_system &fs = _snap_reg.by_path(path);
-					return fs.opendir(path, create, out_handle, alloc);
+					Snapshot_file_system &fs = _snap_reg.by_path(sub_path);
+					Vfs::Vfs_handle *handle = nullptr;
+					Opendir_result const res = fs.opendir(sub_path, create, &handle, alloc);
+					if (res != OPENDIR_OK) {
+						return OPENDIR_ERR_LOOKUP_FAILED;
+					}
+					*out_handle = new (alloc) Dir_snap_vfs_handle(*this, *this,
+					                                              alloc, *handle);
+					return OPENDIR_OK;
 				} catch (Snapshot_registry::Invalid_path) { }
 			}
 			return OPENDIR_ERR_LOOKUP_FAILED;
@@ -2475,12 +2525,10 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				return STAT_ERR_NO_ENTRY;
 			}
 
-			/* strip / */
-			path++;
-
 			try {
 				Snapshot_file_system &fs = _snap_reg.by_path(path);
-				return fs.stat(path, out_stat);
+				Stat_result const res = fs.stat(path, out_stat);
+				return res;
 			} catch (Snapshot_registry::Invalid_path) { }
 
 			return STAT_ERR_NO_ENTRY;
@@ -2498,25 +2546,42 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 
 		file_size num_dirent(char const *path) override
 		{
-			return strcmp(path, "/") == 0 ? 1 : _snap_reg.number_of_snapshots();
+			if (_top_dir(path) || _root_dir(path)) {
+				_snap_reg.update(_vfs_env);
+				file_size const num = _snap_reg.number_of_snapshots();
+				return num;
+			}
+			_snap_reg.update(_vfs_env);
+
+			path = _sub_path(path);
+			if (!path) {
+				return 0;
+			}
+			try {
+				Snapshot_file_system &fs = _snap_reg.by_path(path);
+				file_size const num = fs.num_dirent(path);
+				return num;
+			} catch (Snapshot_registry::Invalid_path) {
+				return 0;
+			}
 		}
 
 		bool directory(char const *path) override
 		{
-			if (Genode::strcmp(path, "/snapshots") == 0) {
+			if (_root_dir(path)) {
 				return true;
 			}
+
 			path = _sub_path(path);
 			if (!path) {
 				return false;
 			}
-			path++;
 			try {
 				Snapshot_file_system &fs = _snap_reg.by_path(path);
 				return fs.directory(path);
-			} catch (Snapshot_registry::Invalid_path) {
-				return false;
-			}
+			} catch (Snapshot_registry::Invalid_path) { }
+
+			return false;
 		}
 
 		char const *leaf_path(char const *path) override
@@ -2526,13 +2591,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				return nullptr;
 			}
 
-			if (strlen(path) == 0) {
-				return path;
-			}
-
-			path++;
-
-			if (Genode::strcmp(path, "") == 0) {
+			if (strlen(path) == 0 || strcmp(path, "") == 0) {
 				return path;
 			}
 
@@ -2542,9 +2601,7 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 				if (leaf_path) {
 					return leaf_path;
 				}
-			} catch (Snapshot_registry::Invalid_path) {
-				return nullptr;
-			}
+			} catch (Snapshot_registry::Invalid_path) { }
 
 			return nullptr;
 		}
@@ -2561,8 +2618,15 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 			return WRITE_ERR_IO;
 		}
 
-		bool queue_read(Vfs::Vfs_handle *, file_size) override
+		bool queue_read(Vfs::Vfs_handle *vfs_handle, file_size size) override
 		{
+			Dir_snap_vfs_handle *dh =
+				dynamic_cast<Dir_snap_vfs_handle*>(vfs_handle);
+			if (dh) {
+				return dh->vfs_handle.fs().queue_read(&dh->vfs_handle,
+				                                      size);
+			}
+
 			return true;
 		}
 
@@ -2570,11 +2634,19 @@ class Vfs_cbe::Snapshots_file_system : public Vfs::File_system
 		                          char *dst, file_size count,
 		                          file_size & out_count) override
 		{
-			Snap_vfs_handle *handle =
-				static_cast<Snap_vfs_handle*>(vfs_handle);
+			Snap_vfs_handle *sh =
+				dynamic_cast<Snap_vfs_handle*>(vfs_handle);
+			if (sh) {
+				Read_result const res = sh->read(dst, count, out_count);
+				return res;
+			}
 
-			if (handle)
-				return handle->read(dst, count, out_count);
+			Dir_snap_vfs_handle *dh =
+				dynamic_cast<Dir_snap_vfs_handle*>(vfs_handle);
+			if (dh) {
+				return dh->vfs_handle.fs().complete_read(&dh->vfs_handle,
+				                                         dst, count, out_count);
+			}
 
 			return READ_ERR_IO;
 		}
