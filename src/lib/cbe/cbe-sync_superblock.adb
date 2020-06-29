@@ -37,10 +37,6 @@ is
    --
    procedure Init_SB_Ciphertext_Without_Key_Values (
       SB_Plain  :     Superblock_Type;
-      SB_Cipher : out Superblock_Ciphertext_Type);
-
-   procedure Init_SB_Ciphertext_Without_Key_Values (
-      SB_Plain  :     Superblock_Type;
       SB_Cipher : out Superblock_Ciphertext_Type)
    is
    begin
@@ -234,6 +230,9 @@ is
       end case;
    end Peek_Generated_Primitive;
 
+   --
+   --  Peek_Generated_Superblock_Ciphertext
+   --
    function Peek_Generated_Superblock_Ciphertext (
       Obj       : Object_Type;
       Prim      : Primitive.Object_Type)
@@ -252,6 +251,9 @@ is
       end case;
    end Peek_Generated_Superblock_Ciphertext;
 
+   --
+   --  Peek_Generated_Key_Value_Plaintext
+   --
    function Peek_Generated_Key_Value_Plaintext (
       Obj  : Object_Type;
       Prim : Primitive.Object_Type)
@@ -323,6 +325,9 @@ is
       end if;
    end Mark_Generated_Primitive_Complete;
 
+   --
+   --  Mark_Generated_Prim_Complete_Key_Value_Ciphertext
+   --
    procedure Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
       Obj       : in out Object_Type;
       Prim      :        Primitive.Object_Type;

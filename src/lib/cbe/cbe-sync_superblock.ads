@@ -134,6 +134,13 @@ private
       Sync_In_Progress,
       Sync_Complete);
 
+   --
+   --  Init_SB_Ciphertext_Without_Key_Values
+   --
+   procedure Init_SB_Ciphertext_Without_Key_Values (
+      SB_Plain  :     Superblock_Type;
+      SB_Cipher : out Superblock_Ciphertext_Type);
+
    function To_String (State : State_Type) return String
    is (
       case State is
