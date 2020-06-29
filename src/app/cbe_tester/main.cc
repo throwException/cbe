@@ -1251,6 +1251,9 @@ class Cbe::Main
 					case Cbe::Request::Operation::WRITE:
 						op = Block::Packet_descriptor::WRITE;
 						break;
+					case Cbe::Request::Operation::SYNC:
+						op = Block::Packet_descriptor::SYNC;
+						break;
 					default:
 						throw Invalid_io_request();
 					}
@@ -1291,8 +1294,12 @@ class Cbe::Main
 				bool const write =
 					packet.operation() == Block::Packet_descriptor::WRITE;
 
+				bool const sync =
+					packet.operation() == Block::Packet_descriptor::SYNC;
+
 				bool const op_match =
 					(read && _blk_req.read()) ||
+					(sync && _blk_req.sync()) ||
 					(write && _blk_req.write());
 
 				bool const bn_match =
