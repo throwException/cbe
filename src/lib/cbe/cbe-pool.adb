@@ -31,10 +31,10 @@ is
       Snap_ID :        Snapshot_ID_Type)
    is
    begin
-      Loop_Items :
-      for Idx in Obj.Items'Range loop
+      Loop_Jobs :
+      for Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Idx).State = Invalid then
+         if Obj.Jobs (Idx).State = Invalid then
 
             case Request.Operation (Req) is
             when Initialize =>
@@ -48,15 +48,15 @@ is
                Deinitialize
             =>
 
-               Obj.Items (Idx).State := Submitted;
-               Obj.Items (Idx).Req   := Req;
+               Obj.Jobs (Idx).State := Submitted;
+               Obj.Jobs (Idx).Req   := Req;
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
             when Resume_Rekeying =>
 
-               Obj.Items (Idx).State := Submitted_Resume_Rekeying;
-               Obj.Items (Idx).Req   := Request.Valid_Object (
+               Obj.Jobs (Idx).State := Submitted_Resume_Rekeying;
+               Obj.Jobs (Idx).Req   := Request.Valid_Object (
                   Op     => Rekey,
                   Succ   => False,
                   Blk_Nr => 0,
@@ -70,7 +70,7 @@ is
 
             when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
 
-               Obj.Items (Idx) := (
+               Obj.Jobs (Idx) := (
                   State                   => Pending,
                   Req                     => Req,
                   Snap_ID                 => Snap_ID,
@@ -80,7 +80,7 @@ is
                   Nr_Of_Prims_Completed   => 0,
                   SB_State                => Superblock_State_Type'First);
 
-               Request.Success (Obj.Items (Idx).Req, True);
+               Request.Success (Obj.Jobs (Idx).Req, True);
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
@@ -88,7 +88,7 @@ is
 
          end if;
 
-      end loop Loop_Items;
+      end loop Loop_Jobs;
 
       raise Program_Error;
 
@@ -105,13 +105,13 @@ is
          return Primitive.Invalid_Object;
       end if;
 
-      Declare_Item :
+      Declare_Job :
       declare
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Itm : constant Item_Type := Obj.Items (Idx);
+         Job : constant Job_Type := Obj.Jobs (Idx);
       begin
-         if Itm.State /= Pending or else
-            Request.Operation (Itm.Req) /= Discard_Snapshot
+         if Job.State /= Pending or else
+            Request.Operation (Job.Req) /= Discard_Snapshot
          then
             return Primitive.Invalid_Object;
          end if;
@@ -119,14 +119,14 @@ is
          return
             Primitive.Valid_Object (
                Read,
-               Request.Success (Itm.Req),
+               Request.Success (Job.Req),
                Primitive.Tag_Pool_Discard_Snap,
                Idx,
-               Request.Block_Number (Itm.Req) +
-                  Block_Number_Type (Itm.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+               Request.Block_Number (Job.Req) +
+                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
+               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
 
-      end Declare_Item;
+      end Declare_Job;
    end Peek_Generated_Discard_Snap_Primitive;
 
    --
@@ -140,13 +140,13 @@ is
          return Primitive.Invalid_Object;
       end if;
 
-      Declare_Item :
+      Declare_Job :
       declare
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Itm : constant Item_Type := Obj.Items (Idx);
+         Job : constant Job_Type := Obj.Jobs (Idx);
       begin
-         if Itm.State /= Pending or else
-            Request.Operation (Itm.Req) /= Create_Snapshot
+         if Job.State /= Pending or else
+            Request.Operation (Job.Req) /= Create_Snapshot
          then
             return Primitive.Invalid_Object;
          end if;
@@ -154,14 +154,14 @@ is
          return
             Primitive.Valid_Object (
                Read,
-               Request.Success (Itm.Req),
+               Request.Success (Job.Req),
                Primitive.Tag_Pool_Create_Snap,
                Idx,
-               Request.Block_Number (Itm.Req) +
-                  Block_Number_Type (Itm.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+               Request.Block_Number (Job.Req) +
+                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
+               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
 
-      end Declare_Item;
+      end Declare_Job;
    end Peek_Generated_Create_Snap_Primitive;
 
    --
@@ -175,13 +175,13 @@ is
          return Primitive.Invalid_Object;
       end if;
 
-      Declare_Item :
+      Declare_Job :
       declare
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Itm : constant Item_Type := Obj.Items (Idx);
+         Job : constant Job_Type := Obj.Jobs (Idx);
       begin
-         if Itm.State /= Pending or else
-            Request.Operation (Itm.Req) /= Sync
+         if Job.State /= Pending or else
+            Request.Operation (Job.Req) /= Sync
          then
             return Primitive.Invalid_Object;
          end if;
@@ -189,14 +189,14 @@ is
          return
             Primitive.Valid_Object (
                Sync,
-               Request.Success (Itm.Req),
+               Request.Success (Job.Req),
                Primitive.Tag_Pool_Sync,
                Idx,
-               Request.Block_Number (Itm.Req) +
-                  Block_Number_Type (Itm.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+               Request.Block_Number (Job.Req) +
+                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
+               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
 
-      end Declare_Item;
+      end Declare_Job;
    end Peek_Generated_Sync_Primitive;
 
    --
@@ -210,29 +210,29 @@ is
          return Primitive.Invalid_Object;
       end if;
 
-      Declare_Item :
+      Declare_Job :
       declare
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Itm : constant Item_Type := Obj.Items (Idx);
+         Job : constant Job_Type := Obj.Jobs (Idx);
       begin
-         if Itm.State /= Pending or else (
-               Request.Operation (Itm.Req) /= Read and then
-               Request.Operation (Itm.Req) /= Write)
+         if Job.State /= Pending or else (
+               Request.Operation (Job.Req) /= Read and then
+               Request.Operation (Job.Req) /= Write)
          then
             return Primitive.Invalid_Object;
          end if;
 
          return
             Primitive.Valid_Object (
-               Prim_Op_From_Req_Op (Request.Operation (Itm.Req)),
-               Request.Success (Itm.Req),
+               Prim_Op_From_Req_Op (Request.Operation (Job.Req)),
+               Request.Success (Job.Req),
                Primitive.Tag_Pool_VBD,
                Idx,
-               Request.Block_Number (Itm.Req) +
-                  Block_Number_Type (Itm.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Itm.Nr_Of_Prims_Completed));
+               Request.Block_Number (Job.Req) +
+                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
+               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
 
-      end Declare_Item;
+      end Declare_Job;
    end Peek_Generated_VBD_Primitive;
 
    --
@@ -245,13 +245,13 @@ is
 
       if not Index_Queue.Empty (Obj.Indices) then
 
-         Declare_Item :
+         Declare_Job :
          declare
-            Itm : constant Item_Type :=
-               Obj.Items (Index_Queue.Head (Obj.Indices));
+            Job : constant Job_Type :=
+               Obj.Jobs (Index_Queue.Head (Obj.Indices));
          begin
 
-            case Itm.State is
+            case Job.State is
             when
                Rekey_Init_Pending |
                Rekey_VBA_Pending |
@@ -261,7 +261,7 @@ is
                Deinitialize_SB_Ctrl_Pending
             =>
 
-               return Itm.Prim;
+               return Job.Prim;
 
             when others =>
 
@@ -269,7 +269,7 @@ is
 
             end case;
 
-         end Declare_Item;
+         end Declare_Job;
 
       end if;
       return Primitive.Invalid_Object;
@@ -287,14 +287,14 @@ is
    begin
       if Index_Queue.Empty (Obj.Indices) or else
          Index_Queue.Head (Obj.Indices) /= Idx or else
-         Obj.Items (Idx).State /= Pending or else (
-            Request.Operation (Obj.Items (Idx).Req) /= Read and then
-            Request.Operation (Obj.Items (Idx).Req) /= Write)
+         Obj.Jobs (Idx).State /= Pending or else (
+            Request.Operation (Obj.Jobs (Idx).Req) /= Read and then
+            Request.Operation (Obj.Jobs (Idx).Req) /= Write)
       then
          raise Program_Error;
       end if;
 
-      return Obj.Items (Idx).Snap_ID;
+      return Obj.Jobs (Idx).Snap_ID;
 
    end Peek_Generated_VBD_Primitive_ID;
 
@@ -310,15 +310,15 @@ is
          Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
    begin
 
-      case Obj.Items (Idx).State is
+      case Obj.Jobs (Idx).State is
       when
          VBD_Extension_Step_Pending |
          FT_Extension_Step_Pending
       =>
 
-         if Primitive.Equal (Prim, Obj.Items (Idx).Prim) then
+         if Primitive.Equal (Prim, Obj.Jobs (Idx).Prim) then
             return Number_Of_Blocks_Type (
-               Request.Count (Obj.Items (Idx).Req));
+               Request.Count (Obj.Jobs (Idx).Req));
          else
             raise Program_Error;
          end if;
@@ -342,27 +342,27 @@ is
       if not Index_Queue.Empty (Obj.Indices) and then
          Index_Queue.Head (Obj.Indices) = Idx
       then
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when Pending =>
-            Obj.Items (Idx).State := In_Progress;
+            Obj.Jobs (Idx).State := In_Progress;
             return;
          when Rekey_Init_Pending =>
-            Obj.Items (Idx).State := Rekey_Init_In_Progress;
+            Obj.Jobs (Idx).State := Rekey_Init_In_Progress;
             return;
          when Rekey_VBA_Pending =>
-            Obj.Items (Idx).State := Rekey_VBA_In_Progress;
+            Obj.Jobs (Idx).State := Rekey_VBA_In_Progress;
             return;
          when VBD_Extension_Step_Pending =>
-            Obj.Items (Idx).State := VBD_Extension_Step_In_Progress;
+            Obj.Jobs (Idx).State := VBD_Extension_Step_In_Progress;
             return;
          when FT_Extension_Step_Pending =>
-            Obj.Items (Idx).State := FT_Extension_Step_In_Progress;
+            Obj.Jobs (Idx).State := FT_Extension_Step_In_Progress;
             return;
          when Initialize_SB_Ctrl_Pending =>
-            Obj.Items (Idx).State := Initialize_SB_Ctrl_In_Progress;
+            Obj.Jobs (Idx).State := Initialize_SB_Ctrl_In_Progress;
             return;
          when Deinitialize_SB_Ctrl_Pending =>
-            Obj.Items (Idx).State := Deinitialize_SB_Ctrl_In_Progress;
+            Obj.Jobs (Idx).State := Deinitialize_SB_Ctrl_In_Progress;
             return;
          when others =>
             raise Program_Error;
@@ -375,17 +375,17 @@ is
    --  Execute_Extend_VBD
    --
    procedure Execute_Extend_VBD (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Items (Idx).State is
+      case Jobs (Idx).State is
       when Submitted =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step,
@@ -393,26 +393,26 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := VBD_Extension_Step_Pending;
+         Jobs (Idx).State := VBD_Extension_Step_Pending;
          Progress := True;
 
       when VBD_Extension_Step_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         if Items (Idx).Request_Finished then
+         if Jobs (Idx).Request_Finished then
 
-            Request.Success (Items (Idx).Req, True);
-            Items (Idx).State := Complete;
+            Request.Success (Jobs (Idx).Req, True);
+            Jobs (Idx).State := Complete;
             Index_Queue.Dequeue (Indices, Idx);
             Progress := True;
 
          else
 
-            Items (Idx).Nr_Of_Requests_Preponed := 0;
-            Items (Idx).State := Prepone_Requests_Pending;
+            Jobs (Idx).Nr_Of_Requests_Preponed := 0;
+            Jobs (Idx).State := Prepone_Requests_Pending;
             Progress := True;
 
          end if;
@@ -428,7 +428,7 @@ is
             loop
 
                exit Try_Prepone_Requests when
-                  Items (Idx).Nr_Of_Requests_Preponed >=
+                  Jobs (Idx).Nr_Of_Requests_Preponed >=
                      Max_Nr_Of_Requests_Preponed_At_A_Time or else
                   Index_Queue.Item_Is_Tail (Indices, Idx);
 
@@ -437,12 +437,12 @@ is
                      Index_Queue.Next_Item (Indices, Idx);
                begin
 
-                  case Request.Operation (Items (Next_Idx).Req) is
+                  case Request.Operation (Jobs (Next_Idx).Req) is
                   when Read | Write | Sync | Discard_Snapshot =>
 
                      Index_Queue.Move_One_Item_Towards_Tail (Indices, Idx);
-                     Items (Idx).Nr_Of_Requests_Preponed :=
-                        Items (Idx).Nr_Of_Requests_Preponed + 1;
+                     Jobs (Idx).Nr_Of_Requests_Preponed :=
+                        Jobs (Idx).Nr_Of_Requests_Preponed + 1;
 
                      Requests_Preponed := True;
                      Progress := True;
@@ -459,7 +459,7 @@ is
 
             if not Requests_Preponed then
 
-               Items (Idx).State := Prepone_Requests_Complete;
+               Jobs (Idx).State := Prepone_Requests_Complete;
                Progress := True;
 
             end if;
@@ -468,7 +468,7 @@ is
 
       when Prepone_Requests_Complete =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_VBD_Ext_Step,
@@ -476,7 +476,7 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := VBD_Extension_Step_Pending;
+         Jobs (Idx).State := VBD_Extension_Step_Pending;
          Progress := True;
 
       when others =>
@@ -491,17 +491,17 @@ is
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Items (Idx).State is
+      case Jobs (Idx).State is
       when Submitted =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step,
@@ -509,26 +509,26 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := FT_Extension_Step_Pending;
+         Jobs (Idx).State := FT_Extension_Step_Pending;
          Progress := True;
 
       when FT_Extension_Step_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         if Items (Idx).Request_Finished then
+         if Jobs (Idx).Request_Finished then
 
-            Request.Success (Items (Idx).Req, True);
-            Items (Idx).State := Complete;
+            Request.Success (Jobs (Idx).Req, True);
+            Jobs (Idx).State := Complete;
             Index_Queue.Dequeue (Indices, Idx);
             Progress := True;
 
          else
 
-            Items (Idx).Nr_Of_Requests_Preponed := 0;
-            Items (Idx).State := Prepone_Requests_Pending;
+            Jobs (Idx).Nr_Of_Requests_Preponed := 0;
+            Jobs (Idx).State := Prepone_Requests_Pending;
             Progress := True;
 
          end if;
@@ -544,7 +544,7 @@ is
             loop
 
                exit Try_Prepone_Requests when
-                  Items (Idx).Nr_Of_Requests_Preponed >=
+                  Jobs (Idx).Nr_Of_Requests_Preponed >=
                      Max_Nr_Of_Requests_Preponed_At_A_Time or else
                   Index_Queue.Item_Is_Tail (Indices, Idx);
 
@@ -553,12 +553,12 @@ is
                      Index_Queue.Next_Item (Indices, Idx);
                begin
 
-                  case Request.Operation (Items (Next_Idx).Req) is
+                  case Request.Operation (Jobs (Next_Idx).Req) is
                   when Read | Write | Sync | Discard_Snapshot =>
 
                      Index_Queue.Move_One_Item_Towards_Tail (Indices, Idx);
-                     Items (Idx).Nr_Of_Requests_Preponed :=
-                        Items (Idx).Nr_Of_Requests_Preponed + 1;
+                     Jobs (Idx).Nr_Of_Requests_Preponed :=
+                        Jobs (Idx).Nr_Of_Requests_Preponed + 1;
 
                      Requests_Preponed := True;
                      Progress := True;
@@ -575,7 +575,7 @@ is
 
             if not Requests_Preponed then
 
-               Items (Idx).State := Prepone_Requests_Complete;
+               Jobs (Idx).State := Prepone_Requests_Complete;
                Progress := True;
 
             end if;
@@ -584,7 +584,7 @@ is
 
       when Prepone_Requests_Complete =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step,
@@ -592,7 +592,7 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := FT_Extension_Step_Pending;
+         Jobs (Idx).State := FT_Extension_Step_Pending;
          Progress := True;
 
       when others =>
@@ -607,17 +607,17 @@ is
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Items (Idx).State is
+      case Jobs (Idx).State is
       when Submitted =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Init_Rekey,
@@ -625,44 +625,44 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := Rekey_Init_Pending;
+         Jobs (Idx).State := Rekey_Init_Pending;
          Progress := True;
 
       when Submitted_Resume_Rekeying =>
 
-         Items (Idx).Prim := Primitive.Invalid_Object;
+         Jobs (Idx).Prim := Primitive.Invalid_Object;
 
-         Items (Idx).Nr_Of_Requests_Preponed := 0;
-         Items (Idx).State := Prepone_Requests_Pending;
+         Jobs (Idx).Nr_Of_Requests_Preponed := 0;
+         Jobs (Idx).State := Prepone_Requests_Pending;
          Progress := True;
 
       when Rekey_Init_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         Items (Idx).Nr_Of_Requests_Preponed := 0;
-         Items (Idx).State := Prepone_Requests_Pending;
+         Jobs (Idx).Nr_Of_Requests_Preponed := 0;
+         Jobs (Idx).State := Prepone_Requests_Pending;
          Progress := True;
 
       when Rekey_VBA_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         if Items (Idx).Request_Finished then
+         if Jobs (Idx).Request_Finished then
 
-            Request.Success (Items (Idx).Req, True);
-            Items (Idx).State := Complete;
+            Request.Success (Jobs (Idx).Req, True);
+            Jobs (Idx).State := Complete;
             Index_Queue.Dequeue (Indices, Idx);
             Progress := True;
 
          else
 
-            Items (Idx).Nr_Of_Requests_Preponed := 0;
-            Items (Idx).State := Prepone_Requests_Pending;
+            Jobs (Idx).Nr_Of_Requests_Preponed := 0;
+            Jobs (Idx).State := Prepone_Requests_Pending;
             Progress := True;
 
          end if;
@@ -678,7 +678,7 @@ is
             loop
 
                exit Try_Prepone_Requests when
-                  Items (Idx).Nr_Of_Requests_Preponed >=
+                  Jobs (Idx).Nr_Of_Requests_Preponed >=
                      Max_Nr_Of_Requests_Preponed_At_A_Time or else
                   Index_Queue.Item_Is_Tail (Indices, Idx);
 
@@ -687,12 +687,12 @@ is
                      Index_Queue.Next_Item (Indices, Idx);
                begin
 
-                  case Request.Operation (Items (Next_Idx).Req) is
+                  case Request.Operation (Jobs (Next_Idx).Req) is
                   when Read | Write | Sync | Discard_Snapshot =>
 
                      Index_Queue.Move_One_Item_Towards_Tail (Indices, Idx);
-                     Items (Idx).Nr_Of_Requests_Preponed :=
-                        Items (Idx).Nr_Of_Requests_Preponed + 1;
+                     Jobs (Idx).Nr_Of_Requests_Preponed :=
+                        Jobs (Idx).Nr_Of_Requests_Preponed + 1;
 
                      Requests_Preponed := True;
                      Progress := True;
@@ -709,7 +709,7 @@ is
 
             if not Requests_Preponed then
 
-               Items (Idx).State := Prepone_Requests_Complete;
+               Jobs (Idx).State := Prepone_Requests_Complete;
                Progress := True;
 
             end if;
@@ -718,7 +718,7 @@ is
 
       when Prepone_Requests_Complete =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA,
@@ -726,7 +726,7 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := Rekey_VBA_Pending;
+         Jobs (Idx).State := Rekey_VBA_Pending;
          Progress := True;
 
       when others =>
@@ -741,17 +741,17 @@ is
    --  Execute_Initialize
    --
    procedure Execute_Initialize (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Items (Idx).State is
+      case Jobs (Idx).State is
       when Submitted =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Initialize,
@@ -759,26 +759,26 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := Initialize_SB_Ctrl_Pending;
+         Jobs (Idx).State := Initialize_SB_Ctrl_Pending;
          Progress := True;
 
       when Initialize_SB_Ctrl_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         case Items (Idx).SB_State is
+         case Jobs (Idx).SB_State is
          when Normal =>
 
             Index_Queue.Dequeue (Indices, Idx);
-            Items (Idx) := Item_Invalid;
+            Jobs (Idx) := Job_Invalid;
             Progress := True;
 
          when Rekeying =>
 
-            Items (Idx).State := Submitted_Resume_Rekeying;
-            Items (Idx).Req   := Request.Valid_Object (
+            Jobs (Idx).State := Submitted_Resume_Rekeying;
+            Jobs (Idx).Req   := Request.Valid_Object (
                Op     => Rekey,
                Succ   => False,
                Blk_Nr => 0,
@@ -792,8 +792,8 @@ is
 
          when Extending_VBD =>
 
-            Items (Idx).State := Submitted;
-            Items (Idx).Req   :=
+            Jobs (Idx).State := Submitted;
+            Jobs (Idx).Req   :=
                Request.Valid_Object (
                   Op     => Extend_VBD,
                   Succ   => False,
@@ -808,8 +808,8 @@ is
 
          when Extending_FT =>
 
-            Items (Idx).State := Submitted;
-            Items (Idx).Req   :=
+            Jobs (Idx).State := Submitted;
+            Jobs (Idx).Req   :=
                Request.Valid_Object (
                   Op     => Extend_FT,
                   Succ   => False,
@@ -836,17 +836,17 @@ is
    --  Execute_Deinitialize
    --
    procedure Execute_Deinitialize (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
    is
    begin
 
-      case Items (Idx).State is
+      case Jobs (Idx).State is
       when Submitted =>
 
-         Items (Idx).Prim := Primitive.Valid_Object (
+         Jobs (Idx).Prim := Primitive.Valid_Object (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
             Tg     => Primitive.Tag_Pool_SB_Ctrl_Deinitialize,
@@ -854,17 +854,17 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type'First);
 
-         Items (Idx).State := Deinitialize_SB_Ctrl_Pending;
+         Jobs (Idx).State := Deinitialize_SB_Ctrl_Pending;
          Progress := True;
 
       when Deinitialize_SB_Ctrl_Complete =>
 
-         if not Primitive.Success (Items (Idx).Prim) then
+         if not Primitive.Success (Jobs (Idx).Prim) then
             raise Program_Error;
          end if;
 
-         Request.Success (Items (Idx).Req, True);
-         Items (Idx).State := Complete;
+         Request.Success (Jobs (Idx).Req, True);
+         Jobs (Idx).State := Complete;
          Index_Queue.Dequeue (Indices, Idx);
          Progress := True;
 
@@ -892,26 +892,26 @@ is
             Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
          begin
 
-            case Request.Operation (Obj.Items (Idx).Req) is
+            case Request.Operation (Obj.Jobs (Idx).Req) is
             when Rekey =>
 
-               Execute_Rekey (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Rekey (Obj.Jobs, Obj.Indices, Idx, Progress);
 
             when Extend_VBD =>
 
-               Execute_Extend_VBD (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Extend_VBD (Obj.Jobs, Obj.Indices, Idx, Progress);
 
             when Extend_FT =>
 
-               Execute_Extend_FT (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Extend_FT (Obj.Jobs, Obj.Indices, Idx, Progress);
 
             when Initialize =>
 
-               Execute_Initialize (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Initialize (Obj.Jobs, Obj.Indices, Idx, Progress);
 
             when Deinitialize =>
 
-               Execute_Deinitialize (Obj.Items, Obj.Indices, Idx, Progress);
+               Execute_Deinitialize (Obj.Jobs, Obj.Indices, Idx, Progress);
 
             when others =>
 
@@ -942,15 +942,15 @@ is
          raise Program_Error;
       end if;
 
-      case Request.Operation (Obj.Items (Idx).Req) is
+      case Request.Operation (Obj.Jobs (Idx).Req) is
       when Initialize =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when Initialize_SB_Ctrl_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Initialize_SB_Ctrl_Complete;
-            Obj.Items (Idx).SB_State := SB_State;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Initialize_SB_Ctrl_Complete;
+            Obj.Jobs (Idx).SB_State := SB_State;
 
          when others =>
 
@@ -982,14 +982,14 @@ is
          raise Program_Error;
       end if;
 
-      case Request.Operation (Obj.Items (Idx).Req) is
+      case Request.Operation (Obj.Jobs (Idx).Req) is
       when Rekey =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when Rekey_Init_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Rekey_Init_Complete;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Rekey_Init_Complete;
 
          when others =>
 
@@ -999,11 +999,11 @@ is
 
       when Deinitialize =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when Deinitialize_SB_Ctrl_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Deinitialize_SB_Ctrl_Complete;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Deinitialize_SB_Ctrl_Complete;
 
          when others =>
 
@@ -1013,20 +1013,20 @@ is
 
       when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
 
-         if Obj.Items (Idx).State /= In_Progress then
+         if Obj.Jobs (Idx).State /= In_Progress then
             raise Program_Error;
          end if;
 
-         Request.Success (Obj.Items (Idx).Req, Success);
-         Obj.Items (Idx).Nr_Of_Prims_Completed :=
-            Obj.Items (Idx).Nr_Of_Prims_Completed + 1;
+         Request.Success (Obj.Jobs (Idx).Req, Success);
+         Obj.Jobs (Idx).Nr_Of_Prims_Completed :=
+            Obj.Jobs (Idx).Nr_Of_Prims_Completed + 1;
 
-         if Obj.Items (Idx).Nr_Of_Prims_Completed <
-               Item_Nr_Of_Prims (Obj.Items (Idx))
+         if Obj.Jobs (Idx).Nr_Of_Prims_Completed <
+               Job_Nr_Of_Prims (Obj.Jobs (Idx))
          then
-            Obj.Items (Idx).State := Pending;
+            Obj.Jobs (Idx).State := Pending;
          else
-            Obj.Items (Idx).State := Complete;
+            Obj.Jobs (Idx).State := Complete;
             Index_Queue.Dequeue (Obj.Indices, Idx);
          end if;
 
@@ -1055,15 +1055,15 @@ is
          raise Program_Error;
       end if;
 
-      case Request.Operation (Obj.Items (Idx).Req) is
+      case Request.Operation (Obj.Jobs (Idx).Req) is
       when Rekey =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when Rekey_VBA_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := Rekey_VBA_Complete;
-            Obj.Items (Idx).Request_Finished := Request_Finished;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Rekey_VBA_Complete;
+            Obj.Jobs (Idx).Request_Finished := Request_Finished;
 
          when others =>
 
@@ -1073,12 +1073,12 @@ is
 
       when Extend_VBD =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when VBD_Extension_Step_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := VBD_Extension_Step_Complete;
-            Obj.Items (Idx).Request_Finished := Request_Finished;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := VBD_Extension_Step_Complete;
+            Obj.Jobs (Idx).Request_Finished := Request_Finished;
 
          when others =>
 
@@ -1088,12 +1088,12 @@ is
 
       when Extend_FT =>
 
-         case Obj.Items (Idx).State is
+         case Obj.Jobs (Idx).State is
          when FT_Extension_Step_In_Progress =>
 
-            Primitive.Success (Obj.Items (Idx).Prim, Success);
-            Obj.Items (Idx).State := FT_Extension_Step_Complete;
-            Obj.Items (Idx).Request_Finished := Request_Finished;
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := FT_Extension_Step_Complete;
+            Obj.Jobs (Idx).Request_Finished := Request_Finished;
 
          when others =>
 
@@ -1116,12 +1116,12 @@ is
    return Request.Object_Type
    is
    begin
-      For_Each_Item_Idx :
-      for Idx in Obj.Items'Range loop
-         if Obj.Items (Idx).State = Complete then
-            return Obj.Items (Idx).Req;
+      For_Each_Job_Idx :
+      for Idx in Obj.Jobs'Range loop
+         if Obj.Jobs (Idx).State = Complete then
+            return Obj.Jobs (Idx).Req;
          end if;
-      end loop For_Each_Item_Idx;
+      end loop For_Each_Job_Idx;
       return Request.Invalid_Object;
    end Peek_Completed_Request;
 
@@ -1133,18 +1133,18 @@ is
       Req :        Request.Object_Type)
    is
    begin
-      For_Each_Item_Idx :
-      for Idx in Obj.Items'Range loop
-         if Request.Valid (Obj.Items (Idx).Req)
-            and then Request.Equal (Obj.Items (Idx).Req, Req)
+      For_Each_Job_Idx :
+      for Idx in Obj.Jobs'Range loop
+         if Request.Valid (Obj.Jobs (Idx).Req)
+            and then Request.Equal (Obj.Jobs (Idx).Req, Req)
          then
-            if Obj.Items (Idx).State /= Complete then
+            if Obj.Jobs (Idx).State /= Complete then
                raise Program_Error;
             end if;
-            Obj.Items (Idx) := Item_Invalid;
+            Obj.Jobs (Idx) := Job_Invalid;
             return;
          end if;
-      end loop For_Each_Item_Idx;
+      end loop For_Each_Job_Idx;
       raise Program_Error;
    end Drop_Completed_Request;
 
@@ -1157,21 +1157,21 @@ is
    return Request.Object_Type
    is
    begin
-      if Obj.Items (Idx).State = Invalid then
+      if Obj.Jobs (Idx).State = Invalid then
          raise Program_Error;
       end if;
-      return Obj.Items (Idx).Req;
+      return Obj.Jobs (Idx).Req;
    end Request_For_Index;
 
    --
-   --  Item_Nr_Of_Prims
+   --  Job_Nr_Of_Prims
    --
-   function Item_Nr_Of_Prims (Itm : Item_Type)
+   function Job_Nr_Of_Prims (Job : Job_Type)
    return Number_Of_Primitives_Type
    is (
-      case Request.Operation (Itm.Req) is
+      case Request.Operation (Job.Req) is
       when Read | Write =>
-         Number_Of_Primitives_Type (Request.Count (Itm.Req)),
+         Number_Of_Primitives_Type (Request.Count (Job.Req)),
       when
          Sync |
          Create_Snapshot |
@@ -1186,10 +1186,10 @@ is
          1);
 
    --
-   --  Item_Invalid
+   --  Job_Invalid
    --
-   function Item_Invalid
-   return Item_Type
+   function Job_Invalid
+   return Job_Type
    is (
       State                   => Invalid,
       Req                     => Request.Invalid_Object,
@@ -1211,11 +1211,11 @@ is
    begin
 
       Obj := (
-         Items   => (others => Item_Invalid),
+         Jobs   => (others => Job_Invalid),
          Indices => Index_Queue.Empty_Queue);
 
-      Obj.Items (Idx).State := Submitted;
-      Obj.Items (Idx).Req   :=
+      Obj.Jobs (Idx).State := Submitted;
+      Obj.Jobs (Idx).Req   :=
          Request.Valid_Object (
             Op     => Initialize,
             Succ   => False,

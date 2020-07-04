@@ -150,7 +150,7 @@ private
 
    Max_Nr_Of_Requests_Preponed_At_A_Time : constant := 8;
 
-   type Item_State_Type is (
+   type Job_State_Type is (
       Invalid,
       Pending,
       In_Progress,
@@ -178,8 +178,8 @@ private
       Deinitialize_SB_Ctrl_Complete,
       Complete);
 
-   type Item_Type is record
-      State                   : Item_State_Type;
+   type Job_Type is record
+      State                   : Job_State_Type;
       Req                     : Request.Object_Type;
       Snap_ID                 : Snapshot_ID_Type;
       Prim                    : Primitive.Object_Type;
@@ -189,7 +189,7 @@ private
       SB_State                : Superblock_State_Type;
    end record;
 
-   type Items_Type is array (Pool_Index_Type) of Item_Type;
+   type Jobs_Type is array (Pool_Index_Type) of Job_Type;
 
    type Index_Queue_Index_Type is range 0 .. Pool_Index_Type'Range_Length;
 
@@ -197,27 +197,27 @@ private
       Pool_Index_Type, Index_Queue_Index_Type);
 
    type Object_Type is record
-      Items   : Items_Type;
+      Jobs   : Jobs_Type;
       Indices : Index_Queue.Queue_Type;
    end record;
 
    --
-   --  Item_Invalid
+   --  Job_Invalid
    --
-   function Item_Invalid
-   return Item_Type;
+   function Job_Invalid
+   return Job_Type;
 
    --
-   --  Item_Nr_Of_Prims
+   --  Job_Nr_Of_Prims
    --
-   function Item_Nr_Of_Prims (Itm : Item_Type)
+   function Job_Nr_Of_Prims (Job : Job_Type)
    return Number_Of_Primitives_Type;
 
    --
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -226,7 +226,7 @@ private
    --  Execute_Extend_VBD
    --
    procedure Execute_Extend_VBD (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -235,7 +235,7 @@ private
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -244,7 +244,7 @@ private
    --  Execute_Initialize
    --
    procedure Execute_Initialize (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -253,7 +253,7 @@ private
    --  Execute_Deinitialize
    --
    procedure Execute_Deinitialize (
-      Items    : in out Items_Type;
+      Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
