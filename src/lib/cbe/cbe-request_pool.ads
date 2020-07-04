@@ -12,7 +12,7 @@ with CBE.Request;
 with CBE.Primitive;
 with CBE.Generic_Index_Queue;
 
-package CBE.Pool
+package CBE.Request_Pool
 with SPARK_Mode
 is
    pragma Pure;
@@ -128,7 +128,7 @@ is
    --
    --  Peek_Completed_Request
    --
-   function Peek_Completed_Request (Obj : Pool.Object_Type)
+   function Peek_Completed_Request (Obj : Object_Type)
    return Request.Object_Type;
 
    --
@@ -258,4 +258,4 @@ private
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
 
-end CBE.Pool;
+end CBE.Request_Pool;

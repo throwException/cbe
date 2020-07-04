@@ -34,7 +34,7 @@ is
       Obj.Write_Stalled := False;
 
       Obj.Execute_Progress := False;
-      Obj.Request_Pool_Obj := Pool.Initialized_Object;
+      Obj.Request_Pool_Obj := Request_Pool.Initialized_Object;
       Obj.Crypto_Obj       := Crypto.Initialized_Object;
 
       Obj.IO_Obj := Block_IO.Initialized_Object;
@@ -147,7 +147,7 @@ is
                Key    => 0,
                Tg     => 0);
       begin
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
       end Declare_Snapshot_Sync_Request;
 
       Obj.Creating_Quarantine_Snapshot := True;
@@ -222,7 +222,7 @@ is
                   Key    => 0,
                   Tg     => 0);
          begin
-            Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+            Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
          end Declare_Discard_Sync_Request;
 
          Obj.Discarding_Snapshot := True;
@@ -298,7 +298,7 @@ is
 
    function Client_Request_Acceptable (Obj : Object_Type)
    return Boolean
-   is (Pool.Request_Acceptable (Obj.Request_Pool_Obj));
+   is (Request_Pool.Request_Acceptable (Obj.Request_Pool_Obj));
 
    procedure Submit_Client_Request (
       Obj : in out Object_Type;
@@ -318,7 +318,7 @@ is
          Deinitialize
       =>
 
-         Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
+         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
       when
          Create_Snapshot | Discard_Snapshot | Initialize | Resume_Rekeying
@@ -333,7 +333,7 @@ is
    return Request.Object_Type
    is
       Req : constant Request.Object_Type :=
-         Pool.Peek_Completed_Request (Obj.Request_Pool_Obj);
+         Request_Pool.Peek_Completed_Request (Obj.Request_Pool_Obj);
    begin
 
       case Request.Operation (Req) is
@@ -361,7 +361,7 @@ is
       Req :        Request.Object_Type)
    is
    begin
-      Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
+      Request_Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
       pragma Debug (Debug.Print_String ("Completed Request: "
          & Request.To_String (Req)));
       Obj.Handle_Failed_FT_Prims := False;
@@ -505,13 +505,13 @@ is
 
       Data_Index_Valid := True;
       Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
-      Pool.Mark_Generated_Primitive_Complete (
+      Request_Pool.Mark_Generated_Primitive_Complete (
          Obj.Request_Pool_Obj,
          Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
          Primitive.Success (Prim));
 
       pragma Debug (Debug.Print_String (
-         "========> Pool.Mark_Completed_Primitive: "
+         "========> Request_Pool.Mark_Completed_Primitive: "
          & Primitive.To_String (Prim)));
 
       Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
@@ -1183,7 +1183,7 @@ is
                   --  raise Program_Error;
                end if;
 
-               Pool.Mark_Generated_Primitive_Complete (
+               Request_Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
@@ -1879,14 +1879,15 @@ is
       Progress : in out Boolean)
    is
    begin
-      Pool.Execute (Obj.Request_Pool_Obj, Progress);
+      Request_Pool.Execute (Obj.Request_Pool_Obj, Progress);
 
       Loop_Pool_Generated_Sync_Prims :
       loop
          Declare_Sync_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Pool.Peek_Generated_Sync_Primitive (Obj.Request_Pool_Obj);
+               Request_Pool.Peek_Generated_Sync_Primitive (
+                  Obj.Request_Pool_Obj);
          begin
 
             exit Loop_Pool_Generated_Sync_Prims when
@@ -1910,7 +1911,7 @@ is
                Obj.Cur_Gen);
 
             Obj.Handle_Failed_FT_Prims := False;
-            Pool.Drop_Generated_Primitive (
+            Request_Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -1925,7 +1926,7 @@ is
          Declare_Create_Snap_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Pool.Peek_Generated_Create_Snap_Primitive (
+               Request_Pool.Peek_Generated_Create_Snap_Primitive (
                   Obj.Request_Pool_Obj);
          begin
 
@@ -1951,7 +1952,7 @@ is
                Obj.Cur_Gen);
 
             Obj.Handle_Failed_FT_Prims := False;
-            Pool.Drop_Generated_Primitive (
+            Request_Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -1966,7 +1967,7 @@ is
          Declare_Discard_Snap_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Pool.Peek_Generated_Discard_Snap_Primitive (
+               Request_Pool.Peek_Generated_Discard_Snap_Primitive (
                   Obj.Request_Pool_Obj);
          begin
 
@@ -1984,7 +1985,7 @@ is
                Obj.Cur_Gen);
 
             Obj.Handle_Failed_FT_Prims := False;
-            Pool.Drop_Generated_Primitive (
+            Request_Pool.Drop_Generated_Primitive (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -1999,7 +2000,8 @@ is
          Declare_VBD_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Pool.Peek_Generated_VBD_Primitive (Obj.Request_Pool_Obj);
+               Request_Pool.Peek_Generated_VBD_Primitive (
+                  Obj.Request_Pool_Obj);
          begin
 
             exit Loop_Pool_Generated_VBD_Prims when
@@ -2009,7 +2011,7 @@ is
             Declare_Snap_Slot_Idx :
             declare
                Snap_ID : constant Snapshot_ID_Type :=
-                  Pool.Peek_Generated_VBD_Primitive_ID (
+                  Request_Pool.Peek_Generated_VBD_Primitive_ID (
                      Obj.Request_Pool_Obj,
                      Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -2024,11 +2026,11 @@ is
                            .Nr_Of_Leafs - 1)
                then
 
-                  Pool.Drop_Generated_Primitive (
+                  Request_Pool.Drop_Generated_Primitive (
                      Obj.Request_Pool_Obj,
                      Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
-                  Pool.Mark_Generated_Primitive_Complete (
+                  Request_Pool.Mark_Generated_Primitive_Complete (
                      Obj.Request_Pool_Obj,
                      Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                      False);
@@ -2060,7 +2062,7 @@ is
                      Obj.Superblock.Previous_Key.ID,
                      Obj.Superblock.Current_Key.ID);
 
-                  Pool.Drop_Generated_Primitive (
+                  Request_Pool.Drop_Generated_Primitive (
                      Obj.Request_Pool_Obj,
                      Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -2079,7 +2081,8 @@ is
          Declare_SB_Ctrl_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               Pool.Peek_Generated_SB_Ctrl_Primitive (Obj.Request_Pool_Obj);
+               Request_Pool.Peek_Generated_SB_Ctrl_Primitive (
+                  Obj.Request_Pool_Obj);
          begin
 
             exit Loop_Pool_Generated_SB_Ctrl_Prims when
@@ -2094,9 +2097,10 @@ is
 
                Superblock_Control.Submit_Primitive_Nr_Of_Blks (
                   Obj.SB_Ctrl, Prim,
-                  Pool.Peek_Generated_Nr_Of_Blks (Obj.Request_Pool_Obj, Prim));
+                  Request_Pool.Peek_Generated_Nr_Of_Blks (
+                     Obj.Request_Pool_Obj, Prim));
 
-               Pool.Drop_Generated_Primitive (
+               Request_Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -2109,7 +2113,7 @@ is
             =>
 
                Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
-               Pool.Drop_Generated_Primitive (
+               Request_Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -2119,7 +2123,7 @@ is
 
                Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
 
-               Pool.Drop_Generated_Primitive (
+               Request_Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
@@ -2802,7 +2806,7 @@ is
                Primitive.Tag_Pool_SB_Ctrl_Deinitialize
             =>
 
-               Pool.Mark_Generated_Primitive_Complete (
+               Request_Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
@@ -2816,7 +2820,7 @@ is
                Primitive.Tag_Pool_SB_Ctrl_FT_Ext_Step
             =>
 
-               Pool.Mark_Generated_Primitive_Complete_Req_Fin (
+               Request_Pool.Mark_Generated_Primitive_Complete_Req_Fin (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim),
@@ -2828,7 +2832,7 @@ is
 
             when Primitive.Tag_Pool_SB_Ctrl_Initialize =>
 
-               Pool.Mark_Generated_Primitive_Complete_SB_State (
+               Request_Pool.Mark_Generated_Primitive_Complete_SB_State (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim),
@@ -3006,13 +3010,13 @@ is
             --  at some place "save" (leafs on the block device, inner nodes
             --  within the Cache, acknowledge the primitive.
             --
-            Pool.Mark_Generated_Primitive_Complete (
+            Request_Pool.Mark_Generated_Primitive_Complete (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                Primitive.Success (Prim));
 
             pragma Debug (Debug.Print_String (
-               "========> Pool.Mark_Completed_Primitive: "
+               "========> Request_Pool.Mark_Completed_Primitive: "
                & Primitive.To_String (Prim)));
 
          end Declare_Prim_6;
@@ -3273,13 +3277,13 @@ is
 
             if not Obj.Write_Stalled then
 
-               Pool.Mark_Generated_Primitive_Complete (
+               Request_Pool.Mark_Generated_Primitive_Complete (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
 
                pragma Debug (Debug.Print_String (
-                  "========> Pool.Mark_Completed_Primitive: "
+                  "========> Request_Pool.Mark_Completed_Primitive: "
                   & Primitive.To_String (Prim)));
 
                Declare_Pool_Index :
@@ -3289,14 +3293,15 @@ is
                   Pool_Idx      : constant Pool_Index_Type :=
                      Pool_Idx_Slot_Content (Pool_Idx_Slot);
                   Req : constant Request.Object_Type :=
-                     Pool.Request_For_Index (Obj.Request_Pool_Obj, Pool_Idx);
+                     Request_Pool.Request_For_Index (
+                        Obj.Request_Pool_Obj, Pool_Idx);
                begin
                   if Obj.Creating_Quarantine_Snapshot then
                      if Request.Operation (Req) = Create_Snapshot then
                         Obj.Snap_Gen :=
                            Obj.Superblock.Last_Secured_Generation;
 
-                           Pool.Drop_Completed_Request (
+                           Request_Pool.Drop_Completed_Request (
                               Obj.Request_Pool_Obj, Req);
 
                            Obj.Creating_Quarantine_Snapshot := False;
@@ -3308,7 +3313,7 @@ is
 
                         Obj.Last_Discard_Snap_ID := Obj.Discard_Snap_ID;
 
-                        Pool.Drop_Completed_Request (
+                        Request_Pool.Drop_Completed_Request (
                            Obj.Request_Pool_Obj, Req);
 
                         Obj.Discarding_Snapshot := False;
@@ -3685,7 +3690,7 @@ is
    begin
       Obj.Wait_For_Front_End := (
          Req         =>
-            Pool.Request_For_Index (
+            Request_Pool.Request_For_Index (
                Obj.Request_Pool_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim))),
          Prim        => Prim,

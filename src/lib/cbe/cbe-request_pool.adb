@@ -11,7 +11,7 @@ pragma Ada_2012;
 with CBE.Debug;
 pragma Unreferenced (CBE.Debug);
 
-package body CBE.Pool
+package body CBE.Request_Pool
 with SPARK_Mode
 is
    --
@@ -1112,7 +1112,7 @@ is
    --
    --  Peek_Completed_Request
    --
-   function Peek_Completed_Request (Obj : Pool.Object_Type)
+   function Peek_Completed_Request (Obj : Object_Type)
    return Request.Object_Type
    is
    begin
@@ -1230,4 +1230,4 @@ is
 
    end Initialized_Object;
 
-end CBE.Pool;
+end CBE.Request_Pool;

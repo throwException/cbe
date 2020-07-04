@@ -8,7 +8,7 @@
 
 pragma Ada_2012;
 
-with CBE.Pool;
+with CBE.Request_Pool;
 with CBE.Crypto;
 with CBE.Virtual_Block_Device;
 with CBE.Write_Back;
@@ -462,7 +462,7 @@ private
       Cache_Jobs_Data              : Cache.Jobs_Data_Type;
       Cache_Slots_Data             : Cache.Slots_Data_Type;
       Cache_Sync_State             : Cache_Sync_State_Type;
-      Request_Pool_Obj             : Pool.Object_Type;
+      Request_Pool_Obj             : Request_Pool.Object_Type;
       Crypto_Obj                   : Crypto.Object_Type;
       IO_Obj                       : Block_IO.Object_Type;
       Trans_Data                   : Translation_Data_Type;
