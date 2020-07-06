@@ -52,24 +52,6 @@ is
       Curr_SB :     Superblocks_Index_Type);
 
    --
-   --  Create snapshot
-   --
-   procedure Create_Snapshot (
-      Obj     : in out Object_Type;
-      Token   :        Token_Type;
-      Quara   :        Boolean;
-      Result  :    out Boolean);
-
-   --
-   --  Check if snapshot creation is complete
-   --
-   procedure Snapshot_Creation_Complete (
-      Obj     :     Object_Type;
-      Token   : out Token_Type;
-      Snap_ID : out Generation_Type;
-      Result  : out Boolean);
-
-   --
    --  Discard given quaratine snapshot
    --
    --  \param Snap_ID  id of the snapshot

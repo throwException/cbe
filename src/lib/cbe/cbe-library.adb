@@ -117,67 +117,6 @@ is
 
    end Initialize_Object;
 
-   procedure Create_Snapshot (
-      Obj     : in out Object_Type;
-      Token   :        Token_Type;
-      Quara   :        Boolean;
-      Result  :    out Boolean)
-   is
-      pragma Unreferenced (Quara);
-   begin
-      --
-      --  For now allow only one creation request to by pending.
-      --  That has to be changed later when the snapshot creation opertion
-      --  is managed by the Job_Pool.
-      --
-      if Obj.Creating_Quarantine_Snapshot then
-         Result := False;
-         return;
-      end if;
-
-      Declare_Snapshot_Sync_Request :
-      declare
-         Req : constant Request.Object_Type :=
-            Request.Valid_Object (
-               Op     => Create_Snapshot,
-               Succ   => False,
-               Blk_Nr => Block_Number_Type (0),
-               Off    => 0,
-               Cnt    => 1,
-               Key    => 0,
-               Tg     => 0);
-      begin
-         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-      end Declare_Snapshot_Sync_Request;
-
-      Obj.Creating_Quarantine_Snapshot := True;
-      Obj.Snap_Token := Token;
-      Result := True;
-   end Create_Snapshot;
-
-   procedure Snapshot_Creation_Complete (
-      Obj     :     Object_Type;
-      Token   : out Token_Type;
-      Snap_ID : out Generation_Type;
-      Result  : out Boolean)
-   is
-      R : constant Boolean :=
-         Obj.Superblock.Last_Secured_Generation = Obj.Snap_Gen;
-   begin
-      pragma Debug (Debug.Print_String ("Snapshot_Creation_Complete: "
-         & " result: " & Debug.To_String (R)));
-
-      if R and then Obj.Creating_Quarantine_Snapshot = False then
-         Token   := Obj.Snap_Token;
-         Snap_ID := Obj.Superblock.Last_Secured_Generation;
-      else
-         Token   := 0;
-         Snap_ID := 0;
-      end if;
-
-      Result := R;
-   end Snapshot_Creation_Complete;
-
    procedure Discard_Snapshot (
       Obj     : in out Object_Type;
       Token   :        Token_Type;
@@ -320,8 +259,23 @@ is
 
          Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
 
+      when Create_Snapshot =>
+
+         --
+         --  For now allow only one creation request to by pending.
+         --  That has to be changed later when the snapshot creation opertion
+         --  is managed by the Job_Pool.
+         --
+         if Obj.Creating_Quarantine_Snapshot then
+            raise Program_Error;
+         end if;
+
+         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+         Obj.Creating_Quarantine_Snapshot := True;
+         Obj.Snap_Token := 1;
+
       when
-         Create_Snapshot | Discard_Snapshot | Initialize | Resume_Rekeying
+         Discard_Snapshot | Initialize | Resume_Rekeying
       =>
          raise Program_Error;
 
@@ -345,12 +299,13 @@ is
          Rekey |
          Extend_VBD |
          Extend_FT |
-         Deinitialize
+         Deinitialize |
+         Create_Snapshot
       =>
          return Req;
 
       when
-         Create_Snapshot | Discard_Snapshot | Initialize | Resume_Rekeying
+         Discard_Snapshot | Initialize | Resume_Rekeying
       =>
          return Request.Invalid_Object;
       end case;
@@ -3300,9 +3255,6 @@ is
                      if Request.Operation (Req) = Create_Snapshot then
                         Obj.Snap_Gen :=
                            Obj.Superblock.Last_Secured_Generation;
-
-                           Request_Pool.Drop_Completed_Request (
-                              Obj.Request_Pool_Obj, Req);
 
                            Obj.Creating_Quarantine_Snapshot := False;
 

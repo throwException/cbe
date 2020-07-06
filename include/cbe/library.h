@@ -54,8 +54,6 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 		void _crypto_cipher_data_required(Request &, Crypto_plain_buffer::Index &) const;
 		void _crypto_plain_data_required(Request &, Crypto_cipher_buffer::Index &) const;
 
-		void _create_snapshot(uint64_t, bool, bool &);
-		void _snapshot_creation_complete(uint64_t &, uint64_t &, bool &);
 		void _discard_snapshot(uint64_t, uint64_t, bool &);
 		void _discard_snapshot_complete(uint64_t &, bool &);
 
@@ -252,41 +250,6 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 	{
 		bool result = false;
 		_supply_client_data(now, request, data, result);
-		return result;
-	}
-
-	/**
-	 * Create snapshot
-	 *
-	 * \param token      user-defined token to identify create snapshot
-	 *                   request
-	 *
-	 * \param quaratine  if set to true a quaratine snapshot will be
-	 *                   created, otherwise a disposable one
-	 *
-	 * \return true if request is being processed, false otherwise
-	 */
-	bool create_snapshot(Token token, bool quaratine)
-	{
-		bool result = false;
-		_create_snapshot(token.value, quaratine, result);
-		return result;
-	}
-
-	/**
-	 * Check completion state of snapshot creation
-	 *
-	 * Both parameters are only usable of the method returned true.
-	 *
-	 * \param token token of the completed snapshot request
-	 * \param id    id of the completed snapshot
-	 *
-	 * \return true if snapshot creation is complete, false otherwise
-	 */
-	bool snapshot_creation_complete(Token &token, Snapshot_ID &id)
-	{
-		bool result = false;
-		_snapshot_creation_complete(token.value, id.value, result);
 		return result;
 	}
 

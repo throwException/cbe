@@ -31,36 +31,6 @@ is
          Obj, SBs_SPARK, Superblocks_Index_Type (Curr_SB.Value));
    end Initialize_Object;
 
-   procedure Create_Snapshot (
-      Obj     : in out Library.Object_Type;
-      Token   :        CXX_Token_Type;
-      Quara   :        CXX_Bool_Type;
-      Result  :    out CXX_Bool_Type)
-   is
-      SPARK_Result : Boolean;
-   begin
-      Library.Create_Snapshot (Obj, Token_Type (Token),
-         CXX_Bool_To_SPARK (Quara), SPARK_Result);
-      Result := CXX_Bool_From_SPARK (SPARK_Result);
-   end Create_Snapshot;
-
-   procedure Snapshot_Creation_Complete (
-      Obj     :     Library.Object_Type;
-      Token   : out CXX_Token_Type;
-      Snap_ID : out CXX_Snapshot_ID_Type;
-      Result  : out CXX_Bool_Type)
-   is
-      SPARK_Token  : Token_Type;
-      SPARK_ID     : Generation_Type;
-      SPARK_Result : Boolean;
-   begin
-      Library.Snapshot_Creation_Complete (Obj, SPARK_Token, SPARK_ID,
-                                          SPARK_Result);
-      Token   := CXX_Token_Type (SPARK_Token);
-      Snap_ID := CXX_Snapshot_ID_Type (SPARK_ID);
-      Result  := CXX_Bool_From_SPARK (SPARK_Result);
-   end Snapshot_Creation_Complete;
-
    procedure Discard_Snapshot (
       Obj     : in out Library.Object_Type;
       Token   :        CXX_Token_Type;

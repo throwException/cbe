@@ -561,12 +561,10 @@ struct Cbe::Block_session_component
 		_test_in_progress.destruct();
 	}
 
-	void create_snapshot_done(Cbe::Token token, Cbe::Snapshot_ID id)
+	void create_snapshot_done(Cbe::Snapshot_ID id,
+	                          Cbe::Request const &req)
 	{
-		bool const success =
-			token.value == _test_in_progress->create_snapshot->token.value;
-
-		if (success) {
+		if (req.success() == Cbe::Request::Success::TRUE) {
 			log("create snapshot succeeded: token ",
 			    _test_in_progress->create_snapshot->token,
 			    ", id ", id,
@@ -1426,7 +1424,9 @@ class Cbe::Main
 			 * Acknowledge finished Block session requests.
 			 */
 
-			if (!_rekey && !_deinitialize && !_extend_vbd && !_extend_ft) {
+			if (!_rekey && !_deinitialize && !_extend_vbd && !_extend_ft &&
+			    !_creating_snapshot)
+			{
 
 				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
 
@@ -1450,25 +1450,40 @@ class Cbe::Main
 			}
 
 			if (!_creating_snapshot) {
-				_block_session->with_create_snapshot([&] (Create_snapshot const cs) {
-					if (_cbe->create_snapshot(cs.token, cs.quarantine)) {
-						_creating_snapshot = true;
-						// XXX state change?
-					} else {
-						_block_session->create_snapshot_failed();
+				_block_session->with_create_snapshot([&] (Create_snapshot const) {
+
+					if (!_cbe->client_request_acceptable()) {
+						return;
 					}
+
+					Cbe::Request req {
+						Cbe::Request::Operation::CREATE_SNAPSHOT,
+						Cbe::Request::Success::FALSE,
+						0,
+						0,
+						1,
+						0,
+						0 };
+
+					_cbe->submit_client_request(req, 0);
+
+					_creating_snapshot = true;
 					progress |= true;
 				});
 			}
 
 			if (_creating_snapshot) {
-				Cbe::Token       token   { 0 };
-				Cbe::Snapshot_ID snap_id { 0, false };
 
-				if (_cbe->snapshot_creation_complete(token, snap_id)) {
-					_block_session->create_snapshot_done(token, snap_id);
+				Cbe::Request const &req {
+					_cbe->peek_completed_client_request() };
+
+				if (req.valid() &&
+				    req.operation() == Cbe::Request::Operation::CREATE_SNAPSHOT)
+				{
+					_block_session->create_snapshot_done({ 1, true }, req);
 					_creating_snapshot = false;
 
+					_cbe->drop_completed_client_request(req);
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;
 					} else {
