@@ -615,15 +615,15 @@ struct Cbe::Block_session_component
 		fn(*_test_in_progress->discard_snapshot);
 	}
 
-	void discard_snapshot_done(bool success)
+	void discard_snapshot_done(Cbe::Request const &req)
 	{
-		if (success) {
+		if (req.success() == Cbe::Request::Success::TRUE) {
 			log("discard snapshot succeeded: id ",
-		    _test_in_progress->discard_snapshot->id);
+			    _test_in_progress->discard_snapshot->id);
 		} else {
 			_nr_of_failed_tests++;
 			log("discard snapshot failed: id ",
-		    _test_in_progress->discard_snapshot->id);
+			    _test_in_progress->discard_snapshot->id);
 		}
 		_test_in_progress.destruct();
 	}
@@ -1425,7 +1425,7 @@ class Cbe::Main
 			 */
 
 			if (!_rekey && !_deinitialize && !_extend_vbd && !_extend_ft &&
-			    !_creating_snapshot)
+			    !_creating_snapshot && !_discard_snapshot)
 			{
 
 				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
@@ -1495,24 +1495,40 @@ class Cbe::Main
 
 			if (!_discard_snapshot) {
 				_block_session->with_discard_snapshot([&] (Discard_snapshot const ds) {
-					if (_cbe->discard_snapshot(ds.token, Cbe::Snapshot_ID { ds.id, true })) {
-						_discard_snapshot_obj = { ds.token, ds.id };
-						_discard_snapshot = true;
-					} else {
-						_block_session->discard_snapshot_done(false);
+
+					if (!_cbe->client_request_acceptable()) {
+						return;
 					}
+
+					Cbe::Request req {
+						Cbe::Request::Operation::DISCARD_SNAPSHOT,
+						Cbe::Request::Success::FALSE,
+						0,
+						0,
+						1,
+						0,
+						0 };
+
+					_cbe->submit_client_request(req, ds.id);
+					_discard_snapshot_obj = { ds.token, ds.id };
+					_discard_snapshot = true;
 					progress |= true;
 				});
 			}
 
 			if (_discard_snapshot) {
-				Cbe::Token token { 0 };
-				if (_cbe->discard_snapshot_complete(token)
-				    && token.value == _discard_snapshot_obj.token.value) {
-					_block_session->discard_snapshot_done(true);
+
+				Cbe::Request const &req {
+					_cbe->peek_completed_client_request() };
+
+				if (req.valid() &&
+				    req.operation() == Cbe::Request::Operation::DISCARD_SNAPSHOT)
+				{
+					_block_session->discard_snapshot_done(req);
 					_discard_snapshot_obj = { 0, 0 };
 					_discard_snapshot = false;
 
+					_cbe->drop_completed_client_request(req);
 					if (_block_session->cbe_request_next()) {
 						_state = CBE;
 					} else {

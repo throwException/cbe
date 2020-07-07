@@ -52,25 +52,6 @@ is
       Curr_SB :     Superblocks_Index_Type);
 
    --
-   --  Discard given quaratine snapshot
-   --
-   --  \param Snap_ID  id of the snapshot
-   --
-   procedure Discard_Snapshot (
-      Obj     : in out Object_Type;
-      Token   :        Token_Type;
-      Snap_ID :        Generation_Type;
-      Result  :    out Boolean);
-
-   --
-   --  Check if discard given quaratine snapshot is complete
-   --
-   procedure Discard_Snapshot_Complete (
-      Obj     :     Object_Type;
-      Token   : out Token_Type;
-      Result  : out Boolean);
-
-   --
    --  Return active snapshot ids
    --
    --  \param reference to id array
@@ -510,11 +491,6 @@ private
       FT_Rszg : FT_Resizing.Resizing_Type;
 
    end record;
-
-   procedure Try_Discard_Snapshot (
-      Snaps     : in out Snapshots_Type;
-      Keep_Snap :        Snapshots_Index_Type;
-      Success   :    out Boolean);
 
    function To_String (WFE : Wait_For_Event_Type) return String;
 

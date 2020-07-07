@@ -35,25 +35,6 @@ is
       External_Name =>
          "_ZN3Cbe7LibraryC2ERKNS_11SuperblocksERKNS_17Superblocks_indexE";
 
-   procedure Discard_Snapshot (
-      Obj     : in out Library.Object_Type;
-      Token   :        CXX_Token_Type;
-      Snap_ID :        CXX_Snapshot_ID_Type;
-      Result  :    out CXX_Bool_Type)
-   with
-      Export,
-      Convention    => C,
-      External_Name => "_ZN3Cbe7Library17_discard_snapshotEyyRb";
-
-   procedure Discard_Snapshot_Complete (
-      Obj     :     Library.Object_Type;
-      Token   : out CXX_Token_Type;
-      Result  : out CXX_Bool_Type)
-   with
-      Export,
-      Convention    => C,
-      External_Name => "_ZN3Cbe7Library26_discard_snapshot_completeERyRb";
-
    procedure Active_Snapshot_IDs (
       Obj :     Library.Object_Type;
       IDs : out Active_Snapshot_IDs_Type)

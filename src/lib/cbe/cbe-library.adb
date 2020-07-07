@@ -117,58 +117,6 @@ is
 
    end Initialize_Object;
 
-   procedure Discard_Snapshot (
-      Obj     : in out Object_Type;
-      Token   :        Token_Type;
-      Snap_ID :        Generation_Type;
-      Result  :    out Boolean)
-   is
-   begin
-      Result := False;
-
-      --
-      --  For now allow only one discard request to be pending.
-      --  That has to be changed later when the snapshot discard
-      --  operation is managed by the Job_Pool.
-      --
-      if Obj.Discarding_Snapshot then
-         return;
-      end if;
-
-      Loop_Discard_Snapshot :
-      for I in Snapshots_Index_Type loop
-         if Obj.Superblock.Snapshots (I).Valid and then
-            Obj.Superblock.Snapshots (I).Keep and then
-            Obj.Superblock.Snapshots (I).Gen = Snap_ID
-         then
-            Obj.Discard_Snap_ID   := Snap_ID;
-            Obj.Discard_Snap_Slot := I;
-            Result := True;
-            exit Loop_Discard_Snapshot;
-         end if;
-      end loop Loop_Discard_Snapshot;
-
-      if Result then
-         Declare_Discard_Sync_Request :
-         declare
-            Req : constant Request.Object_Type :=
-               Request.Valid_Object (
-                  Op     => Discard_Snapshot,
-                  Succ   => False,
-                  Blk_Nr => Block_Number_Type (0),
-                  Off    => 0,
-                  Cnt    => 1,
-                  Key    => 0,
-                  Tg     => 0);
-         begin
-            Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-         end Declare_Discard_Sync_Request;
-
-         Obj.Discarding_Snapshot := True;
-         Obj.Discard_Snap_Token  := Token;
-      end if;
-   end Discard_Snapshot;
-
    --
    --  Discard_Disposable_Snapshots
    --
@@ -198,24 +146,6 @@ is
       end loop For_Each_Snap;
 
    end Discard_Disposable_Snapshots;
-
-   procedure Discard_Snapshot_Complete (
-      Obj     :     Object_Type;
-      Token   : out Token_Type;
-      Result  : out Boolean)
-   is
-      R : constant Boolean :=
-         Obj.Discard_Snap_ID = Obj.Last_Discard_Snap_ID;
-   begin
-      if R and then Obj.Discarding_Snapshot = False
-      then
-         Token  := Obj.Discard_Snap_Token;
-         Result := True;
-      else
-         Token  := 0;
-         Result := False;
-      end if;
-   end Discard_Snapshot_Complete;
 
    procedure Active_Snapshot_IDs (
       Obj  :     Object_Type;
@@ -274,9 +204,38 @@ is
          Obj.Creating_Quarantine_Snapshot := True;
          Obj.Snap_Token := 1;
 
-      when
-         Discard_Snapshot | Initialize | Resume_Rekeying
-      =>
+      when Discard_Snapshot =>
+
+         if Obj.Discarding_Snapshot then
+            raise Program_Error;
+         end if;
+
+         Search_For_Snapshot :
+         for Idx in Snapshots_Index_Type loop
+
+            if Obj.Superblock.Snapshots (Idx).Valid and then
+               Obj.Superblock.Snapshots (Idx).Keep and then
+               Obj.Superblock.Snapshots (Idx).Gen = Generation_Type (ID)
+            then
+
+               Obj.Discarding_Snapshot := True;
+               Obj.Discard_Snap_ID := Generation_Type (ID);
+               Obj.Discard_Snap_Slot := Idx;
+               Obj.Discard_Snap_Token := 1;
+               exit Search_For_Snapshot;
+
+            end if;
+
+         end loop Search_For_Snapshot;
+
+         if not Obj.Discarding_Snapshot then
+            raise Program_Error;
+         end if;
+
+         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
+
+      when Initialize | Resume_Rekeying =>
+
          raise Program_Error;
 
       end case;
@@ -291,7 +250,6 @@ is
    begin
 
       case Request.Operation (Req) is
-
       when
          Read |
          Write |
@@ -300,15 +258,18 @@ is
          Extend_VBD |
          Extend_FT |
          Deinitialize |
-         Create_Snapshot
+         Create_Snapshot |
+         Discard_Snapshot
       =>
+
          return Req;
 
-      when
-         Discard_Snapshot | Initialize | Resume_Rekeying
-      =>
+      when Initialize | Resume_Rekeying =>
+
          return Request.Invalid_Object;
+
       end case;
+
    end Peek_Completed_Client_Request;
 
    procedure Drop_Completed_Client_Request (
@@ -806,33 +767,6 @@ is
          end if;
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
-
-   procedure Try_Discard_Snapshot (
-      Snaps     : in out Snapshots_Type;
-      Keep_Snap :        Snapshots_Index_Type;
-      Success   :    out Boolean)
-   is
-      Discard_Idx       : Snapshots_Index_Type := Snapshots_Index_Type'First;
-      Discard_Idx_Valid : Boolean              := False;
-   begin
-      For_Snapshots :
-      for Idx in Snapshots_Index_Type loop
-         if
-            Idx /= Keep_Snap and then
-            Snaps (Idx).Valid and then
-            not Snaps (Idx).Keep and then (
-               not Discard_Idx_Valid or else
-               Snaps (Idx).ID < Snaps (Discard_Idx).ID)
-         then
-            Discard_Idx       := Idx;
-            Discard_Idx_Valid := True;
-         end if;
-      end loop For_Snapshots;
-      if Discard_Idx_Valid then
-         Snaps (Discard_Idx) := Snapshot_Invalid;
-      end if;
-      Success := Discard_Idx_Valid;
-   end Try_Discard_Snapshot;
 
    function Curr_Snap (Obj : Object_Type)
    return Snapshots_Index_Type
@@ -3264,9 +3198,6 @@ is
                      if Request.Operation (Req) = Discard_Snapshot then
 
                         Obj.Last_Discard_Snap_ID := Obj.Discard_Snap_ID;
-
-                        Request_Pool.Drop_Completed_Request (
-                           Obj.Request_Pool_Obj, Req);
 
                         Obj.Discarding_Snapshot := False;
                      end if;

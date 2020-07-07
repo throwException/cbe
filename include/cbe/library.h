@@ -54,9 +54,6 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 		void _crypto_cipher_data_required(Request &, Crypto_plain_buffer::Index &) const;
 		void _crypto_plain_data_required(Request &, Crypto_cipher_buffer::Index &) const;
 
-		void _discard_snapshot(uint64_t, uint64_t, bool &);
-		void _discard_snapshot_complete(uint64_t &, bool &);
-
 	public:
 
 	/**
@@ -250,36 +247,6 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 	{
 		bool result = false;
 		_supply_client_data(now, request, data, result);
-		return result;
-	}
-
-	/**
-	 * Discard given snapshot
-	 *
-	 * \param id  id of the snapshot that should be discarded
-	 *
-	 * \return true if discard attempt was successful, false otherwise
-	 */
-	bool discard_snapshot(Token token, Snapshot_ID id)
-	{
-		bool result = false;
-		_discard_snapshot(token.value, id.value, result);
-		return result;
-	}
-
-	/**
-	 * Check completion state of snapshot discard
-	 *
-	 * The parameter is only usable of the method returned true.
-	 *
-	 * \param token token of the completed snapshot request
-	 *
-	 * \return true if snapshot discard is complete, false otherwise
-	 */
-	bool discard_snapshot_complete(Token &token)
-	{
-		bool result = false;
-		_discard_snapshot_complete(token.value, result);
 		return result;
 	}
 
