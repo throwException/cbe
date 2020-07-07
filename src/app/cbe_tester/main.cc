@@ -136,7 +136,8 @@ struct Cbe::Block_session_component
 			EXTEND_FT,
 			INITIALIZE,
 			CHECK,
-			DUMP
+			DUMP,
+			LIST_SNAPSHOTS
 		};
 
 		Type                                   type             { INVALID };
@@ -299,6 +300,13 @@ struct Cbe::Block_session_component
 		_test_queue.enqueue(test);
 	}
 
+	void _read_list_snapshots_node()
+	{
+		Test &test = *new (_alloc) Test;
+		test.type = Test::LIST_SNAPSHOTS;
+		_test_queue.enqueue(test);
+	}
+
 	void _read_extend_vbd_node(Xml_node const &node)
 	{
 		struct Bad_extend_vbd_node : Exception { };
@@ -353,6 +361,8 @@ struct Cbe::Block_session_component
 					_read_rekey_node();
 				} else if (sub_node.has_type("deinitialize")) {
 					_read_deinitialize_node();
+				} else if (sub_node.has_type("list-snapshots")) {
+					_read_list_snapshots_node();
 				} else if (sub_node.has_type("extend-vbd")) {
 					_read_extend_vbd_node(sub_node);
 				} else if (sub_node.has_type("extend-ft")) {
@@ -660,6 +670,41 @@ struct Cbe::Block_session_component
 		log("deinitialize started");
 
 		fn();
+	}
+
+	template <typename FN>
+	void with_list_snapshots(FN const &fn)
+	{
+		if (_test_in_progress.constructed()) {
+			return;
+		}
+		bool head_available { false };
+		bool head_has_correct_type { false };
+		_test_queue.head([&] (Test &test) {
+			head_available = true;
+			if (test.type == Test::LIST_SNAPSHOTS) {
+				head_has_correct_type = true;
+			}
+		});
+		if (!head_available) {
+			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
+			if (_nr_of_failed_tests > 0) {
+				_env.parent().exit(-1);
+			} else {
+				_env.parent().exit(0);
+			}
+		}
+		if (!head_has_correct_type) {
+			return;
+		}
+		_test_queue.dequeue([&] (Test &test) {
+			_test_in_progress.construct(test);
+			destroy(_alloc, &test);
+		});
+		log("list snapshots:");
+
+		fn();
+		_test_in_progress.destruct();
 	}
 
 	void deinitialize_done(bool success)
@@ -1586,6 +1631,18 @@ class Cbe::Main
 					progress |= true;
 				}
 			}
+
+			_block_session->with_list_snapshots([&] () {
+				Active_snapshot_ids ids;
+				_cbe->active_snapshot_ids(ids);
+				unsigned snap_nr { 0 };
+				for (unsigned idx { 0 }; idx < sizeof(ids.values) / sizeof(ids.values[0]); idx++) {
+					if (ids.values[idx] != 0) {
+						log("   snap ", snap_nr, " generation ", ids.values[idx]);
+						snap_nr++;
+					}
+				}
+			});
 
 			if (!_rekey) {
 				_block_session->with_rekey([&] () {
