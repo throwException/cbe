@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Genode Labs GmbH, Componolit GmbH, secunet AG
+ * Copyright (C) 2019-2020 Genode Labs GmbH, Componolit GmbH, secunet AG
  *
  * This file is part of the Consistent Block Encrypter project, which is
  * distributed under the terms of the GNU Affero General Public License
@@ -19,6 +19,9 @@
 /* cbe includes */
 #include <cbe/library.h>
 #include <cbe/external_crypto.h>
+
+/* local includes */
+#include "io_job.h"
 
 
 namespace Vfs_cbe {
@@ -71,8 +74,10 @@ class Vfs_cbe::Wrapper
 {
 	private:
 
-		Vfs::Env          &_env;
-		Vfs_handle *_backend { nullptr };
+		Vfs::Env &_env;
+
+		Vfs_handle            *_backend_handle { nullptr };
+		Constructible<Io_job>  _backend_job { };
 
 		friend struct Backend_io_response_handler;
 
@@ -221,10 +226,10 @@ class Vfs_cbe::Wrapper
 			 */
 			for (uint64_t i = 0; i < Cbe::NUM_SUPER_BLOCKS; i++) {
 				file_size bytes = 0;
-				_backend->seek(i * Cbe::BLOCK_SIZE);
+				_backend_handle->seek(i * Cbe::BLOCK_SIZE);
 				Cbe::Superblock &dst = sbs.block[i];
 
-				if (!_backend->fs().queue_read(_backend, Cbe::BLOCK_SIZE)) {
+				if (!_backend_handle->fs().queue_read(_backend_handle, Cbe::BLOCK_SIZE)) {
 					error("queue_read failed");
 					return Cbe::Superblocks_index(0);
 				}
@@ -233,8 +238,8 @@ class Vfs_cbe::Wrapper
 
 				while (true) {
 
-					Result const result = _backend->fs().complete_read(
-						_backend, (char*)&dst, Cbe::BLOCK_SIZE, bytes);
+					Result const result = _backend_handle->fs().complete_read(
+						_backend_handle, (char*)&dst, Cbe::BLOCK_SIZE, bytes);
 
 					if (   result == Result::READ_QUEUED
 						|| result == Result::READ_ERR_INTERRUPT
@@ -296,7 +301,7 @@ class Vfs_cbe::Wrapper
 
 			Result res = _env.root_dir().open(_block_device.string(),
 			                                  Vfs::Directory_service::OPEN_MODE_RDWR,
-			                                       (Vfs::Vfs_handle **)&_backend,
+			                                       (Vfs::Vfs_handle **)&_backend_handle,
 			                                       _env.alloc());
 			if (res != Result::OPEN_OK) {
 				error("cbe_fs: Could not open back end block device: '", _block_device, "'");
@@ -333,253 +338,10 @@ class Vfs_cbe::Wrapper
 				break;
 			}
 
-			_backend->handler(&_backend_io_response_handler);
+			_backend_handle->handler(&_backend_io_response_handler);
 			_cbe.construct(_super_blocks, _cur_sb);
 		}
 
-		struct Backend_request
-		{
-			enum State {
-				NONE,
-				READ_PENDING, READ_IN_PROGRESS, READ_COMPLETE,
-				WRITE_PENDING, WRITE_IN_PROGRESS, WRITE_COMPLETE,
-				SYNC_PENDING, SYNC_IN_PROGRESS, SYNC_COMPLETE,
-				ERROR,
-			};
-
-			static char const *state_to_string(State s)
-			{
-				switch (s) {
-				case State::NONE:              return "NONE";
-				case State::READ_PENDING:      return "READ_PENDING";
-				case State::READ_IN_PROGRESS:  return "READ_IN_PROGRESS";
-				case State::READ_COMPLETE:     return "READ_COMPLETE";
-				case State::WRITE_PENDING:     return "WRITE_PENDING";
-				case State::WRITE_IN_PROGRESS: return "WRITE_IN_PROGRESS";
-				case State::WRITE_COMPLETE:    return "WRITE_COMPLETE";
-				case State::SYNC_PENDING:      return "SYNC_PENDING";
-				case State::SYNC_IN_PROGRESS:  return "SYNC_IN_PROGRESS";
-				case State::SYNC_COMPLETE:     return "SYNC_COMPLETE";
-				case State::ERROR:             return "ERROR";
-				}
-				return "<unknown>";
-			}
-			State           state       { NONE };
-			Cbe::Block_data block_data  { };
-			Cbe::Request    cbe_request { };
-			file_size       count       { 0 };
-			bool            success     { false };
-		};
-
-		Backend_request _backend_request { };
-
-		bool _backend_read(Cbe::Request &request,
-		                   Cbe::Io_buffer::Index const data_index)
-		{
-			bool progress = false;
-
-			switch (_backend_request.state) {
-			case Backend_request::State::NONE:
-
-				_backend_request.count = request.count() * Cbe::BLOCK_SIZE;
-				if (_backend_request.count > sizeof (_backend_request.block_data)) {
-					struct Buffer_too_small { };
-					throw Buffer_too_small ();
-				}
-
-				request.tag(data_index.value);
-
-				_backend_request.cbe_request = request;
-				_backend_request.state       = Backend_request::State::READ_PENDING;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::READ_PENDING:
-
-				_backend->seek(request.block_number() * Cbe::BLOCK_SIZE);
-				if (!_backend->fs().queue_read(_backend, _backend_request.count)) {
-					return progress;
-				}
-
-				_cbe->io_request_in_progress(data_index);
-				_backend_request.state = Backend_request::State::READ_IN_PROGRESS;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::READ_IN_PROGRESS:
-			{
-				using Result = Vfs::File_io_service::Read_result;
-
-				file_size out = 0;
-
-				char * const data = reinterpret_cast<char* const>(&_backend_request.block_data);
-				Result const result =
-					_backend->fs().complete_read(_backend, data,
-					                             _backend_request.count, out);
-				if (   result == Result::READ_QUEUED
-				    || result == Result::READ_ERR_INTERRUPT
-				    || result == Result::READ_ERR_AGAIN
-				    || result == Result::READ_ERR_WOULD_BLOCK) {
-					return progress;
-				}
-
-				if (result == Result::READ_OK) {
-					_io_data.item(data_index) = _backend_request.block_data;
-					_backend_request.success = true;
-				}
-
-				if (   result == Result::READ_ERR_IO
-				    || result == Result::READ_ERR_INVALID
-				    /* partial read not supported */
-				    || out != _backend_request.count) {
-					_backend_request.success = false;
-				}
-				_backend_request.state = Backend_request::State::READ_COMPLETE;
-				progress = true;
-			}
-			[[fallthrough]]
-			case Backend_request::State::READ_COMPLETE:
-
-				_cbe->io_request_completed(data_index, _backend_request.success);
-				_backend_request.cbe_request = Cbe::Request();
-				_backend_request.state       = Backend_request::State::NONE;
-				progress = true;
-			default: break;
-			}
-
-			return progress;
-		}
-
-		bool _backend_write(Cbe::Request &request,
-		                    Cbe::Io_buffer::Index const data_index)
-		{
-			bool progress = false;
-
-			switch (_backend_request.state) {
-			case Backend_request::State::NONE:
-
-				_backend_request.count = request.count() * Cbe::BLOCK_SIZE;
-				if (_backend_request.count > sizeof (_backend_request.block_data)) {
-					struct Buffer_too_small { };
-					throw Buffer_too_small ();
-				}
-
-				request.tag(data_index.value);
-
-				_backend_request.cbe_request = request;
-				_backend_request.state       = Backend_request::State::WRITE_PENDING;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::WRITE_PENDING:
-
-				_backend->seek(request.block_number() * Cbe::BLOCK_SIZE);
-
-				_backend_request.block_data = _io_data.item(data_index);
-				_cbe->io_request_in_progress(data_index);
-				_backend_request.state = Backend_request::State::WRITE_IN_PROGRESS;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::WRITE_IN_PROGRESS:
-			{
-				using Result = Vfs::File_io_service::Write_result;
-
-				file_size out = 0;
-
-				Result result = Result::WRITE_ERR_INVALID;
-				try {
-					char const * const data =
-						reinterpret_cast<char const * const>(&_backend_request.block_data);
-					result = _backend->fs().write(_backend, data,
-					                              _backend_request.count, out);
-				} catch (Vfs::File_io_service::Insufficient_buffer) {
-					return progress;
-				}
-				if (   result == Result::WRITE_ERR_AGAIN
-				    || result == Result::WRITE_ERR_INTERRUPT
-				    || result == Result::WRITE_ERR_WOULD_BLOCK) {
-					return progress;
-				}
-				if (result == Result::WRITE_OK) {
-				    /* partial write not supported */
-					_backend_request.success =
-						out == _backend_request.count;
-				}
-
-				if (   result == Result::WRITE_ERR_IO
-				    || result == Result::WRITE_ERR_INVALID
-				    /* partial write not supported */
-				    || out != _backend_request.count) {
-					_backend_request.success = false;
-				}
-				_backend_request.state = Backend_request::State::WRITE_COMPLETE;
-				progress = true;
-			}
-			[[fallthrough]]
-			case Backend_request::State::WRITE_COMPLETE:
-
-				_cbe->io_request_completed(data_index, _backend_request.success);
-				_backend_request.cbe_request = Cbe::Request();
-				_backend_request.state       = Backend_request::State::NONE;
-				progress = true;
-			default: break;
-			}
-
-			return progress;
-		}
-
-		bool _backend_sync(Cbe::Request &request,
-		                   Cbe::Io_buffer::Index const data_index)
-		{
-			bool progress = false;
-
-			switch (_backend_request.state) {
-			case Backend_request::State::NONE:
-
-				request.tag(data_index.value);
-
-				_backend_request.cbe_request = request;
-				_backend_request.state       = Backend_request::State::SYNC_PENDING;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::SYNC_PENDING:
-
-				if (!_backend->fs().queue_sync(_backend)) {
-					return progress;
-				}
-				_cbe->io_request_in_progress(data_index);
-				_backend_request.state = Backend_request::State::SYNC_IN_PROGRESS;
-				progress = true;
-			[[fallthrough]]
-			case Backend_request::State::SYNC_IN_PROGRESS:
-			{
-				using Result = Vfs::File_io_service::Sync_result;
-				Result const result = _backend->fs().complete_sync(_backend);
-
-				if (result == Result::SYNC_QUEUED) {
-					return progress;
-				}
-
-				if (result == Result::SYNC_ERR_INVALID) {
-					_backend_request.success = false;
-				}
-
-				if (result == Result::SYNC_OK) {
-					_backend_request.success = true;
-				}
-
-				_backend_request.state = Backend_request::State::SYNC_COMPLETE;
-				progress = true;
-			}
-			[[fallthrough]]
-			case Backend_request::State::SYNC_COMPLETE:
-
-				_cbe->io_request_completed(data_index, _backend_request.success);
-				_backend_request.cbe_request = Cbe::Request();
-				_backend_request.state       = Backend_request::State::NONE;
-				progress = true;
-			default: break;
-			}
-
-			return progress;
-		}
 
 	public:
 
@@ -783,46 +545,30 @@ class Vfs_cbe::Wrapper
 			return true;
 		}
 
-		bool _handle_cbe_backend(Cbe::Library &cbe, Backend_request &req)
+		bool _handle_cbe_backend(Cbe::Library &cbe, Cbe::Io_buffer &io_data)
 		{
-			using ST = Backend_request::State;
-
-			bool progress = false;
-
 			Cbe::Io_buffer::Index data_index { 0 };
-			Cbe::Request cbe_request = _cbe->has_io_request(data_index);
-			if (cbe_request.valid() && req.state == ST::NONE) {
+			Cbe::Request cbe_request = cbe.has_io_request(data_index);
 
-				if (cbe_request.read()) {
-					progress |= _backend_read(cbe_request, data_index);
-				} else if (cbe_request.write()) {
-					progress |= _backend_write(cbe_request, data_index);
-				} else if (cbe_request.sync()) {
-					progress |= _backend_sync(cbe_request, data_index);
-				} else {
-					Genode::error("invalid cbe_request");
-					throw -1;
-				}
+			if (cbe_request.valid() && !_backend_job.constructed()) {
+
+				file_offset const base_offset = cbe_request.block_number()
+				                              * Cbe::BLOCK_SIZE;
+				file_size const count = cbe_request.count()
+				                      * Cbe::BLOCK_SIZE;
+
+				_backend_job.construct(*_backend_handle, cbe_request.operation(),
+				                       data_index, base_offset, count);
 			}
 
-			if (req.state != ST::NONE) {
-				Cbe::Io_buffer::Index const data_index {
-					req.cbe_request.tag() };
+			if (!_backend_job.constructed()) {
+				return false;
+			}
 
-				if (req.cbe_request.valid()) {
-					if (req.cbe_request.read()) {
-						progress |= _backend_read(req.cbe_request, data_index);
-					} else if (req.cbe_request.write()) {
-						progress |= _backend_write(req.cbe_request, data_index);
-					} else if (req.cbe_request.sync()) {
-						progress |= _backend_sync(req.cbe_request, data_index);
-					} else {
-						Genode::error("invalid req.cbe_request");
-						throw -1;
-					}
-				} else {
-					Genode::warning("req.cbe_request no longer valid");
-				}
+			bool progress = _backend_job->execute(cbe, io_data);
+
+			if (_backend_job->completed()) {
+				_backend_job.destruct();
 			}
 
 			return progress;
@@ -1196,9 +942,7 @@ class Vfs_cbe::Wrapper
 				static uint64_t cnt = 0;
 				log("FE: ", Frontend_request::state_to_string(_frontend_request.state),
 				     " (", _frontend_request.cbe_request, ") ",
-				    "BE: ", Backend_request::state_to_string(_backend_request.state),
-				     " (", _backend_request.cbe_request, ") ",
-				    ++cnt);
+				    "BE: ", *_backend_job, " ", ++cnt);
 			}
 		}
 
@@ -1212,8 +956,7 @@ class Vfs_cbe::Wrapper
 					_handle_cbe_frontend(*_cbe, _frontend_request);
 				progress |= frontend_progress;
 
-				bool const backend_progress =
-					_handle_cbe_backend(*_cbe, _backend_request);
+				bool const backend_progress = _handle_cbe_backend(*_cbe, _io_data);
 				progress |= backend_progress;
 
 				bool const crypto_progress =
