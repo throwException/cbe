@@ -967,6 +967,53 @@ is
    end Mark_Generated_Primitive_Complete_SB_State;
 
    --
+   --  Mark_Generated_Primitive_Complete_Generation
+   --
+   procedure Mark_Generated_Primitive_Complete_Generation (
+      Obj     : in out Object_Type;
+      Idx     :        Pool_Index_Type;
+      Success :        Boolean;
+      Gen     :        Generation_Type)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) or else
+         Index_Queue.Head (Obj.Indices) /= Idx
+      then
+         raise Program_Error;
+      end if;
+
+      case Request.Operation (Obj.Jobs (Idx).Req) is
+      when Create_Snapshot =>
+
+         if Obj.Jobs (Idx).State /= In_Progress then
+            raise Program_Error;
+         end if;
+
+         Request.Success (Obj.Jobs (Idx).Req, Success);
+         Request.Offset (Obj.Jobs (Idx).Req, Request.Offset_Type (Gen));
+
+         Obj.Jobs (Idx).Nr_Of_Prims_Completed :=
+            Obj.Jobs (Idx).Nr_Of_Prims_Completed + 1;
+
+         if Obj.Jobs (Idx).Nr_Of_Prims_Completed <
+               Job_Nr_Of_Prims (Obj.Jobs (Idx))
+         then
+            Obj.Jobs (Idx).State := Pending;
+         else
+            Obj.Jobs (Idx).State := Complete;
+            Index_Queue.Dequeue (Obj.Indices, Idx);
+         end if;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Mark_Generated_Primitive_Complete_Generation;
+
+   --
    --  Mark_Generated_Primitive_Complete
    --
    procedure Mark_Generated_Primitive_Complete (
@@ -1011,7 +1058,7 @@ is
 
          end case;
 
-      when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+      when Read | Write | Sync | Discard_Snapshot =>
 
          if Obj.Jobs (Idx).State /= In_Progress then
             raise Program_Error;

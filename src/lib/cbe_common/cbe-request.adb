@@ -98,6 +98,14 @@ is
       Obj.Success := Succ;
    end Success;
 
+   procedure Offset (
+      Obj : in out Object_Type;
+      Off :        Offset_Type)
+   is
+   begin
+      Obj.Offset := Off;
+   end Offset;
+
    function To_String (B : Block_Number_Type) return String
    is
    begin

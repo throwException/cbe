@@ -126,6 +126,15 @@ is
       SB_State :        Superblock_State_Type);
 
    --
+   --  Mark_Generated_Primitive_Complete_Generation
+   --
+   procedure Mark_Generated_Primitive_Complete_Generation (
+      Obj     : in out Object_Type;
+      Idx     :        Pool_Index_Type;
+      Success :        Boolean;
+      Gen     :        Generation_Type);
+
+   --
    --  Peek_Completed_Request
    --
    function Peek_Completed_Request (Obj : Object_Type)

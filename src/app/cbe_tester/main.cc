@@ -47,30 +47,88 @@ namespace Cbe {
 	struct Main;
 }
 
+
+struct Create_snapshot_id
+{
+	uint64_t value;
+
+	Create_snapshot_id (uint64_t value) : value { value } { }
+};
+
+
 struct Create_snapshot
 {
-	Cbe::Token token;
-	bool       quarantine;
+	Create_snapshot_id id;
 
-	Create_snapshot(Cbe::Token token,
-	                bool       quarantine)
-	:
-		token      { token },
-		quarantine { quarantine }
-	{ }
+	Create_snapshot(Create_snapshot_id id) : id { id } { }
+};
+
+
+struct Failed_to_find_created_snapshot : Genode::Exception { };
+
+
+class Created_snapshot : public Avl_node<Created_snapshot>
+{
+	private:
+
+		Create_snapshot_id _id;
+		Cbe::Generation    _generation;
+
+	public:
+
+		Created_snapshot(Create_snapshot_id id,
+		                 Cbe::Generation    generation)
+		:
+			_id         { id },
+			_generation { generation }
+		{ }
+
+		Created_snapshot &find_by_id(Create_snapshot_id const &id)
+		{
+			if (id.value == _id.value) {
+				return *this;
+			}
+			bool const side =  _id.value > id.value;
+			Created_snapshot *const snap = child(side);
+			if (!snap) {
+				throw Failed_to_find_created_snapshot();
+			}
+			return snap->find_by_id(id);
+		}
+
+		Cbe::Generation generation() const { return _generation; }
+
+
+		/**************
+		 ** Avl_node **
+		 **************/
+
+		bool higher(Created_snapshot *other)
+		{
+			return _id.value > other->_id.value;
+		}
+};
+
+
+class Created_snapshots_tree : public Avl_tree<Created_snapshot>
+{
+	public:
+
+		Created_snapshot &find_by_id(Create_snapshot_id const &id)
+		{
+			if (!first()) {
+				throw Failed_to_find_created_snapshot();
+			}
+			return first()->find_by_id(id);
+		}
 };
 
 
 struct Discard_snapshot
 {
-	Cbe::Token token;
-	uint64_t   id;
+	Create_snapshot_id id;
 
-	Discard_snapshot(Cbe::Token token, uint64_t id)
-	:
-		token { token },
-		id    { id }
-	{ }
+	Discard_snapshot(Create_snapshot_id id) : id { id } { }
 };
 
 
@@ -205,6 +263,7 @@ struct Cbe::Block_session_component
 	Constructible<Test>     _test_in_progress { };
 	unsigned long           _nr_of_failed_tests { 0 };
 	Block_data              _blk_data { };
+	Created_snapshots_tree  _created_snapshots { };
 
 	void _read_request_node (Xml_node const &node)
 	{
@@ -247,19 +306,14 @@ struct Cbe::Block_session_component
 	{
 		struct Bad_create_snapshot_node : Exception { };
 		try {
-			Cbe::Token token { 0 };
-			bool quarantine { false };
-			if (!node.attribute("id").value(token.value)) {
+			Create_snapshot_id id { 0 };
+			if (!node.attribute("id").value(id.value)) {
 				error("create-snapshot node has bad id attribute");
-				throw Bad_create_snapshot_node();
-			}
-			if (!node.attribute("quarantine").value(quarantine)) {
-				error("create-snapshot node has bad quarantine attribute");
 				throw Bad_create_snapshot_node();
 			}
 			Test &test = *new (_alloc) Test;
 			test.type = Test::CREATE_SNAPSHOT;
-			test.create_snapshot.construct(token, quarantine);
+			test.create_snapshot.construct(id);
 			_test_queue.enqueue(test);
 		} catch (Xml_node::Nonexistent_attribute) {
 			error("create-snapshot node misses attribute");
@@ -271,14 +325,14 @@ struct Cbe::Block_session_component
 	{
 		struct Bad_discard_snapshot_node : Exception { };
 		try {
-			uint64_t id { 0 };
-			if (!node.attribute("id").value(id)) {
+			Create_snapshot_id id { 0 };
+			if (!node.attribute("id").value(id.value)) {
 				error("discard-snapshot node has bad id attribute");
 				throw Bad_discard_snapshot_node();
 			}
 			Test &test = *new (_alloc) Test;
 			test.type = Test::DISCARD_SNAPSHOT;
-			test.discard_snapshot.construct(Token { id }, id);
+			test.discard_snapshot.construct(id);
 			_test_queue.enqueue(test);
 		} catch (Xml_node::Nonexistent_attribute) {
 			error("discard-snapshot node misses attribute");
@@ -553,39 +607,32 @@ struct Cbe::Block_session_component
 			_test_in_progress.construct(test);
 			destroy(_alloc, &test);
 		});
-		log("create snapshot started: token ",
-		    _test_in_progress->create_snapshot->token,
-		    ", quarantine ",
-		    _test_in_progress->create_snapshot->quarantine);
+		log("create snapshot started: id ",
+		    _test_in_progress->create_snapshot->id.value);
 
 		fn(*_test_in_progress->create_snapshot);
 	}
 
-	void create_snapshot_failed()
-	{
-		_nr_of_failed_tests++;
-		log("create snapshot failed: token ",
-		    _test_in_progress->create_snapshot->token,
-		    ", quarantine ",
-		    _test_in_progress->create_snapshot->quarantine);
-		_test_in_progress.destruct();
-	}
-
-	void create_snapshot_done(Cbe::Snapshot_ID id,
-	                          Cbe::Request const &req)
+	void create_snapshot_done(Cbe::Request const &req,
+	                          Genode::Allocator  &alloc)
 	{
 		if (req.success() == Cbe::Request::Success::TRUE) {
-			log("create snapshot succeeded: token ",
-			    _test_in_progress->create_snapshot->token,
-			    ", id ", id,
-			    ", quarantine ",
-			    _test_in_progress->create_snapshot->quarantine);
+
+			log("create snapshot succeeded:",
+			    " id ", _test_in_progress->create_snapshot->id.value,
+			    " generation ", (Generation)req.offset());
+
+			_created_snapshots.insert(
+				new (alloc)
+					Created_snapshot(
+						_test_in_progress->create_snapshot->id,
+						(Generation)req.offset()));
+
 		} else {
 			_nr_of_failed_tests++;
-			log("create snapshot failed: token ",
-			    _test_in_progress->create_snapshot->token,
-			    ", quarantine ",
-			    _test_in_progress->create_snapshot->quarantine);
+			log("create snapshot failed:"
+			    " id ",
+			    _test_in_progress->create_snapshot->id.value);
 		}
 		_test_in_progress.destruct();
 	}
@@ -619,21 +666,46 @@ struct Cbe::Block_session_component
 			_test_in_progress.construct(test);
 			destroy(_alloc, &test);
 		});
-		log("discard snapshot started: id ",
-		    _test_in_progress->discard_snapshot->id);
 
-		fn(*_test_in_progress->discard_snapshot);
+		try {
+			Created_snapshot const &snap {
+				_created_snapshots.find_by_id(
+					_test_in_progress->discard_snapshot->id) };
+
+			log("discard snapshot started: id ",
+				_test_in_progress->discard_snapshot->id.value,
+				" generation ",
+				snap.generation());
+
+			fn(snap.generation());
+		}
+		catch (Failed_to_find_created_snapshot) {
+			_nr_of_failed_tests++;
+			log("discard snapshot failed (unknown snapshot): id ",
+			    _test_in_progress->discard_snapshot->id.value);
+			_test_in_progress.destruct();
+		}
 	}
 
-	void discard_snapshot_done(Cbe::Request const &req)
+	void discard_snapshot_done(Cbe::Request const &req,
+	                           Genode::Allocator &alloc)
 	{
 		if (req.success() == Cbe::Request::Success::TRUE) {
+
+			Created_snapshot &snap {
+				_created_snapshots.find_by_id(
+					_test_in_progress->discard_snapshot->id) };
+
+			_created_snapshots.remove(&snap);
+			destroy(alloc, &snap);
+
 			log("discard snapshot succeeded: id ",
-			    _test_in_progress->discard_snapshot->id);
+			    _test_in_progress->discard_snapshot->id.value);
+
 		} else {
 			_nr_of_failed_tests++;
 			log("discard snapshot failed: id ",
-			    _test_in_progress->discard_snapshot->id);
+			    _test_in_progress->discard_snapshot->id.value);
 		}
 		_test_in_progress.destruct();
 	}
@@ -1083,7 +1155,6 @@ class Cbe::Main
 		Cbe::Snapshot_ID                        _creating_snapshot_id    { 0, false };
 		bool                                    _creating_snapshot       { false };
 		bool                                    _discard_snapshot        { false };
-		Discard_snapshot                        _discard_snapshot_obj    { 0, 0 };
 		bool                                    _rekey                   { false };
 		bool                                    _deinitialize            { false };
 		bool                                    _extend_vbd              { false };
@@ -1525,7 +1596,9 @@ class Cbe::Main
 				if (req.valid() &&
 				    req.operation() == Cbe::Request::Operation::CREATE_SNAPSHOT)
 				{
-					_block_session->create_snapshot_done({ 1, true }, req);
+					
+					_block_session->create_snapshot_done(req, _heap);
+
 					_creating_snapshot = false;
 
 					_cbe->drop_completed_client_request(req);
@@ -1539,8 +1612,8 @@ class Cbe::Main
 			}
 
 			if (!_discard_snapshot) {
-				_block_session->with_discard_snapshot([&] (Discard_snapshot const ds) {
-
+				_block_session->with_discard_snapshot([&] (Generation gen)
+				{
 					if (!_cbe->client_request_acceptable()) {
 						return;
 					}
@@ -1554,8 +1627,7 @@ class Cbe::Main
 						0,
 						0 };
 
-					_cbe->submit_client_request(req, ds.id);
-					_discard_snapshot_obj = { ds.token, ds.id };
+					_cbe->submit_client_request(req, gen);
 					_discard_snapshot = true;
 					progress |= true;
 				});
@@ -1569,8 +1641,7 @@ class Cbe::Main
 				if (req.valid() &&
 				    req.operation() == Cbe::Request::Operation::DISCARD_SNAPSHOT)
 				{
-					_block_session->discard_snapshot_done(req);
-					_discard_snapshot_obj = { 0, 0 };
+					_block_session->discard_snapshot_done(req, _heap);
 					_discard_snapshot = false;
 
 					_cbe->drop_completed_client_request(req);
