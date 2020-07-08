@@ -411,14 +411,9 @@ private
 
       Write_Stalled : Boolean;
 
-      Snap_Token : Token_Type;
-      Snap_Gen   : Generation_Type;
-
-      Discarding_Snapshot  : Boolean;
-      Discard_Snap_ID      : Generation_Type;
-      Discard_Snap_Token   : Token_Type;
-      Last_Discard_Snap_ID : Generation_Type;
-      Discard_Snap_Slot    : Snapshots_Index_Type;
+      Creating_Snap : Boolean;
+      Discarding_Snap : Boolean;
+      Discarding_Snap_Idx : Snapshots_Index_Type;
 
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;
@@ -442,7 +437,6 @@ private
       Last_Secured_Generation      : Generation_Type;
       Secure_Superblock            : Boolean;
       Wait_For_Front_End           : Wait_For_Event_Type;
-      Creating_Quarantine_Snapshot : Boolean;
       Superblock                   : Superblock_Type;
 
       SCD_State    : SCD_State_Type;

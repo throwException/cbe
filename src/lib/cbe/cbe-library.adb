@@ -61,9 +61,9 @@ is
 
       Obj.Free_Tree_Retry_Count   := 0;
 
-      Obj.Secure_Superblock            := False;
-      Obj.Wait_For_Front_End           := Wait_For_Event_Invalid;
-      Obj.Creating_Quarantine_Snapshot := False;
+      Obj.Secure_Superblock := False;
+      Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
+      Obj.Creating_Snap := False;
 
       Obj.Superblock := SBs (Curr_SB);
       Obj.Cur_Gen :=
@@ -73,14 +73,9 @@ is
 
       --  XXX partially unused as long as snapshot creation is disabled
       Obj.Last_Secured_Generation := 0;
-      Obj.Snap_Gen := 0;
-      Obj.Snap_Token := 0;
 
-      Obj.Discarding_Snapshot  := False;
-      Obj.Discard_Snap_ID      := 0;
-      Obj.Discard_Snap_Slot    := Snapshots_Index_Type'First;
-      Obj.Discard_Snap_Token   := 0;
-      Obj.Last_Discard_Snap_ID := 0;
+      Obj.Discarding_Snap  := False;
+      Obj.Discarding_Snap_Idx    := Snapshots_Index_Type'First;
 
       Obj.SCD_State       := Inactive;
       Obj.SCD_Req         := Request.Invalid_Object;
@@ -196,17 +191,16 @@ is
          --  That has to be changed later when the snapshot creation opertion
          --  is managed by the Job_Pool.
          --
-         if Obj.Creating_Quarantine_Snapshot then
+         if Obj.Creating_Snap then
             raise Program_Error;
          end if;
 
          Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
-         Obj.Creating_Quarantine_Snapshot := True;
-         Obj.Snap_Token := 1;
+         Obj.Creating_Snap := True;
 
       when Discard_Snapshot =>
 
-         if Obj.Discarding_Snapshot then
+         if Obj.Discarding_Snap then
             raise Program_Error;
          end if;
 
@@ -218,17 +212,15 @@ is
                Obj.Superblock.Snapshots (Idx).Gen = Generation_Type (ID)
             then
 
-               Obj.Discarding_Snapshot := True;
-               Obj.Discard_Snap_ID := Generation_Type (ID);
-               Obj.Discard_Snap_Slot := Idx;
-               Obj.Discard_Snap_Token := 1;
+               Obj.Discarding_Snap := True;
+               Obj.Discarding_Snap_Idx := Idx;
                exit Search_For_Snapshot;
 
             end if;
 
          end loop Search_For_Snapshot;
 
-         if not Obj.Discarding_Snapshot then
+         if not Obj.Discarding_Snap then
             raise Program_Error;
          end if;
 
@@ -1864,8 +1856,8 @@ is
                not Primitive.Valid (Prim) or else
                not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
 
-            Obj.Superblock.Snapshots (Obj.Discard_Snap_Slot).Keep := False;
-            Obj.Superblock.Snapshots (Obj.Discard_Snap_Slot).Valid := False;
+            Obj.Superblock.Snapshots (Obj.Discarding_Snap_Idx).Keep := False;
+            Obj.Superblock.Snapshots (Obj.Discarding_Snap_Idx).Valid := False;
             Sync_Superblock.Submit_Request (
                Obj.Sync_SB_Obj,
                Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
@@ -3166,7 +3158,7 @@ is
 
             if not Obj.Write_Stalled then
 
-               if not Obj.Creating_Quarantine_Snapshot then
+               if not Obj.Creating_Snap then
 
                   Request_Pool.Mark_Generated_Primitive_Complete (
                      Obj.Request_Pool_Obj,
@@ -3185,7 +3177,7 @@ is
                      Request_Pool.Request_For_Index (
                         Obj.Request_Pool_Obj, Pool_Idx);
                begin
-                  if Obj.Creating_Quarantine_Snapshot then
+                  if Obj.Creating_Snap then
 
                      Request_Pool.
                         Mark_Generated_Primitive_Complete_Generation (
@@ -3196,19 +3188,12 @@ is
                            Obj.Superblock.Last_Secured_Generation);
 
                      if Request.Operation (Req) = Create_Snapshot then
-                        Obj.Snap_Gen :=
-                           Obj.Superblock.Last_Secured_Generation;
-
-                           Obj.Creating_Quarantine_Snapshot := False;
-
+                        Obj.Creating_Snap := False;
                      end if;
 
-                  elsif Obj.Discarding_Snapshot then
+                  elsif Obj.Discarding_Snap then
                      if Request.Operation (Req) = Discard_Snapshot then
-
-                        Obj.Last_Discard_Snap_ID := Obj.Discard_Snap_ID;
-
-                        Obj.Discarding_Snapshot := False;
+                        Obj.Discarding_Snap := False;
                      end if;
                   end if;
                end Declare_Pool_Index;
