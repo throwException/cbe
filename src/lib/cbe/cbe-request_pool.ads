@@ -47,12 +47,6 @@ is
       Progress : in out Boolean);
 
    --
-   --  Peek_Generated_Discard_Snap_Primitive
-   --
-   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
    --  Peek_Generated_Sync_Primitive
    --
    function Peek_Generated_Sync_Primitive (Obj : Object_Type)
@@ -85,6 +79,14 @@ is
       Obj  : Object_Type;
       Prim : Primitive.Object_Type)
    return Number_Of_Blocks_Type;
+
+   --
+   --  Peek_Generated_Gen
+   --
+   function Peek_Generated_Gen (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -173,6 +175,9 @@ private
       Create_Snap_At_SB_Ctrl_Pending,
       Create_Snap_At_SB_Ctrl_In_Progress,
       Create_Snap_At_SB_Ctrl_Complete,
+      Discard_Snap_At_SB_Ctrl_Pending,
+      Discard_Snap_At_SB_Ctrl_In_Progress,
+      Discard_Snap_At_SB_Ctrl_Complete,
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
@@ -251,6 +256,15 @@ private
    --  Execute_Create_Snapshot
    --
    procedure Execute_Create_Snapshot (
+      Jobs    : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Discard_Snapshot
+   --
+   procedure Execute_Discard_Snapshot (
       Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

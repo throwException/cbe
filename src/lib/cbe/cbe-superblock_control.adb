@@ -199,6 +199,38 @@ is
    end Submit_Primitive_Nr_Of_Blks;
 
    --
+   --  Submit_Primitive_Gen
+   --
+   procedure Submit_Primitive_Gen (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Gen  :        Generation_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         if Ctrl.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Pool_SB_Ctrl_Discard_Snap =>
+
+               Ctrl.Jobs (Idx).Operation := Discard_Snapshot;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               Ctrl.Jobs (Idx).Generation := Gen;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_Gen;
+
+   --
    --  Submit_Primitive
    --
    procedure Submit_Primitive (
@@ -1396,6 +1428,189 @@ is
    end Execute_Initialize;
 
    --
+   --  Execute_Discard_Snapshot
+   --
+   procedure Execute_Discard_Snapshot (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         Declare_Result_Of_Snapshot_Search :
+         declare
+            Snapshot_Found : Boolean := False;
+            Snapshot_Idx : Snapshots_Index_Type;
+         begin
+
+            Search_For_Snapshot :
+            for Idx in Snapshots_Index_Type loop
+
+               if SB.Snapshots (Idx).Valid and then
+                  SB.Snapshots (Idx).Keep and then
+                  SB.Snapshots (Idx).Gen = Job.Generation
+               then
+
+                  Snapshot_Idx := Idx;
+                  Snapshot_Found := True;
+                  exit Search_For_Snapshot;
+
+               end if;
+
+            end loop Search_For_Snapshot;
+
+            if Snapshot_Found then
+
+               SB.Snapshots (Snapshot_Idx).Valid := False;
+
+               Discard_Disposable_Snapshots (
+                  SB.Snapshots,
+                  SB.Last_Secured_Generation,
+                  Curr_Gen);
+
+               SB.Last_Secured_Generation := Curr_Gen;
+               SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
+               Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
+               Job.Key_Plaintext := SB.Current_Key;
+               Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+                  Op     => Primitive_Operation_Type'First,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+                  Blk_Nr => Block_Number_Type'First,
+                  Idx    => Primitive.Index_Type (Job_Idx));
+
+               Job.State := Encrypt_Current_Key_Pending;
+               Progress := True;
+
+            else
+
+               Primitive.Success (Job.Submitted_Prim, False);
+               Job.State := Completed;
+               Progress := True;
+
+            end if;
+
+         end Declare_Result_Of_Snapshot_Search;
+
+      when Encrypt_Current_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Key_Plaintext := SB.Previous_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Previous_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Cache,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Cache_Pending;
+         Progress := True;
+
+      when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Discard_Snapshot;
+
+   --
    --  Execute_Create_Snapshot
    --
    procedure Execute_Create_Snapshot (
@@ -2003,6 +2218,11 @@ is
          when Create_Snapshot =>
 
             Execute_Create_Snapshot (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
+
+         when Discard_Snapshot =>
+
+            Execute_Discard_Snapshot (
                Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
 
          when Initialize =>

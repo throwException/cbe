@@ -411,9 +411,6 @@ private
 
       Write_Stalled : Boolean;
 
-      Discarding_Snap : Boolean;
-      Discarding_Snap_Idx : Snapshots_Index_Type;
-
       Execute_Progress             : Boolean;
       Cache_Obj                    : Cache.Cache_Type;
       Cache_Jobs_Data              : Cache.Jobs_Data_Type;

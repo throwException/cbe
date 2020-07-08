@@ -73,9 +73,6 @@ is
       --  XXX partially unused as long as snapshot creation is disabled
       Obj.Last_Secured_Generation := 0;
 
-      Obj.Discarding_Snap  := False;
-      Obj.Discarding_Snap_Idx    := Snapshots_Index_Type'First;
-
       Obj.SCD_State       := Inactive;
       Obj.SCD_Req         := Request.Invalid_Object;
       Obj.SCD_Data        := (others => 0);
@@ -178,39 +175,12 @@ is
          Rekey |
          Extend_VBD |
          Extend_FT |
+         Discard_Snapshot |
          Create_Snapshot |
          Deinitialize
       =>
 
          Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, ID);
-
-      when Discard_Snapshot =>
-
-         if Obj.Discarding_Snap then
-            raise Program_Error;
-         end if;
-
-         Search_For_Snapshot :
-         for Idx in Snapshots_Index_Type loop
-
-            if Obj.Superblock.Snapshots (Idx).Valid and then
-               Obj.Superblock.Snapshots (Idx).Keep and then
-               Obj.Superblock.Snapshots (Idx).Gen = Generation_Type (ID)
-            then
-
-               Obj.Discarding_Snap := True;
-               Obj.Discarding_Snap_Idx := Idx;
-               exit Search_For_Snapshot;
-
-            end if;
-
-         end loop Search_For_Snapshot;
-
-         if not Obj.Discarding_Snap then
-            raise Program_Error;
-         end if;
-
-         Request_Pool.Submit_Request (Obj.Request_Pool_Obj, Req, 0);
 
       when Initialize | Resume_Rekeying =>
 
@@ -1788,39 +1758,6 @@ is
 
       end loop Loop_Pool_Generated_Sync_Prims;
 
-      Loop_Pool_Generated_Discard_Snap_Prims :
-      loop
-         Declare_Discard_Snap_Prim :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Request_Pool.Peek_Generated_Discard_Snap_Primitive (
-                  Obj.Request_Pool_Obj);
-         begin
-
-            exit Loop_Pool_Generated_Discard_Snap_Prims when
-               not Primitive.Valid (Prim) or else
-               not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
-
-            Obj.Superblock.Snapshots (Obj.Discarding_Snap_Idx).Keep := False;
-            Obj.Superblock.Snapshots (Obj.Discarding_Snap_Idx).Valid := False;
-            Sync_Superblock.Submit_Request (
-               Obj.Sync_SB_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-               Obj.Superblock,
-               Obj.Cur_SB,
-               Obj.Cur_Gen);
-
-            Obj.Handle_Failed_FT_Prims := False;
-            Request_Pool.Drop_Generated_Primitive (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
-
-            Progress := True;
-
-         end Declare_Discard_Snap_Prim;
-
-      end loop Loop_Pool_Generated_Discard_Snap_Prims;
-
       Loop_Pool_Generated_VBD_Prims :
       loop
          Declare_VBD_Prim :
@@ -1932,24 +1869,26 @@ is
 
                Progress := True;
 
-            when
-               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
-               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
-               Primitive.Tag_Pool_SB_Ctrl_Create_Snap |
-               Primitive.Tag_Pool_SB_Ctrl_Deinitialize
-            =>
+            when Primitive.Tag_Pool_SB_Ctrl_Discard_Snap =>
 
-               Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
+               Superblock_Control.Submit_Primitive_Gen (
+                  Obj.SB_Ctrl, Prim,
+                  Request_Pool.Peek_Generated_Gen (
+                     Obj.Request_Pool_Obj, Prim));
+
                Request_Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
-               Progress := True;
-
-            when Primitive.Tag_Pool_SB_Ctrl_Initialize =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
+               Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
+               Primitive.Tag_Pool_SB_Ctrl_Create_Snap |
+               Primitive.Tag_Pool_SB_Ctrl_Initialize |
+               Primitive.Tag_Pool_SB_Ctrl_Deinitialize
+            =>
 
                Superblock_Control.Submit_Primitive (Obj.SB_Ctrl, Prim);
-
                Request_Pool.Drop_Generated_Primitive (
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
@@ -2630,6 +2569,7 @@ is
             case Primitive.Tag (Prim) is
             when
                Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
+               Primitive.Tag_Pool_SB_Ctrl_Discard_Snap |
                Primitive.Tag_Pool_SB_Ctrl_Deinitialize
             =>
 
@@ -3120,23 +3060,6 @@ is
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
-
-               Declare_Pool_Index :
-               declare
-                  Pool_Idx_Slot : constant Pool_Index_Slot_Type :=
-                     Primitive.Pool_Idx_Slot (Prim);
-                  Pool_Idx      : constant Pool_Index_Type :=
-                     Pool_Idx_Slot_Content (Pool_Idx_Slot);
-                  Req : constant Request.Object_Type :=
-                     Request_Pool.Request_For_Index (
-                        Obj.Request_Pool_Obj, Pool_Idx);
-               begin
-                  if Obj.Discarding_Snap then
-                     if Request.Operation (Req) = Discard_Snapshot then
-                        Obj.Discarding_Snap := False;
-                     end if;
-                  end if;
-               end Declare_Pool_Index;
 
                Obj.Handle_Failed_FT_Prims := False;
             else

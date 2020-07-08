@@ -46,11 +46,13 @@ is
                Extend_VBD |
                Extend_FT |
                Create_Snapshot |
+               Discard_Snapshot |
                Deinitialize
             =>
 
-               Obj.Jobs (Idx).State := Submitted;
-               Obj.Jobs (Idx).Req   := Req;
+               Obj.Jobs (Idx).State   := Submitted;
+               Obj.Jobs (Idx).Req     := Req;
+               Obj.Jobs (Idx).Snap_ID := Snap_ID;
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
@@ -69,7 +71,7 @@ is
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
-            when Read | Write | Sync | Discard_Snapshot =>
+            when Read | Write | Sync =>
 
                Obj.Jobs (Idx) := (
                   State                   => Pending,
@@ -95,41 +97,6 @@ is
       raise Program_Error;
 
    end Submit_Request;
-
-   --
-   --  Peek_Generated_Discard_Snap_Primitive
-   --
-   function Peek_Generated_Discard_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type
-   is
-   begin
-      if Index_Queue.Empty (Obj.Indices) then
-         return Primitive.Invalid_Object;
-      end if;
-
-      Declare_Job :
-      declare
-         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Job : constant Job_Type := Obj.Jobs (Idx);
-      begin
-         if Job.State /= Pending or else
-            Request.Operation (Job.Req) /= Discard_Snapshot
-         then
-            return Primitive.Invalid_Object;
-         end if;
-
-         return
-            Primitive.Valid_Object (
-               Read,
-               Request.Success (Job.Req),
-               Primitive.Tag_Pool_Discard_Snap,
-               Idx,
-               Request.Block_Number (Job.Req) +
-                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
-
-      end Declare_Job;
-   end Peek_Generated_Discard_Snap_Primitive;
 
    --
    --  Peek_Generated_Sync_Primitive
@@ -225,6 +192,7 @@ is
                VBD_Extension_Step_Pending |
                FT_Extension_Step_Pending |
                Create_Snap_At_SB_Ctrl_Pending |
+               Discard_Snap_At_SB_Ctrl_Pending |
                Initialize_SB_Ctrl_Pending |
                Deinitialize_SB_Ctrl_Pending
             =>
@@ -300,6 +268,35 @@ is
    end Peek_Generated_Nr_Of_Blks;
 
    --
+   --  Peek_Generated_Gen
+   --
+   function Peek_Generated_Gen (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type
+   is
+      Idx : constant Pool_Index_Type :=
+         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
+   begin
+
+      case Obj.Jobs (Idx).State is
+      when Discard_Snap_At_SB_Ctrl_Pending =>
+
+         if Primitive.Equal (Prim, Obj.Jobs (Idx).Prim) then
+            return Generation_Type (Obj.Jobs (Idx).Snap_ID);
+         else
+            raise Program_Error;
+         end if;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Gen;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -328,6 +325,9 @@ is
             return;
          when Create_Snap_At_SB_Ctrl_Pending =>
             Obj.Jobs (Idx).State := Create_Snap_At_SB_Ctrl_In_Progress;
+            return;
+         when Discard_Snap_At_SB_Ctrl_Pending =>
+            Obj.Jobs (Idx).State := Discard_Snap_At_SB_Ctrl_In_Progress;
             return;
          when Initialize_SB_Ctrl_Pending =>
             Obj.Jobs (Idx).State := Initialize_SB_Ctrl_In_Progress;
@@ -601,12 +601,18 @@ is
 
       when Create_Snap_At_SB_Ctrl_Complete =>
 
-         if not Primitive.Success (Jobs (Idx).Prim) then
-            raise Program_Error;
+         if Primitive.Success (Jobs (Idx).Prim) then
+
+            Request.Success (Jobs (Idx).Req, True);
+            Request.Offset (
+               Jobs (Idx).Req, Request.Offset_Type (Jobs (Idx).Gen));
+
+         else
+
+            Request.Success (Jobs (Idx).Req, False);
+
          end if;
 
-         Request.Success (Jobs (Idx).Req, True);
-         Request.Offset (Jobs (Idx).Req, Request.Offset_Type (Jobs (Idx).Gen));
          Jobs (Idx).State := Complete;
          Index_Queue.Dequeue (Indices, Idx);
          Progress := True;
@@ -618,6 +624,55 @@ is
       end case;
 
    end Execute_Create_Snapshot;
+
+   --
+   --  Execute_Discard_Snapshot
+   --
+   procedure Execute_Discard_Snapshot (
+      Jobs    : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Jobs (Idx).State is
+      when Submitted =>
+
+         Jobs (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Discard_Snap,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Jobs (Idx).State := Discard_Snap_At_SB_Ctrl_Pending;
+         Progress := True;
+
+      when Discard_Snap_At_SB_Ctrl_Complete =>
+
+         if Primitive.Success (Jobs (Idx).Prim) then
+
+            Request.Success (Jobs (Idx).Req, True);
+
+         else
+
+            Request.Success (Jobs (Idx).Req, False);
+
+         end if;
+
+         Jobs (Idx).State := Complete;
+         Index_Queue.Dequeue (Indices, Idx);
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Discard_Snapshot;
 
    --
    --  Execute_Rekey
@@ -925,6 +980,10 @@ is
 
                Execute_Create_Snapshot (Obj.Jobs, Obj.Indices, Idx, Progress);
 
+            when Discard_Snapshot =>
+
+               Execute_Discard_Snapshot (Obj.Jobs, Obj.Indices, Idx, Progress);
+
             when Initialize =>
 
                Execute_Initialize (Obj.Jobs, Obj.Indices, Idx, Progress);
@@ -1003,6 +1062,19 @@ is
       end if;
 
       case Request.Operation (Obj.Jobs (Idx).Req) is
+      when Discard_Snapshot =>
+
+         case Obj.Jobs (Idx).State is
+         when Discard_Snap_At_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Discard_Snap_At_SB_Ctrl_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
       when Rekey =>
 
          case Obj.Jobs (Idx).State is
@@ -1031,7 +1103,7 @@ is
 
          end case;
 
-      when Read | Write | Sync | Discard_Snapshot =>
+      when Read | Write | Sync =>
 
          if Obj.Jobs (Idx).State /= In_Progress then
             raise Program_Error;

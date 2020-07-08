@@ -55,6 +55,7 @@ is
       Tag_Pool_SB_Ctrl_VBD_Ext_Step,
       Tag_Pool_SB_Ctrl_FT_Ext_Step,
       Tag_Pool_SB_Ctrl_Create_Snap,
+      Tag_Pool_SB_Ctrl_Discard_Snap,
       Tag_Pool_SB_Ctrl_Initialize,
       Tag_Pool_SB_Ctrl_Deinitialize,
       Tag_SB_Ctrl_TA_Create_Key,
@@ -145,6 +146,7 @@ is
       when Tag_Pool_SB_Ctrl_VBD_Ext_Step => "Pool_SB_Ctrl_VBD_Ext_Step",
       when Tag_Pool_SB_Ctrl_FT_Ext_Step => "Pool_SB_Ctrl_FT_Ext_Step",
       when Tag_Pool_SB_Ctrl_Create_Snap => "Pool_SB_Ctrl_Create_Snap",
+      when Tag_Pool_SB_Ctrl_Discard_Snap => "Pool_SB_Ctrl_Discard_Snap",
       when Tag_Pool_SB_Ctrl_Initialize => "Pool_SB_Ctrl_Initialize",
       when Tag_Pool_SB_Ctrl_Deinitialize => "Pool_SB_Ctrl_Deinitialize",
       when Tag_SB_Ctrl_TA_Create_Key => "SB_Ctrl_TA_Create_Key",
@@ -362,6 +364,9 @@ is
    return Boolean;
 
    function Has_Tag_Pool_SB_Ctrl_Create_Snap (Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_Pool_SB_Ctrl_Discard_Snap (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_Pool_SB_Ctrl_Initialize (Obj : Object_Type)

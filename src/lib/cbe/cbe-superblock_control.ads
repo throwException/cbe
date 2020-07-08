@@ -48,6 +48,14 @@ is
       Nr_Of_PBAs :        Number_Of_Blocks_Type);
 
    --
+   --  Submit_Primitive_Gen
+   --
+   procedure Submit_Primitive_Gen (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Gen  :        Generation_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Ctrl : Control_Type)
@@ -373,6 +381,7 @@ private
       VBD_Extension_Step,
       FT_Extension_Step,
       Create_Snapshot,
+      Discard_Snapshot,
       Initialize_Rekeying,
       Rekey_VBA);
 
@@ -482,6 +491,17 @@ private
    --  Execute_Create_Snapshot
    --
    procedure Execute_Create_Snapshot (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Discard_Snapshot
+   --
+   procedure Execute_Discard_Snapshot (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
       SB            : in out Superblock_Type;
