@@ -53,12 +53,6 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_Create_Snap_Primitive
-   --
-   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
    --  Peek_Generated_Sync_Primitive
    --
    function Peek_Generated_Sync_Primitive (Obj : Object_Type)
@@ -126,9 +120,9 @@ is
       SB_State :        Superblock_State_Type);
 
    --
-   --  Mark_Generated_Primitive_Complete_Generation
+   --  Mark_Generated_Primitive_Complete_Gen
    --
-   procedure Mark_Generated_Primitive_Complete_Generation (
+   procedure Mark_Generated_Primitive_Complete_Gen (
       Obj     : in out Object_Type;
       Idx     :        Pool_Index_Type;
       Success :        Boolean;
@@ -176,6 +170,9 @@ private
       FT_Extension_Step_Pending,
       FT_Extension_Step_In_Progress,
       FT_Extension_Step_Complete,
+      Create_Snap_At_SB_Ctrl_Pending,
+      Create_Snap_At_SB_Ctrl_In_Progress,
+      Create_Snap_At_SB_Ctrl_Complete,
       Rekey_VBA_Pending,
       Rekey_VBA_In_Progress,
       Rekey_VBA_Complete,
@@ -196,6 +193,7 @@ private
       Nr_Of_Requests_Preponed : Number_Of_Requests_Type;
       Nr_Of_Prims_Completed   : Number_Of_Primitives_Type;
       SB_State                : Superblock_State_Type;
+      Gen                     : Generation_Type;
    end record;
 
    type Jobs_Type is array (Pool_Index_Type) of Job_Type;
@@ -244,6 +242,15 @@ private
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
+      Jobs    : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Create_Snapshot
+   --
+   procedure Execute_Create_Snapshot (
       Jobs    : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

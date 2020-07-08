@@ -45,6 +45,7 @@ is
                Rekey |
                Extend_VBD |
                Extend_FT |
+               Create_Snapshot |
                Deinitialize
             =>
 
@@ -68,7 +69,7 @@ is
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
-            when Read | Write | Sync | Create_Snapshot | Discard_Snapshot =>
+            when Read | Write | Sync | Discard_Snapshot =>
 
                Obj.Jobs (Idx) := (
                   State                   => Pending,
@@ -78,7 +79,8 @@ is
                   Request_Finished        => Boolean'First,
                   Nr_Of_Requests_Preponed => 0,
                   Nr_Of_Prims_Completed   => 0,
-                  SB_State                => Superblock_State_Type'First);
+                  SB_State                => Superblock_State_Type'First,
+                  Gen                     => Generation_Type'First);
 
                Request.Success (Obj.Jobs (Idx).Req, True);
                Index_Queue.Enqueue (Obj.Indices, Idx);
@@ -128,41 +130,6 @@ is
 
       end Declare_Job;
    end Peek_Generated_Discard_Snap_Primitive;
-
-   --
-   --  Peek_Generated_Create_Snap_Primitive
-   --
-   function Peek_Generated_Create_Snap_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type
-   is
-   begin
-      if Index_Queue.Empty (Obj.Indices) then
-         return Primitive.Invalid_Object;
-      end if;
-
-      Declare_Job :
-      declare
-         Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
-         Job : constant Job_Type := Obj.Jobs (Idx);
-      begin
-         if Job.State /= Pending or else
-            Request.Operation (Job.Req) /= Create_Snapshot
-         then
-            return Primitive.Invalid_Object;
-         end if;
-
-         return
-            Primitive.Valid_Object (
-               Read,
-               Request.Success (Job.Req),
-               Primitive.Tag_Pool_Create_Snap,
-               Idx,
-               Request.Block_Number (Job.Req) +
-                  Block_Number_Type (Job.Nr_Of_Prims_Completed),
-               Primitive.Index_Type (Job.Nr_Of_Prims_Completed));
-
-      end Declare_Job;
-   end Peek_Generated_Create_Snap_Primitive;
 
    --
    --  Peek_Generated_Sync_Primitive
@@ -257,6 +224,7 @@ is
                Rekey_VBA_Pending |
                VBD_Extension_Step_Pending |
                FT_Extension_Step_Pending |
+               Create_Snap_At_SB_Ctrl_Pending |
                Initialize_SB_Ctrl_Pending |
                Deinitialize_SB_Ctrl_Pending
             =>
@@ -357,6 +325,9 @@ is
             return;
          when FT_Extension_Step_Pending =>
             Obj.Jobs (Idx).State := FT_Extension_Step_In_Progress;
+            return;
+         when Create_Snap_At_SB_Ctrl_Pending =>
+            Obj.Jobs (Idx).State := Create_Snap_At_SB_Ctrl_In_Progress;
             return;
          when Initialize_SB_Ctrl_Pending =>
             Obj.Jobs (Idx).State := Initialize_SB_Ctrl_In_Progress;
@@ -602,6 +573,51 @@ is
       end case;
 
    end Execute_Extend_FT;
+
+   --
+   --  Execute_Create_Snapshot
+   --
+   procedure Execute_Create_Snapshot (
+      Jobs    : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Jobs (Idx).State is
+      when Submitted =>
+
+         Jobs (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Create_Snap,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Jobs (Idx).State := Create_Snap_At_SB_Ctrl_Pending;
+         Progress := True;
+
+      when Create_Snap_At_SB_Ctrl_Complete =>
+
+         if not Primitive.Success (Jobs (Idx).Prim) then
+            raise Program_Error;
+         end if;
+
+         Request.Success (Jobs (Idx).Req, True);
+         Request.Offset (Jobs (Idx).Req, Request.Offset_Type (Jobs (Idx).Gen));
+         Jobs (Idx).State := Complete;
+         Index_Queue.Dequeue (Indices, Idx);
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Create_Snapshot;
 
    --
    --  Execute_Rekey
@@ -905,6 +921,10 @@ is
 
                Execute_Extend_FT (Obj.Jobs, Obj.Indices, Idx, Progress);
 
+            when Create_Snapshot =>
+
+               Execute_Create_Snapshot (Obj.Jobs, Obj.Indices, Idx, Progress);
+
             when Initialize =>
 
                Execute_Initialize (Obj.Jobs, Obj.Indices, Idx, Progress);
@@ -965,53 +985,6 @@ is
       end case;
 
    end Mark_Generated_Primitive_Complete_SB_State;
-
-   --
-   --  Mark_Generated_Primitive_Complete_Generation
-   --
-   procedure Mark_Generated_Primitive_Complete_Generation (
-      Obj     : in out Object_Type;
-      Idx     :        Pool_Index_Type;
-      Success :        Boolean;
-      Gen     :        Generation_Type)
-   is
-   begin
-
-      if Index_Queue.Empty (Obj.Indices) or else
-         Index_Queue.Head (Obj.Indices) /= Idx
-      then
-         raise Program_Error;
-      end if;
-
-      case Request.Operation (Obj.Jobs (Idx).Req) is
-      when Create_Snapshot =>
-
-         if Obj.Jobs (Idx).State /= In_Progress then
-            raise Program_Error;
-         end if;
-
-         Request.Success (Obj.Jobs (Idx).Req, Success);
-         Request.Offset (Obj.Jobs (Idx).Req, Request.Offset_Type (Gen));
-
-         Obj.Jobs (Idx).Nr_Of_Prims_Completed :=
-            Obj.Jobs (Idx).Nr_Of_Prims_Completed + 1;
-
-         if Obj.Jobs (Idx).Nr_Of_Prims_Completed <
-               Job_Nr_Of_Prims (Obj.Jobs (Idx))
-         then
-            Obj.Jobs (Idx).State := Pending;
-         else
-            Obj.Jobs (Idx).State := Complete;
-            Index_Queue.Dequeue (Obj.Indices, Idx);
-         end if;
-
-      when others =>
-
-         raise Program_Error;
-
-      end case;
-
-   end Mark_Generated_Primitive_Complete_Generation;
 
    --
    --  Mark_Generated_Primitive_Complete
@@ -1084,6 +1057,47 @@ is
       end case;
 
    end Mark_Generated_Primitive_Complete;
+
+   --
+   --  Mark_Generated_Primitive_Complete_Gen
+   --
+   procedure Mark_Generated_Primitive_Complete_Gen (
+      Obj     : in out Object_Type;
+      Idx     :        Pool_Index_Type;
+      Success :        Boolean;
+      Gen     :        Generation_Type)
+   is
+   begin
+
+      if Index_Queue.Empty (Obj.Indices) or else
+         Index_Queue.Head (Obj.Indices) /= Idx
+      then
+         raise Program_Error;
+      end if;
+
+      case Request.Operation (Obj.Jobs (Idx).Req) is
+      when Create_Snapshot =>
+
+         case Obj.Jobs (Idx).State is
+         when Create_Snap_At_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Create_Snap_At_SB_Ctrl_Complete;
+            Obj.Jobs (Idx).Gen := Gen;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Mark_Generated_Primitive_Complete_Gen;
 
    --
    --  Mark_Generated_Primitive_Complete_Req_Fin
@@ -1245,7 +1259,8 @@ is
       Request_Finished        => Boolean'First,
       Nr_Of_Requests_Preponed => 0,
       Nr_Of_Prims_Completed   => 0,
-      SB_State                => Superblock_State_Type'First);
+      SB_State                => Superblock_State_Type'First,
+      Gen                     => Generation_Type'First);
 
    --
    --  Initialized_Object

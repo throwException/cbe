@@ -411,7 +411,6 @@ private
 
       Write_Stalled : Boolean;
 
-      Creating_Snap : Boolean;
       Discarding_Snap : Boolean;
       Discarding_Snap_Idx : Snapshots_Index_Type;
 

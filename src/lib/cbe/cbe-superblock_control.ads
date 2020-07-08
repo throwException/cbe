@@ -78,6 +78,14 @@ is
    return Key_Plaintext_Type;
 
    --
+   --  Peek_Completed_Generation
+   --
+   function Peek_Completed_Generation (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type;
+
+   --
    --  Drop_Completed_Primitive
    --
    procedure Drop_Completed_Primitive (
@@ -364,6 +372,7 @@ private
       Deinitialize,
       VBD_Extension_Step,
       FT_Extension_Step,
+      Create_Snapshot,
       Initialize_Rekeying,
       Rekey_VBA);
 
@@ -470,6 +479,17 @@ private
       Progress      : in out Boolean);
 
    --
+   --  Execute_Create_Snapshot
+   --
+   procedure Execute_Create_Snapshot (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
    --  Execute_Rekey_VBA
    --
    procedure Execute_Rekey_VBA (
@@ -542,5 +562,13 @@ private
    procedure Init_SB_Plaintext_Without_Key_Values (
       SB_Cipher :     Superblock_Ciphertext_Type;
       SB_Plain  : out Superblock_Type);
+
+   --
+   --  Discard_Disposable_Snapshots
+   --
+   procedure Discard_Disposable_Snapshots (
+      Snapshots        : in out Snapshots_Type;
+      Curr_Gen         :        Generation_Type;
+      Last_Secured_Gen :        Generation_Type);
 
 end CBE.Superblock_Control;

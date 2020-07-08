@@ -248,6 +248,10 @@ is
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_FT_Ext_Step);
 
+   function Has_Tag_Pool_SB_Ctrl_Create_Snap (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Create_Snap);
+
    function Has_Tag_Pool_SB_Ctrl_Initialize (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Initialize);
