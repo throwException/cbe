@@ -167,18 +167,10 @@ is
       Req :    out Request.Object_Type);
 
    --
-   --  Request access to the Block::Request data for reading data
-   --
-   --  \param Request  reference to the Block::Request processed
-   --                 by the CBE
-   --  \param Data     reference to the data associated with the
-   --                 Block::Request
-   --
-   --  \return  true if the CBE could process the request
+   --  Supply_Client_Data
    --
    procedure Supply_Client_Data (
       Obj      : in out Object_Type;
-      Now      :        Timestamp_Type;
       Req      :        Request.Object_Type;
       Data     :        Block_Data_Type;
       Progress :    out Boolean);
@@ -296,22 +288,13 @@ is
       Data_Valid :        Boolean);
 
    --
-   --  Execute one loop of the CBE
-   --
-   --  \param  now               current time as timestamp
-   --  \param  show_progress     if true, generate a LOG message of the current
-   --                            progress (basically shows the progress state
-   --                            of all modules)
-   --  \param  show_if_progress  if true, generate LOG message only when
-   --                            progress was
-   --                            acutally made
+   --  Execute
    --
    procedure Execute (
       Obj               : in out Object_Type;
       IO_Buf            : in out Block_IO.Data_Type;
       Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
-      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
-      Now               :        Timestamp_Type);
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type);
 
    --
    --  Get highest virtual-block-address useable by the current active snapshot

@@ -1121,7 +1121,6 @@ class Cbe::Main
 		Heap                                    _heap                    { _env.ram(), _env.rm() };
 		Allocator_avl                           _blk_alloc               { &_heap };
 		Block::Connection<>                     _blk                     { _env, &_blk_alloc, TX_BUF_SIZE };
-		Timer::Connection                       _timer                   { _env };
 		Constructible<Cbe::Library>             _cbe                     { };
 		Cbe_check::Library                      _cbe_check               { };
 		Cbe_dump::Library                       _cbe_dump                { };
@@ -1254,8 +1253,6 @@ class Cbe::Main
 
 		void _execute_cbe_dump (bool &progress)
 		{
-			static unsigned x = 0;
-			x++;
 			_cbe_dump.execute(_blk_buf);
 			if (_cbe_dump.execute_progress()) {
 				progress = true;
@@ -1831,7 +1828,7 @@ class Cbe::Main
 				}
 			}
 
-			_cbe->execute(_blk_buf, _crypto_plain_buf, _crypto_cipher_buf, _timer.curr_time().trunc_to_plain_ms().value);
+			_cbe->execute(_blk_buf, _crypto_plain_buf, _crypto_cipher_buf);
 			progress |= _cbe->execute_progress();
 
 			using Payload = Block_session_component::Payload;
@@ -1892,7 +1889,7 @@ class Cbe::Main
 					payload.with_content(request, [&] (void *addr, Genode::size_t) {
 
 						Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(addr);
-						progress |= _cbe->supply_client_data(_timer.curr_time().trunc_to_plain_ms().value, cbe_request, data);
+						progress |= _cbe->supply_client_data(cbe_request, data);
 					});
 				}
 			});

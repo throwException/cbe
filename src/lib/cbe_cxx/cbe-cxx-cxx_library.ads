@@ -50,18 +50,20 @@ is
       Convention    => C,
       External_Name => "_ZNK3Cbe7Library7max_vbaEv";
 
+   --
+   --  Execute
+   --
    procedure Execute (
       Obj               : in out Library.Object_Type;
       IO_Buf            : in out Block_IO.Data_Type;
       Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
-      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
-      Now               :        Timestamp_Type)
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type)
    with
       Export,
       Convention    => C,
       External_Name =>
          "_ZN3Cbe7Library7executeERNS_9Io_bufferERNS_" &
-         "19Crypto_plain_bufferERNS_20Crypto_cipher_bufferEy";
+         "19Crypto_plain_bufferERNS_20Crypto_cipher_bufferE";
 
    function Client_Request_Acceptable (Obj : Library.Object_Type)
    return CXX_Bool_Type
@@ -163,9 +165,11 @@ is
       Convention    => C,
       External_Name => "_ZN3Cbe7Library21_client_data_requiredERNS_7RequestE";
 
+   --
+   --  Supply_Client_Data
+   --
    procedure Supply_Client_Data (
       Obj      : in out Library.Object_Type;
-      Now      :        Timestamp_Type;
       Req      :        CXX_Request_Type;
       Data     :        Block_Data_Type;
       Progress :    out CXX_Bool_Type)
@@ -173,7 +177,7 @@ is
       Export,
       Convention    => C,
       External_Name =>
-         "_ZN3Cbe7Library19_supply_client_dataEyRKNS_7RequestERKNS_" &
+         "_ZN3Cbe7Library19_supply_client_dataERKNS_7RequestERKNS_" &
          "10Block_dataERb";
 
    function Execute_Progress (Obj : Library.Object_Type)

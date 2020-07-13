@@ -41,15 +41,17 @@ is
       return Library.Max_VBA (Obj);
    end Max_VBA;
 
+   --
+   --  Execute
+   --
    procedure Execute (
       Obj               : in out Library.Object_Type;
       IO_Buf            : in out Block_IO.Data_Type;
       Crypto_Plain_Buf  : in out Crypto.Plain_Buffer_Type;
-      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
-      Now               :        Timestamp_Type)
+      Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type)
    is
    begin
-      Library.Execute (Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Now);
+      Library.Execute (Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf);
    end Execute;
 
    function Client_Request_Acceptable (Obj : Library.Object_Type)
@@ -161,9 +163,11 @@ is
       Req := CXX_Request_From_SPARK (SPARK_Req);
    end Client_Data_Required;
 
+   --
+   --  Supply_Client_Data
+   --
    procedure Supply_Client_Data (
       Obj      : in out Library.Object_Type;
-      Now      :        Timestamp_Type;
       Req      :        CXX_Request_Type;
       Data     :        Block_Data_Type;
       Progress :    out CXX_Bool_Type)
@@ -171,7 +175,7 @@ is
       SPARK_Progress : Boolean;
    begin
       Library.Supply_Client_Data (
-         Obj, Now, CXX_Request_To_SPARK (Req), Data, SPARK_Progress);
+         Obj, CXX_Request_To_SPARK (Req), Data, SPARK_Progress);
       Progress := CXX_Bool_From_SPARK (SPARK_Progress);
    end Supply_Client_Data;
 

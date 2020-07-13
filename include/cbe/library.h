@@ -46,7 +46,7 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 		void _client_data_ready(Request &);
 		void _obtain_client_data(Request const &, Crypto_plain_buffer::Index &, bool &);
 		void _client_data_required(Request &);
-		void _supply_client_data(Time::Timestamp const, Request const &, Block_data const &, bool &);
+		void _supply_client_data(Request const &, Block_data const &, bool &);
 
 		void _crypto_add_key_required(Request &, Key &) const;
 		void _crypto_remove_key_required(Request &, Key::Id &) const;
@@ -65,20 +65,9 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 	 */
 	Virtual_block_address max_vba() const;
 
-	/**
-	 * Execute one loop of the CBE
-	 *
-	 * \param  now               current time as timestamp
-	 * \param  show_progress     if true, generate a LOG message of the current
-	 *                           progress (basically shows the progress state of
-	 *                           all modules)
-	 * \param  show_if_progress  if true, generate LOG message only when progress was
-	 *                           acutally made
-	 */
 	void execute(Io_buffer            &io_buf,
 	             Crypto_plain_buffer  &crypto_plain_buf,
-	             Crypto_cipher_buffer &crypto_cipher_buf,
-	             Time::Timestamp       now);
+	             Crypto_cipher_buffer &crypto_cipher_buf);
 
 	/**
 	 * Return whether the last call to 'execute' has made progress or not
@@ -226,12 +215,11 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 	 *
 	 * \return  true if the CBE could process the request
 	 */
-	bool supply_client_data(Time::Timestamp const now,
-	                        Request         const &request,
+	bool supply_client_data(Request         const &request,
 	                        Block_data      const &data)
 	{
 		bool result = false;
-		_supply_client_data(now, request, data, result);
+		_supply_client_data(request, data, result);
 		return result;
 	}
 
