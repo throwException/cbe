@@ -27,9 +27,6 @@ is
    begin
 
       Obj.Handle_Failed_FT_Prims := False;
-      Obj.Read_State  := Invalid;
-      Obj.Write_State := Invalid;
-      Obj.Sync_State  := Invalid;
 
       Obj.Write_Stalled := False;
 

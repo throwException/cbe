@@ -405,9 +405,6 @@ private
    type Object_Type is record
 
       Handle_Failed_FT_Prims : Boolean;
-      Read_State  : Read_Request_State_Type;
-      Write_State : Write_Request_State_Type;
-      Sync_State  : Sync_Request_State_Type;
 
       Write_Stalled : Boolean;
 
