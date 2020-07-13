@@ -46,9 +46,6 @@ is
       Tag_VBD_Dump_Blk_IO,
       Tag_FT_Dump_Blk_Alloc,
       Tag_FT_Dump_Blk_IO,
-      Tag_Pool_Discard_Snap,
-      Tag_Pool_Create_Snap,
-      Tag_Pool_Sync,
       Tag_Pool_VBD,
       Tag_Pool_SB_Ctrl_Init_Rekey,
       Tag_Pool_SB_Ctrl_Rekey_VBA,
@@ -138,9 +135,6 @@ is
       when Tag_VBD_Dump_Blk_IO => "VBD_Dump_Blk_IO",
       when Tag_FT_Dump_Blk_Alloc => "FT_Dump_Blk_Alloc",
       when Tag_FT_Dump_Blk_IO => "FT_Dump_Blk_IO",
-      when Tag_Pool_Discard_Snap => "Pool_Discard_Snap",
-      when Tag_Pool_Create_Snap => "Pool_Create_Snap",
-      when Tag_Pool_Sync => "Pool_Sync",
       when Tag_Pool_VBD => "Pool_VBD",
       when Tag_Pool_SB_Ctrl_Init_Rekey => "Pool_SB_Ctrl_Init_Rekey",
       when Tag_Pool_SB_Ctrl_Rekey_VBA => "Pool_SB_Ctrl_Rekey_VBA",
@@ -352,9 +346,6 @@ is
    function Has_Tag_VBD_Dump_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Dump_Blk_Alloc (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Dump_Blk_IO (Obj : Object_Type) return Boolean;
-   function Has_Tag_Pool_Discard_Snap (Obj : Object_Type) return Boolean;
-   function Has_Tag_Pool_Create_Snap (Obj : Object_Type) return Boolean;
-   function Has_Tag_Pool_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_VBD (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Init_Rekey (Obj : Object_Type) return Boolean;
    function Has_Tag_Pool_SB_Ctrl_Rekey_VBA (Obj : Object_Type) return Boolean;

@@ -47,12 +47,6 @@ is
       Progress : in out Boolean);
 
    --
-   --  Peek_Generated_Sync_Primitive
-   --
-   function Peek_Generated_Sync_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
    --  Peek_Generated_VBD_Primitive
    --
    function Peek_Generated_VBD_Primitive (Obj : Object_Type)

@@ -1718,46 +1718,6 @@ is
    begin
       Request_Pool.Execute (Obj.Request_Pool_Obj, Progress);
 
-      Loop_Pool_Generated_Sync_Prims :
-      loop
-         Declare_Sync_Prim :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Request_Pool.Peek_Generated_Sync_Primitive (
-                  Obj.Request_Pool_Obj);
-         begin
-
-            exit Loop_Pool_Generated_Sync_Prims when
-               not Primitive.Valid (Prim) or else
-               not Sync_Superblock.Request_Acceptable (Obj.Sync_SB_Obj);
-
-            Discard_Disposable_Snapshots (
-               Obj.Superblock.Snapshots,
-               Obj.Superblock.Last_Secured_Generation,
-               Obj.Cur_Gen);
-
-            Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
-            Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
-               Obj.Cur_Gen;
-
-            Sync_Superblock.Submit_Request (
-               Obj.Sync_SB_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-               Obj.Superblock,
-               Obj.Cur_SB,
-               Obj.Cur_Gen);
-
-            Obj.Handle_Failed_FT_Prims := False;
-            Request_Pool.Drop_Generated_Primitive (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
-
-            Progress := True;
-
-         end Declare_Sync_Prim;
-
-      end loop Loop_Pool_Generated_Sync_Prims;
-
       Loop_Pool_Generated_VBD_Prims :
       loop
          Declare_VBD_Prim :
