@@ -23,6 +23,7 @@ with CBE.Trust_Anchor;
 with CBE.VBD_Rekeying;
 with CBE.FT_Resizing;
 with CBE.MT_Resizing;
+with CBE.TA_Request;
 
 package CBE.Library
 with SPARK_Mode
@@ -286,6 +287,75 @@ is
       Obj        : in out Object_Type;
       Data_Index :        Crypto.Plain_Buffer_Index_Type;
       Data_Valid :        Boolean);
+
+   --
+   --  Peek generated trust-anchor request
+   --
+   procedure Peek_Generated_TA_Request (
+      Obj :     Object_Type;
+      Req : out TA_Request.Object_Type);
+
+   --
+   --  Drop generated trust-anchor request
+   --
+   procedure Drop_Generated_TA_Request (
+      Obj : in out Object_Type;
+      Req :        TA_Request.Object_Type);
+
+   --
+   --  Peek generated trust-anchor superblock hash
+   --
+   procedure Peek_Generated_TA_SB_Hash (
+      Obj  :     Object_Type;
+      Req  :     TA_Request.Object_Type;
+      Hash : out Hash_Type);
+
+   --
+   --  Peek generated trust-anchor key value ciphertext
+   --
+   procedure Peek_Generated_TA_Key_Cipher (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Ciphertext_Type);
+
+   --
+   --  Peek generated trust-anchor key value plaintext
+   --
+   procedure Peek_Generated_TA_Key_Plain (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA create key request complete
+   --
+   procedure Mark_Generated_TA_Create_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA secure superblock request complete
+   --
+   procedure Mark_Generated_TA_Secure_SB_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type);
+
+   --
+   --  Mark generated TA decrypt key request complete
+   --
+   procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA encrypt key request complete
+   --
+   procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type);
 
    --
    --  Execute

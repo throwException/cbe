@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Request;
+with CBE.TA_Request;
 
 package CBE.CXX
 with SPARK_Mode
@@ -33,6 +34,8 @@ is
    type CXX_Tree_Level_Index_Type     is new CXX_UInt64_Type;
    type CXX_Tree_Degree_Type          is new CXX_UInt64_Type;
    type CXX_Tree_Number_Of_Leafs_Type is new CXX_UInt64_Type;
+
+   type CXX_Hash_Type is array (Hash_Index_Type) of CXX_UInt8_Type;
 
    type CXX_Key_Value_Type is array (Key_Value_Index_Type) of CXX_UInt8_Type;
 
@@ -191,5 +194,87 @@ is
       Rekeying      => CXX_Bool_From_SPARK (Info.Rekeying),
       Extending_FT  => CXX_Bool_From_SPARK (Info.Extending_FT),
       Extending_VBD => CXX_Bool_From_SPARK (Info.Extending_VBD));
+
+   --
+   --  CXX_Hash_From_SPARK
+   --
+   function CXX_Hash_From_SPARK (SPARK_Hash : Hash_Type)
+   return CXX_Hash_Type;
+
+   --
+   --  CXX_Hash_To_SPARK
+   --
+   function CXX_Hash_To_SPARK (CXX_Hash : CXX_Hash_Type)
+   return Hash_Type;
+
+   --
+   --  Trust Anchor
+   --
+
+   type CXX_TA_Request_Type is record
+      Operation    : CXX_Operation_Type;
+      Success      : CXX_Bool_Type;
+      Tag          : CXX_Tag_Type;
+   end record;
+   pragma Pack (CXX_TA_Request_Type);
+
+   type CXX_TA_Request_Operation_Type is new CXX_UInt32_Type;
+
+   function CXX_TA_Request_Operation_From_SPARK (
+      Input : TA_Request.Operation_Type)
+   return CXX_Operation_Type
+   is (
+      case Input is
+      when TA_Request.Create_Key        => 1,
+      when TA_Request.Secure_Superblock => 2,
+      when TA_Request.Encrypt_Key       => 3,
+      when TA_Request.Decrypt_Key       => 4);
+
+   function CXX_TA_Request_Valid_To_SPARK (
+      Input : CXX_TA_Request_Type;
+      Op    : TA_Request.Operation_Type)
+   return TA_Request.Object_Type
+   is (
+      TA_Request.Valid_Object (
+         Op,
+         CXX_Bool_To_SPARK (Input.Success),
+         TA_Request.Tag_Type  (Input.Tag)));
+
+   function CXX_TA_Request_To_SPARK (Input : CXX_TA_Request_Type)
+   return TA_Request.Object_Type;
+
+   function CXX_TA_Request_From_SPARK (Obj : TA_Request.Object_Type)
+   return CXX_TA_Request_Type
+   is (
+      case TA_Request.Valid (Obj) is
+      when True => (
+         Operation => CXX_TA_Request_Operation_From_SPARK (
+            TA_Request.Operation (Obj)),
+         Success   => CXX_Bool_From_SPARK (TA_Request.Success (Obj)),
+         Tag       => CXX_Tag_Type        (TA_Request.Tag (Obj))),
+      when False => (
+         Operation => 0,
+         Success   => 0,
+         Tag       => 0));
+
+   subtype CXX_Key_Value_Ciphertext_Type is CXX_Key_Value_Type;
+
+   function CXX_Key_Value_Ciphertext_To_SPARK (
+      Key_Value : CXX_Key_Value_Ciphertext_Type)
+   return Key_Value_Ciphertext_Type;
+
+   function CXX_Key_Value_Ciphertext_From_SPARK (
+      SPARK_Key_Value : Key_Value_Ciphertext_Type)
+   return CXX_Key_Value_Ciphertext_Type;
+
+   subtype CXX_Key_Value_Plaintext_Type is CXX_Key_Value_Type;
+
+   function CXX_Key_Value_Plaintext_To_SPARK (
+      Key_Value : CXX_Key_Value_Plaintext_Type)
+   return Key_Value_Plaintext_Type;
+
+   function CXX_Key_Value_Plaintext_From_SPARK (
+      SPARK_Key_Value : Key_Value_Plaintext_Type)
+   return CXX_Key_Value_Plaintext_Type;
 
 end CBE.CXX;

@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
+with CBE.TA_Request;
 
 package CBE.Trust_Anchor
 with SPARK_Mode
@@ -89,11 +90,73 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Execute
+   --  Peek generated request
    --
-   procedure Execute (
-      Anchor   : in out Anchor_Type;
-      Progress : in out Boolean);
+   procedure Peek_Generated_Request (
+      Anchor :     Anchor_Type;
+      Req    : out TA_Request.Object_Type);
+
+   --
+   --  Drop generated request
+   --
+   procedure Drop_Generated_Request (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type);
+
+   --
+   --  Peek generated superblock hash
+   --
+   procedure Peek_Generated_SB_Hash (
+      Anchor :     Anchor_Type;
+      Req    :     TA_Request.Object_Type;
+      Hash   : out Hash_Type);
+
+   --
+   --  Peek generated key value ciphertext
+   --
+   procedure Peek_Generated_Key_Value_Ciphertext (
+      Anchor    :     Anchor_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Ciphertext_Type);
+
+   --
+   --  Peek generated key value plaintext
+   --
+   procedure Peek_Generated_Key_Value_Plaintext (
+      Anchor    :     Anchor_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA create key request complete
+   --
+   procedure Mark_Generated_Create_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA secure superblock request complete
+   --
+   procedure Mark_Generated_Secure_SB_Request_Complete (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type);
+
+   --
+   --  Mark generated TA decrypt key request complete
+   --
+   procedure Mark_Generated_Decrypt_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   --
+   --  Mark generated TA encrypt key request complete
+   --
+   procedure Mark_Generated_Encrypt_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type);
 
 private
 
@@ -110,58 +173,23 @@ private
 
    type Job_State_Type is (
       Submitted,
+      Dropped,
       Completed);
 
    type Job_Type is record
-      Operation : Job_Operation_Type;
-      State : Job_State_Type;
-      Submitted_Prim : Primitive.Object_Type;
-      Key_Value_Plaintext : Key_Value_Plaintext_Type;
+      Operation            : Job_Operation_Type;
+      State                : Job_State_Type;
+      Submitted_Prim       : Primitive.Object_Type;
+      Key_Value_Plaintext  : Key_Value_Plaintext_Type;
       Key_Value_Ciphertext : Key_Value_Ciphertext_Type;
-      Hash : Hash_Type;
+      Hash                 : Hash_Type;
+      Request              : TA_Request.Object_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
 
-   type Modulo_Byte_Type is mod 2**8;
-
    type Anchor_Type is record
       Jobs : Jobs_Type;
-      Next_Key_Value_Plaintext_Byte : Modulo_Byte_Type;
-      Secured_SB_Hash : Hash_Type;
-      Private_Key : Key_Value_Plaintext_Type;
    end record;
-
-   --
-   --  Execute_Secure_SB
-   --
-   procedure Execute_Secure_SB (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean);
-
-   --
-   --  Execute_Create_Key
-   --
-   procedure Execute_Create_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean);
-
-   --
-   --  Execute_Encrypt_Key
-   --
-   procedure Execute_Encrypt_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean);
-
-   --
-   --  Execute_Decrypt_Key
-   --
-   procedure Execute_Decrypt_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean);
 
 end CBE.Trust_Anchor;

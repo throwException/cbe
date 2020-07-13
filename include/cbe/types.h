@@ -127,6 +127,69 @@ namespace Cbe {
 
 	} __attribute__((packed));
 
+	class Trust_anchor_request
+	{
+		public:
+
+			enum class Operation : uint32_t {
+				INVALID           = 0,
+				CREATE_KEY        = 1,
+				SECURE_SUPERBLOCK = 2,
+				ENCRYPT_KEY       = 3,
+				DECRYPT_KEY       = 4,
+			};
+
+		private:
+
+			Operation const _operation;
+			bool            _success;
+			uint32_t  const _tag;
+
+		public:
+
+			Trust_anchor_request()
+			:
+				_operation { Operation::INVALID },
+				_success   { false },
+				_tag       { 0 }
+			{ }
+
+			Trust_anchor_request(Operation operation,
+			                     bool      success,
+			                     uint32_t  tag)
+			:
+				_operation { operation },
+				_success   { success },
+				_tag       { tag }
+			{ }
+
+			void print(Genode::Output &out) const;
+
+			bool valid() const
+			{
+				switch (_operation) {
+				case Operation::CREATE_KEY:        return true;
+				case Operation::SECURE_SUPERBLOCK: return true;
+				case Operation::ENCRYPT_KEY:       return true;
+				case Operation::DECRYPT_KEY:       return true;
+				case Operation::INVALID:           return false;
+				}
+				return false;
+			}
+
+			bool create_key()        const { return _operation == Operation::CREATE_KEY; }
+			bool secure_superblock() const { return _operation == Operation::SECURE_SUPERBLOCK; }
+			bool encrypt_key()       const { return _operation == Operation::ENCRYPT_KEY; }
+			bool decrypt_key()       const { return _operation == Operation::DECRYPT_KEY; }
+
+			Operation operation() const { return _operation; }
+			bool      success()   const { return _success; }
+			uint32_t  tag()       const { return _tag; }
+
+			void success(bool arg) { _success = arg; }
+
+	} __attribute__((packed));
+
 
 	struct Block_data
 	{
@@ -229,6 +292,58 @@ namespace Cbe {
 	} __attribute__((packed));
 
 
+	/*
+	 * The Hash contains the hash of a node.
+	 */
+	struct Hash
+	{
+		enum { MAX_LENGTH = 32, };
+		char values[MAX_LENGTH];
+
+		/* hash as hex value plus "0x" prefix and terminating null */
+		using String = Genode::String<sizeof(values) * 2 + 3>;
+
+		/* debug */
+		void print(Genode::Output &out) const
+		{
+			using namespace Genode;
+			Genode::print(out, "0x");
+			bool leading_zero = true;
+			for (char const c : values) {
+				if (leading_zero) {
+					if (c) {
+						leading_zero = false;
+						Genode::print(out, Hex(c, Hex::OMIT_PREFIX));
+					}
+				} else {
+					Genode::print(out, Hex(c, Hex::OMIT_PREFIX, Hex::PAD));
+				}
+			}
+			if (leading_zero) {
+				Genode::print(out, "0");
+			}
+		}
+	};
+
+	struct Key_plaintext_value
+	{
+		enum { KEY_SIZE = 32 };
+		char value[KEY_SIZE];
+	};
+
+	struct Key_ciphertext_value
+	{
+		enum { KEY_SIZE = 32 };
+		char value[KEY_SIZE];
+	};
+
+	/*
+	 * The Key contains the key-material that is used to
+	 * process cipher-blocks.
+	 *
+	 * (For now it is not used but the ID field is already referenced
+	 *  by type 2 nodes.)
+	 */
 	struct Key
 	{
 		enum { KEY_SIZE = 32 };
@@ -297,6 +412,20 @@ char const *to_string(Cbe::Request::Operation op)
 	case Cbe::Request::Operation::RESUME_REKEYING: return "resume_rekeying";
 	case Cbe::Request::Operation::DEINITIALIZE: return "deinitialize";
 	case Cbe::Request::Operation::INITIALIZE: return "initialize";
+	}
+	throw Unknown_operation_type();
+}
+
+
+char const *to_string(Cbe::Trust_anchor_request::Operation op)
+{
+	struct Unknown_operation_type : Genode::Exception { };
+	switch (op) {
+	case Cbe::Trust_anchor_request::Operation::INVALID: return "invalid";
+	case Cbe::Trust_anchor_request::Operation::CREATE_KEY: return "create_key";
+	case Cbe::Trust_anchor_request::Operation::SECURE_SUPERBLOCK: return "secure_superblock";
+	case Cbe::Trust_anchor_request::Operation::ENCRYPT_KEY: return "encrypt_key";
+	case Cbe::Trust_anchor_request::Operation::DECRYPT_KEY: return "decrypt_key";
 	}
 	throw Unknown_operation_type();
 }
@@ -377,4 +506,14 @@ void Cbe::Request::print(Genode::Output &out) const
 	Genode::print(out, " success: ", _success);
 }
 
+void Cbe::Trust_anchor_request::print(Genode::Output &out) const
+{
+	if (!valid()) {
+		Genode::print(out, "<invalid>");
+		return;
+	}
+	Genode::print(out, "tag: ", _tag);
+	Genode::print(out, " op: ", to_string (_operation));
+	Genode::print(out, " success: ", _success);
+}
 #endif /* _CBE_TYPES_H_ */

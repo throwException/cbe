@@ -660,6 +660,90 @@ is
          Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index), Data_Valid);
    end Supply_Crypto_Plain_Data;
 
+   procedure Peek_Generated_TA_Request (
+      Obj :     Object_Type;
+      Req : out TA_Request.Object_Type)
+   is
+   begin
+      Trust_Anchor.Peek_Generated_Request (Obj.TA, Req);
+   end Peek_Generated_TA_Request;
+
+   procedure Drop_Generated_TA_Request (
+      Obj : in out Object_Type;
+      Req :        TA_Request.Object_Type)
+   is
+   begin
+      Trust_Anchor.Drop_Generated_Request (Obj.TA, Req);
+   end Drop_Generated_TA_Request;
+
+   procedure Peek_Generated_TA_SB_Hash (
+      Obj  :     Object_Type;
+      Req  :     TA_Request.Object_Type;
+      Hash : out Hash_Type)
+   is
+   begin
+      Trust_Anchor.Peek_Generated_SB_Hash (Obj.TA, Req, Hash);
+   end Peek_Generated_TA_SB_Hash;
+
+   procedure Peek_Generated_TA_Key_Cipher (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Ciphertext_Type)
+   is
+   begin
+      Trust_Anchor.Peek_Generated_Key_Value_Ciphertext (
+         Obj.TA, Req, Key_Value);
+   end Peek_Generated_TA_Key_Cipher;
+
+   procedure Peek_Generated_TA_Key_Plain (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Plaintext_Type)
+   is
+   begin
+      Trust_Anchor.Peek_Generated_Key_Value_Plaintext (
+         Obj.TA, Req, Key_Value);
+   end Peek_Generated_TA_Key_Plain;
+
+   procedure Mark_Generated_TA_Create_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type)
+   is
+   begin
+      Trust_Anchor.Mark_Generated_Create_Key_Request_Complete (
+         Obj.TA, Req, Key_Value);
+   end Mark_Generated_TA_Create_Key_Request_Complete;
+
+   procedure Mark_Generated_TA_Secure_SB_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type)
+   is
+   begin
+      Trust_Anchor.Mark_Generated_Secure_SB_Request_Complete (
+         Obj.TA, Req);
+   end Mark_Generated_TA_Secure_SB_Request_Complete;
+
+   procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type)
+   is
+   begin
+      Trust_Anchor.Mark_Generated_Decrypt_Key_Request_Complete (
+         Obj.TA, Req, Key_Value);
+   end Mark_Generated_TA_Decrypt_Key_Request_Complete;
+
+   procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type)
+   is
+   begin
+      Trust_Anchor.Mark_Generated_Encrypt_Key_Request_Complete (
+         Obj.TA, Req, Key_Value);
+   end Mark_Generated_TA_Encrypt_Key_Request_Complete;
+
    --------------
    --  private --
    --------------
@@ -2779,8 +2863,6 @@ is
       Progress : in out Boolean)
    is
    begin
-      Trust_Anchor.Execute (Obj.TA, Progress);
-
       Loop_Completed_Prims :
       loop
          Declare_Prim :

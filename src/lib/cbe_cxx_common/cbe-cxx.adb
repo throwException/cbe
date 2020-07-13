@@ -11,6 +11,28 @@ pragma Ada_2012;
 package body CBE.CXX
 with SPARK_Mode
 is
+   function CXX_Hash_From_SPARK (SPARK_Hash : Hash_Type)
+   return CXX_Hash_Type
+   is
+      CXX_Hash : CXX_Hash_Type;
+   begin
+      for Idx in CXX_Hash'Range loop
+         CXX_Hash (Idx) := CXX_UInt8_Type (SPARK_Hash (Idx));
+      end loop;
+      return CXX_Hash;
+   end CXX_Hash_From_SPARK;
+
+   function CXX_Hash_To_SPARK (CXX_Hash : CXX_Hash_Type)
+   return Hash_Type
+   is
+      Hash : Hash_Type;
+   begin
+      for Idx in Hash'Range loop
+         Hash (Idx) := Byte_Type (CXX_Hash (Idx));
+      end loop;
+      return Hash;
+   end CXX_Hash_To_SPARK;
+
    --
    --  CXX_Key_From_SPARK
    --
@@ -63,5 +85,80 @@ is
       when others => raise Program_Error;
       end case;
    end CXX_Request_To_SPARK;
+
+   --
+   --  Trust Anchor
+   --
+
+   function CXX_TA_Request_To_SPARK (Input : CXX_TA_Request_Type)
+   return TA_Request.Object_Type
+   is
+   begin
+      case Input.Operation is
+      when 0 =>
+         return TA_Request.Invalid_Object;
+      when 1 =>
+         return CXX_TA_Request_Valid_To_SPARK (Input,
+            TA_Request.Create_Key);
+      when 2 =>
+         return CXX_TA_Request_Valid_To_SPARK (Input,
+            TA_Request.Secure_Superblock);
+      when 3 =>
+         return CXX_TA_Request_Valid_To_SPARK (Input,
+            TA_Request.Encrypt_Key);
+      when 4 =>
+         return CXX_TA_Request_Valid_To_SPARK (Input,
+            TA_Request.Decrypt_Key);
+      when others => raise Program_Error;
+      end case;
+   end CXX_TA_Request_To_SPARK;
+
+   function CXX_Key_Value_Ciphertext_To_SPARK (
+      Key_Value : CXX_Key_Value_Ciphertext_Type)
+   return Key_Value_Ciphertext_Type
+   is
+      SPARK_Key : Key_Value_Ciphertext_Type;
+   begin
+      for Idx in SPARK_Key'Range loop
+         SPARK_Key (Idx) := Byte_Type (Key_Value (Idx));
+      end loop;
+      return SPARK_Key;
+   end CXX_Key_Value_Ciphertext_To_SPARK;
+
+   function CXX_Key_Value_Ciphertext_From_SPARK (
+      SPARK_Key_Value : Key_Value_Ciphertext_Type)
+   return CXX_Key_Value_Ciphertext_Type
+   is
+      CXX_Key : CXX_Key_Value_Ciphertext_Type;
+   begin
+      for Idx in CXX_Key'Range loop
+         CXX_Key (Idx) := CXX_UInt8_Type (SPARK_Key_Value (Idx));
+      end loop;
+      return CXX_Key;
+   end CXX_Key_Value_Ciphertext_From_SPARK;
+
+   function CXX_Key_Value_Plaintext_To_SPARK (
+      Key_Value : CXX_Key_Value_Plaintext_Type)
+   return Key_Value_Plaintext_Type
+   is
+      SPARK_Key : Key_Value_Plaintext_Type;
+   begin
+      for Idx in SPARK_Key'Range loop
+         SPARK_Key (Idx) := Byte_Type (Key_Value (Idx));
+      end loop;
+      return SPARK_Key;
+   end CXX_Key_Value_Plaintext_To_SPARK;
+
+   function CXX_Key_Value_Plaintext_From_SPARK (
+      SPARK_Key_Value : Key_Value_Plaintext_Type)
+   return CXX_Key_Value_Plaintext_Type
+   is
+      CXX_Key : CXX_Key_Value_Plaintext_Type;
+   begin
+      for Idx in CXX_Key'Range loop
+         CXX_Key (Idx) := CXX_UInt8_Type (SPARK_Key_Value (Idx));
+      end loop;
+      return CXX_Key;
+   end CXX_Key_Value_Plaintext_From_SPARK;
 
 end CBE.CXX;

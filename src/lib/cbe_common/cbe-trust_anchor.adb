@@ -26,14 +26,10 @@ is
             Submitted_Prim => Primitive.Invalid_Object,
             Key_Value_Plaintext => (others => Byte_Type'First),
             Key_Value_Ciphertext => (others => Byte_Type'First),
-            Hash => (others => Byte_Type'First));
+            Hash => (others => Byte_Type'First),
+            Request => TA_Request.Invalid_Object);
 
       end loop Initialize_Each_Job;
-
-      Anchor.Private_Key := (others => Byte_Type (42));
-
-      Anchor.Next_Key_Value_Plaintext_Byte := 23;
-      Anchor.Secured_SB_Hash := (others => Byte_Type'First);
 
    end Initialize_Anchor;
 
@@ -63,6 +59,10 @@ is
                Anchor.Jobs (Idx).Operation := Create_Key;
                Anchor.Jobs (Idx).State := Submitted;
                Anchor.Jobs (Idx).Submitted_Prim := Prim;
+               Anchor.Jobs (Idx).Request := TA_Request.Valid_Object (
+                  Op   => TA_Request.Create_Key,
+                  Succ => False,
+                  Tg   => 0);
                return;
 
             when others =>
@@ -95,6 +95,10 @@ is
                Anchor.Jobs (Idx).State := Submitted;
                Anchor.Jobs (Idx).Submitted_Prim := Prim;
                Anchor.Jobs (Idx).Hash := Hash;
+               Anchor.Jobs (Idx).Request := TA_Request.Valid_Object (
+                  Op   => TA_Request.Secure_Superblock,
+                  Succ => False,
+                  Tg   => 0);
                return;
 
             when others =>
@@ -130,6 +134,10 @@ is
                Anchor.Jobs (Idx).State := Submitted;
                Anchor.Jobs (Idx).Submitted_Prim := Prim;
                Anchor.Jobs (Idx).Key_Value_Plaintext := Key;
+               Anchor.Jobs (Idx).Request := TA_Request.Valid_Object (
+                  Op   => TA_Request.Encrypt_Key,
+                  Succ => False,
+                  Tg   => 0);
                return;
 
             when others =>
@@ -162,6 +170,10 @@ is
                Anchor.Jobs (Idx).State := Submitted;
                Anchor.Jobs (Idx).Submitted_Prim := Prim;
                Anchor.Jobs (Idx).Key_Value_Ciphertext := Key;
+               Anchor.Jobs (Idx).Request := TA_Request.Valid_Object (
+                  Op   => TA_Request.Decrypt_Key,
+                  Succ => False,
+                  Tg   => 0);
                return;
 
             when others =>
@@ -269,162 +281,237 @@ is
    end Drop_Completed_Primitive;
 
    --
-   --  Execute_Create_Key
+   --  Peek generated request
    --
-   procedure Execute_Create_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean)
+   procedure Peek_Generated_Request (
+      Anchor :     Anchor_Type;
+      Req    : out TA_Request.Object_Type)
    is
    begin
-      case Anchor.Jobs (Idx).State is
-      when Submitted =>
 
-         Anchor.Jobs (Idx).Key_Value_Plaintext := (
-            others => Byte_Type (Anchor.Next_Key_Value_Plaintext_Byte));
-
-         Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
-         Anchor.Jobs (Idx).State := Completed;
-         Anchor.Next_Key_Value_Plaintext_Byte :=
-            Anchor.Next_Key_Value_Plaintext_Byte + 1;
-         Progress := True;
-
-      when others =>
-
-         null;
-
-      end case;
-   end Execute_Create_Key;
-
-   --
-   --  Execute_Encrypt_Key
-   --
-   procedure Execute_Encrypt_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean)
-   is
-   begin
-      case Anchor.Jobs (Idx).State is
-      when Submitted =>
-
-         if Anchor.Jobs (Idx).Operation = Encrypt_Key then
-
-            for Jdx in 0 .. Key_Value_Plaintext_Type'Last loop
-               Anchor.Jobs (Idx).Key_Value_Ciphertext (Jdx) :=
-                  Byte_Type (
-                  Modulo_Byte_Type (Anchor.Private_Key (Jdx))
-                     xor Modulo_Byte_Type (
-                        Anchor.Jobs (Idx).Key_Value_Plaintext (Jdx)));
-            end loop;
-
-            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
-            Anchor.Jobs (Idx).State := Completed;
-
-            Progress := True;
-         end if;
-
-      when others =>
-
-         null;
-
-      end case;
-   end Execute_Encrypt_Key;
-
-   --
-   --  Execute_Decrypt_Key
-   --
-   procedure Execute_Decrypt_Key (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean)
-   is
-   begin
-      case Anchor.Jobs (Idx).State is
-      when Submitted =>
-
-         if Anchor.Jobs (Idx).Operation = Decrypt_Key then
-
-            for Jdx in 0 .. Key_Value_Plaintext_Type'Last loop
-               Anchor.Jobs (Idx).Key_Value_Plaintext (Jdx) :=
-                  Byte_Type (
-                  Modulo_Byte_Type (Anchor.Private_Key (Jdx))
-                     xor Modulo_Byte_Type (
-                        Anchor.Jobs (Idx).Key_Value_Ciphertext (Jdx)));
-            end loop;
-
-            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
-            Anchor.Jobs (Idx).State := Completed;
-
-            Progress := True;
-         end if;
-
-      when others =>
-
-         null;
-
-      end case;
-   end Execute_Decrypt_Key;
-
-   --
-   --  Execute_Secure_SB
-   --
-   procedure Execute_Secure_SB (
-      Anchor   : in out Anchor_Type;
-      Idx      :        Jobs_Index_Type;
-      Progress : in out Boolean)
-   is
-   begin
-      case Anchor.Jobs (Idx).State is
-      when Submitted =>
-
-         Anchor.Secured_SB_Hash := Anchor.Jobs (Idx).Hash;
-         Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim, True);
-         Anchor.Jobs (Idx).State := Completed;
-         Progress := True;
-
-      when others =>
-
-         null;
-
-      end case;
-   end Execute_Secure_SB;
-
-   --
-   --  Execute
-   --
-   procedure Execute (
-      Anchor   : in out Anchor_Type;
-      Progress : in out Boolean)
-   is
-   begin
-      Execute_Each_Valid_Job :
+      Find_Pending_Generated_Request :
       for Idx in Anchor.Jobs'Range loop
 
-         case Anchor.Jobs (Idx).Operation is
-         when Create_Key =>
+         if Anchor.Jobs (Idx).Operation /= Invalid and then
+            Anchor.Jobs (Idx).State = Submitted
+         then
+            Req := Anchor.Jobs (Idx).Request;
+            return;
+         end if;
+      end loop Find_Pending_Generated_Request;
 
-            Execute_Create_Key (Anchor, Idx, Progress);
+      Req := TA_Request.Invalid_Object;
 
-         when Encrypt_Key =>
+   end Peek_Generated_Request;
 
-            Execute_Encrypt_Key (Anchor, Idx, Progress);
+   --
+   --  Drop generated request
+   --
+   procedure Drop_Generated_Request (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type)
+   is
+   begin
+      Find_Dropped_Generated_Request :
+      for Idx in Anchor.Jobs'Range loop
 
-         when Decrypt_Key =>
+         if Anchor.Jobs (Idx).Operation /= Invalid and then
+            Anchor.Jobs (Idx).State = Submitted and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).State := Dropped;
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Request;
 
-            Execute_Decrypt_Key (Anchor, Idx, Progress);
+      raise Program_Error;
 
-         when Secure_Superblock =>
+   end Drop_Generated_Request;
 
-            Execute_Secure_SB (Anchor, Idx, Progress);
+   --
+   --  Peek generated superblock hash
+   --
+   procedure Peek_Generated_SB_Hash (
+      Anchor :     Anchor_Type;
+      Req    :     TA_Request.Object_Type;
+      Hash   : out Hash_Type)
+   is
+   begin
 
-         when Invalid =>
+      Find_Hash_Generated_Request :
+      for Idx in Anchor.Jobs'Range loop
 
-            null;
+         if Anchor.Jobs (Idx).Operation /= Invalid and then
+            Anchor.Jobs (Idx).State = Submitted and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Hash := Anchor.Jobs (Idx).Hash;
+            return;
+         end if;
+      end loop Find_Hash_Generated_Request;
 
-         end case;
+      raise Program_Error;
 
-      end loop Execute_Each_Valid_Job;
-   end Execute;
+   end Peek_Generated_SB_Hash;
+
+   --
+   --  Peek generated key value ciphertext
+   --
+   procedure Peek_Generated_Key_Value_Ciphertext (
+      Anchor    :     Anchor_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Ciphertext_Type)
+   is
+   begin
+      Find_Ciphertext_Generated_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation /= Invalid and then
+            Anchor.Jobs (Idx).State = Submitted and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Key_Value := Anchor.Jobs (Idx).Key_Value_Ciphertext;
+            return;
+         end if;
+      end loop Find_Ciphertext_Generated_Request;
+
+      raise Program_Error;
+
+   end Peek_Generated_Key_Value_Ciphertext;
+
+   --
+   --  Peek generated key value plaintext
+   --
+   procedure Peek_Generated_Key_Value_Plaintext (
+      Anchor    :     Anchor_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Plaintext_Type)
+   is
+   begin
+      Find_Plaintext_Generated_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation /= Invalid and then
+            Anchor.Jobs (Idx).State = Submitted and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Key_Value := Anchor.Jobs (Idx).Key_Value_Plaintext;
+            return;
+         end if;
+      end loop Find_Plaintext_Generated_Request;
+
+      raise Program_Error;
+
+   end Peek_Generated_Key_Value_Plaintext;
+
+   --
+   --  Mark generated TA create key request complete
+   --
+   procedure Mark_Generated_Create_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type)
+   is
+   begin
+      Find_Dropped_Generated_Create_Key_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Create_Key and then
+            Anchor.Jobs (Idx).State = Dropped and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).Key_Value_Plaintext := Key_Value;
+            Anchor.Jobs (Idx).State := Completed;
+            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim,
+               TA_Request.Success (Req));
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Create_Key_Request;
+
+      raise Program_Error;
+
+   end Mark_Generated_Create_Key_Request_Complete;
+
+   --
+   --  Mark generated TA secure superblock request complete
+   --
+   procedure Mark_Generated_Secure_SB_Request_Complete (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type)
+   is
+   begin
+      Find_Dropped_Generated_Secure_SB_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Secure_Superblock and then
+            Anchor.Jobs (Idx).State = Dropped and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).State := Completed;
+            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim,
+               TA_Request.Success (Req));
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Secure_SB_Request;
+
+      raise Program_Error;
+
+   end Mark_Generated_Secure_SB_Request_Complete;
+
+   --
+   --  Mark generated TA decrypt key request complete
+   --
+   procedure Mark_Generated_Decrypt_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type)
+   is
+   begin
+      Find_Dropped_Generated_Decrypt_Key_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Decrypt_Key and then
+            Anchor.Jobs (Idx).State = Dropped and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).Key_Value_Plaintext := Key_Value;
+            Anchor.Jobs (Idx).State := Completed;
+            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim,
+               TA_Request.Success (Req));
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Decrypt_Key_Request;
+
+      raise Program_Error;
+
+   end Mark_Generated_Decrypt_Key_Request_Complete;
+
+   --
+   --  Mark generated TA encrypt key request complete
+   --
+   procedure Mark_Generated_Encrypt_Key_Request_Complete (
+      Anchor    : in out Anchor_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type)
+   is
+   begin
+      Find_Dropped_Generated_Encrypt_Key_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Encrypt_Key and then
+            Anchor.Jobs (Idx).State = Dropped and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).Key_Value_Ciphertext := Key_Value;
+            Anchor.Jobs (Idx).State := Completed;
+            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim,
+               TA_Request.Success (Req));
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Encrypt_Key_Request;
+
+      raise Program_Error;
+
+   end Mark_Generated_Encrypt_Key_Request_Complete;
 
 end CBE.Trust_Anchor;
