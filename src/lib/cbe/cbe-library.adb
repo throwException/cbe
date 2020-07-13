@@ -21,8 +21,6 @@ is
    is
    begin
 
-      Obj.Handle_Failed_FT_Prims := False;
-
       Obj.Write_Stalled := False;
 
       Obj.Execute_Progress := False;
@@ -210,9 +208,6 @@ is
    is
    begin
       Request_Pool.Drop_Completed_Request (Obj.Request_Pool_Obj, Req);
-      pragma Debug (Debug.Print_String ("Completed Request: "
-         & Request.To_String (Req)));
-      Obj.Handle_Failed_FT_Prims := False;
    end Drop_Completed_Client_Request;
 
    procedure Has_IO_Request (
@@ -966,55 +961,9 @@ is
             when others =>
 
                exit Loop_Free_Tree_Completed_Prims when
-                  Primitive.Success (Prim) or else
-                  not Obj.Handle_Failed_FT_Prims;
+                  Primitive.Success (Prim);
 
-               if Obj.Free_Tree_Retry_Count < Free_Tree_Retry_Limit then
-                  Obj.Free_Tree_Retry_Count := Obj.Free_Tree_Retry_Count + 1;
-
-                  if not Obj.Write_Stalled then
-
-                     Discard_Disposable_Snapshots (
-                        Obj.Superblock.Snapshots,
-                        Obj.Superblock.Last_Secured_Generation,
-                        Obj.Cur_Gen);
-
-                     Obj.Superblock.Last_Secured_Generation := Obj.Cur_Gen;
-                     Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen :=
-                        Obj.Cur_Gen;
-
-                     Sync_Superblock.Submit_Request (
-                        Obj.Sync_SB_Obj, 1, Obj.Superblock, Obj.Cur_SB,
-                        Obj.Cur_Gen);
-
-                     pragma Debug (Debug.Print_String (
-                        "Write_Stalled Sync_Request"));
-                     Obj.Write_Stalled := True;
-                     Obj.Handle_Failed_FT_Prims := False;
-                  else
-                     Obj.Write_Stalled := False;
-                     pragma Debug (Debug.Print_String ("Retry FT allocation"));
-                     New_Free_Tree.Retry_Allocation (Obj.New_Free_Tree_Obj);
-                  end if;
-
-                  exit Loop_Free_Tree_Completed_Prims;
-               else
-                  pragma Debug (Debug.Print_String (
-                     "Retry FT allocation failed"));
-                  --  raise Program_Error;
-               end if;
-
-               Request_Pool.Mark_Generated_Primitive_Complete (
-                  Obj.Request_Pool_Obj,
-                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-                  Primitive.Success (Prim));
-
-               --  FIXME
-               Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-               New_Free_Tree.Drop_Completed_Primitive (
-                  Obj.New_Free_Tree_Obj, Prim);
-
-               Progress := True;
+               raise Program_Error;
 
             end case;
 
@@ -1745,15 +1694,6 @@ is
                   Progress := True;
 
                else
-
-                  case Primitive.Operation (Prim) is
-                  when Read =>
-                     Obj.Handle_Failed_FT_Prims := False;
-                  when Write =>
-                     Obj.Handle_Failed_FT_Prims := True;
-                  when others =>
-                     raise Program_Error;
-                  end case;
 
                   Virtual_Block_Device.Submit_Primitive (
                      Obj.VBD,
@@ -3007,9 +2947,6 @@ is
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
                   Primitive.Success (Prim));
 
-               Obj.Handle_Failed_FT_Prims := False;
-            else
-               Obj.Handle_Failed_FT_Prims := True;
             end if;
 
             Obj.Secure_Superblock := False;

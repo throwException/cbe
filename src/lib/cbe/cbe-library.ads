@@ -390,8 +390,6 @@ private
 
    type Object_Type is record
 
-      Handle_Failed_FT_Prims : Boolean;
-
       Write_Stalled : Boolean;
 
       Execute_Progress             : Boolean;
