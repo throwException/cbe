@@ -277,6 +277,13 @@ is
                Ctrl.Jobs (Idx).Submitted_Prim := Prim;
                return;
 
+            when Primitive.Tag_Pool_SB_Ctrl_Sync =>
+
+               Ctrl.Jobs (Idx).Operation := Sync;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               return;
+
             when others =>
 
                raise Program_Error;
@@ -1759,6 +1766,153 @@ is
    end Execute_Create_Snapshot;
 
    --
+   --  Execute_Sync
+   --
+   procedure Execute_Sync (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         Discard_Disposable_Snapshots (
+            SB.Snapshots,
+            SB.Last_Secured_Generation,
+            Curr_Gen);
+
+         SB.Last_Secured_Generation := Curr_Gen;
+         SB.Snapshots (SB.Curr_Snap).Gen := Curr_Gen;
+
+         Init_SB_Ciphertext_Without_Key_Values (SB, Job.SB_Ciphertext);
+         Job.Key_Plaintext := SB.Current_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Current_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Current_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Key_Plaintext := SB.Previous_Key;
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Encrypt_Key,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Encrypt_Previous_Key_Pending;
+         Progress := True;
+
+      when Encrypt_Previous_Key_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Cache,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Cache_Pending;
+         Progress := True;
+
+      when Sync_Cache_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Write_SB_Pending;
+         Progress := True;
+
+      when Write_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Sync,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_Blk_IO_Sync,
+            Blk_Nr => Block_Number_Type (SB_Idx),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Sync_Blk_IO_Pending;
+         Progress := True;
+
+      when Sync_Blk_IO_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Secure_SB,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Secure_SB_Pending;
+
+         if SB_Idx < Superblocks_Index_Type'Last then
+            SB_Idx := SB_Idx + 1;
+         else
+            SB_Idx := Superblocks_Index_Type'First;
+         end if;
+
+         Job.Generation := Curr_Gen;
+         Curr_Gen := Curr_Gen + 1;
+
+         Progress := True;
+
+      when Secure_SB_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         SB.Last_Secured_Generation := Job.Generation;
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Sync;
+
+   --
    --  Execute_Initialize_Rekeying
    --
    procedure Execute_Initialize_Rekeying (
@@ -2195,6 +2349,12 @@ is
       for Idx in Ctrl.Jobs'Range loop
 
          case Ctrl.Jobs (Idx).Operation is
+
+         when Sync =>
+
+            Execute_Sync (
+               Ctrl.Jobs (Idx), Idx, SB, SB_Idx, Curr_Gen, Progress);
+
          when Initialize_Rekeying =>
 
             Execute_Initialize_Rekeying (

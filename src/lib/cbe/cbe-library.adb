@@ -1881,6 +1881,7 @@ is
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
             when
+               Primitive.Tag_Pool_SB_Ctrl_Sync |
                Primitive.Tag_Pool_SB_Ctrl_Rekey_VBA |
                Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
                Primitive.Tag_Pool_SB_Ctrl_Create_Snap |
@@ -2568,6 +2569,7 @@ is
 
             case Primitive.Tag (Prim) is
             when
+               Primitive.Tag_Pool_SB_Ctrl_Sync |
                Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
                Primitive.Tag_Pool_SB_Ctrl_Discard_Snap |
                Primitive.Tag_Pool_SB_Ctrl_Deinitialize

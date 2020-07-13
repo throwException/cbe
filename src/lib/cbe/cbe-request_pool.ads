@@ -175,6 +175,9 @@ private
       Create_Snap_At_SB_Ctrl_Pending,
       Create_Snap_At_SB_Ctrl_In_Progress,
       Create_Snap_At_SB_Ctrl_Complete,
+      Sync_At_SB_Ctrl_Pending,
+      Sync_At_SB_Ctrl_In_Progress,
+      Sync_At_SB_Ctrl_Complete,
       Discard_Snap_At_SB_Ctrl_Pending,
       Discard_Snap_At_SB_Ctrl_In_Progress,
       Discard_Snap_At_SB_Ctrl_Complete,
@@ -209,7 +212,7 @@ private
       Pool_Index_Type, Index_Queue_Index_Type);
 
    type Object_Type is record
-      Jobs   : Jobs_Type;
+      Jobs    : Jobs_Type;
       Indices : Index_Queue.Queue_Type;
    end record;
 
@@ -229,7 +232,7 @@ private
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -238,7 +241,7 @@ private
    --  Execute_Extend_VBD
    --
    procedure Execute_Extend_VBD (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -247,7 +250,7 @@ private
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -256,7 +259,16 @@ private
    --  Execute_Create_Snapshot
    --
    procedure Execute_Create_Snapshot (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Sync
+   --
+   procedure Execute_Sync (
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -265,7 +277,7 @@ private
    --  Execute_Discard_Snapshot
    --
    procedure Execute_Discard_Snapshot (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -274,7 +286,7 @@ private
    --  Execute_Initialize
    --
    procedure Execute_Initialize (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);
@@ -283,7 +295,7 @@ private
    --  Execute_Deinitialize
    --
    procedure Execute_Deinitialize (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean);

@@ -42,6 +42,7 @@ is
                raise Program_Error;
 
             when
+               Sync |
                Rekey |
                Extend_VBD |
                Extend_FT |
@@ -71,7 +72,7 @@ is
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
-            when Read | Write | Sync =>
+            when Read | Write =>
 
                Obj.Jobs (Idx) := (
                   State                   => Pending,
@@ -187,6 +188,7 @@ is
 
             case Job.State is
             when
+               Sync_At_SB_Ctrl_Pending |
                Rekey_Init_Pending |
                Rekey_VBA_Pending |
                VBD_Extension_Step_Pending |
@@ -311,6 +313,9 @@ is
          when Pending =>
             Obj.Jobs (Idx).State := In_Progress;
             return;
+         when Sync_At_SB_Ctrl_Pending =>
+            Obj.Jobs (Idx).State := Sync_At_SB_Ctrl_In_Progress;
+            return;
          when Rekey_Init_Pending =>
             Obj.Jobs (Idx).State := Rekey_Init_In_Progress;
             return;
@@ -346,7 +351,7 @@ is
    --  Execute_Extend_VBD
    --
    procedure Execute_Extend_VBD (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -462,7 +467,7 @@ is
    --  Execute_Extend_FT
    --
    procedure Execute_Extend_FT (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -575,10 +580,61 @@ is
    end Execute_Extend_FT;
 
    --
+   --  Execute_Sync
+   --
+   procedure Execute_Sync (
+      Jobs     : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Jobs (Idx).State is
+      when Submitted =>
+
+         Jobs (Idx).Prim := Primitive.Valid_Object (
+            Op     => Primitive_Operation_Type'First,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Sync,
+            Pl_Idx => Idx,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type'First);
+
+         Jobs (Idx).State := Sync_At_SB_Ctrl_Pending;
+         Progress := True;
+
+      when Sync_At_SB_Ctrl_Complete =>
+
+         if Primitive.Success (Jobs (Idx).Prim) then
+
+            Request.Success (Jobs (Idx).Req, True);
+            Request.Offset (
+               Jobs (Idx).Req, Request.Offset_Type (Jobs (Idx).Gen));
+
+         else
+
+            Request.Success (Jobs (Idx).Req, False);
+
+         end if;
+
+         Jobs (Idx).State := Complete;
+         Index_Queue.Dequeue (Indices, Idx);
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Sync;
+
+   --
    --  Execute_Create_Snapshot
    --
    procedure Execute_Create_Snapshot (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -629,7 +685,7 @@ is
    --  Execute_Discard_Snapshot
    --
    procedure Execute_Discard_Snapshot (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -678,7 +734,7 @@ is
    --  Execute_Rekey
    --
    procedure Execute_Rekey (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -812,7 +868,7 @@ is
    --  Execute_Initialize
    --
    procedure Execute_Initialize (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -907,7 +963,7 @@ is
    --  Execute_Deinitialize
    --
    procedure Execute_Deinitialize (
-      Jobs    : in out Jobs_Type;
+      Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;
       Progress : in out Boolean)
@@ -964,6 +1020,10 @@ is
          begin
 
             case Request.Operation (Obj.Jobs (Idx).Req) is
+            when Sync =>
+
+               Execute_Sync (Obj.Jobs, Obj.Indices, Idx, Progress);
+
             when Rekey =>
 
                Execute_Rekey (Obj.Jobs, Obj.Indices, Idx, Progress);
@@ -1062,6 +1122,20 @@ is
       end if;
 
       case Request.Operation (Obj.Jobs (Idx).Req) is
+      when Sync =>
+
+         case Obj.Jobs (Idx).State is
+         when Sync_At_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Sync_At_SB_Ctrl_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
       when Discard_Snapshot =>
 
          case Obj.Jobs (Idx).State is
@@ -1103,7 +1177,7 @@ is
 
          end case;
 
-      when Read | Write | Sync =>
+      when Read | Write =>
 
          if Obj.Jobs (Idx).State /= In_Progress then
             raise Program_Error;

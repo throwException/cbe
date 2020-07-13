@@ -376,6 +376,7 @@ private
 
    type Job_Operation_Type is (
       Invalid,
+      Sync,
       Initialize,
       Deinitialize,
       VBD_Extension_Step,
@@ -560,6 +561,17 @@ private
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
       SB            :        Superblock_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Sync
+   --
+   procedure Execute_Sync (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      SB_Idx        : in out Superblocks_Index_Type;
+      Curr_Gen      : in out Generation_Type;
       Progress      : in out Boolean);
 
    --
