@@ -1389,6 +1389,10 @@ is
             SB_Idx := Job.SB_Idx;
             Curr_Gen := Job.Generation + 1;
 
+            if SB.Free_Max_Level < Free_Tree_Min_Max_Level then
+               raise Program_Error;
+            end if;
+
             Primitive.Success (Job.Submitted_Prim, True);
             Job.State := Completed;
             Progress := True;
@@ -1422,6 +1426,10 @@ is
          SB.Previous_Key.Value := Job.Prev_Key_Plaintext.Value;
          SB_Idx := Job.SB_Idx;
          Curr_Gen := Job.Generation + 1;
+
+         if SB.Free_Max_Level < Free_Tree_Min_Max_Level then
+            raise Program_Error;
+         end if;
 
          Primitive.Success (Job.Submitted_Prim, True);
          Job.State := Completed;

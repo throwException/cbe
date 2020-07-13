@@ -56,22 +56,7 @@ class Cbe::Library : public Cbe::Spark_object<338608>
 
 	public:
 
-	/**
-	 * Constructor
-	 *
-	 * \param  block   reference to the Block::Connection used by the I/O
-	 *                 module
-	 * \param  sbs     array of all super-blocks, will be copied
-	 *
-	 * \param  current_sb  super-block that should be used initially
-	 */
-	Library(Superblocks       const &sbs,
-	        Superblocks_index const &current_sb);
-
-	/**
-	 * Print current active super-block/snapshot information to LOG
-	 */
-//	void dump_cur_sb_info() const;
+	Library();
 
 	/**
 	 * Get highest virtual-block-address useable by the current active snapshot

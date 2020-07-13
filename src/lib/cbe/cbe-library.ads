@@ -33,23 +33,9 @@ is
    type Object_Type is private;
 
    --
-   --  Constructor
+   --  Initialize_Object
    --
-   --  \param  now     current time as timestamp
-   --  \param  sync    interval in ms after which the current generation
-   --                 should be sealed
-   --  \param  secure  interval in ms after which the current super-block
-   --                 should be secured
-   --  \param  block   reference to the Block::Connection used by the I/O
-   --                 module
-   --  \param  sbs     array of all super-blocks, will be copied
-   --
-   --  \param  current_sb  super-block that should be used initially
-   --
-   procedure Initialize_Object (
-      Obj     : out Object_Type;
-      SBs     :     Superblocks_Type;
-      Curr_SB :     Superblocks_Index_Type);
+   procedure Initialize_Object (Obj : out Object_Type);
 
    --
    --  Return active snapshot ids

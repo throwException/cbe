@@ -1104,28 +1104,12 @@ struct Cbe::Block_session_component
 	}
 };
 
-struct A1 { A1 () {Genode::log(__func__,__LINE__);}};
-struct A2 { A2 () {Genode::log(__func__,__LINE__);}};
-struct A3 { A3 () {Genode::log(__func__,__LINE__);}};
-struct A4 { A4 () {Genode::log(__func__,__LINE__);}};
 
 class Cbe::Main
 {
 	private:
 
 		enum State { INVALID, CBE, CBE_INIT, CBE_CHECK, CBE_DUMP };
-
-		static char const *state_to_string(State s)
-		{
-			switch (s) {
-			case CBE: return "CBE";
-			case CBE_INIT: return "INIT";
-			case CBE_CHECK: return "CHECK";
-			case CBE_DUMP: return "DUMP";
-			case INVALID: return "INVALID";
-			default: throw -1;
-			}
-		}
 
 		enum { TX_BUF_SIZE = Block::Session::TX_QUEUE_SIZE * BLOCK_SIZE, };
 
@@ -1148,11 +1132,7 @@ class Cbe::Main
 		Crypto_cipher_buffer                    _crypto_cipher_buf       { };
 		External::Crypto                        _crypto                  { };
 		State                                   _state                   { INVALID };
-		Cbe::Superblocks                        _super_blocks            { };
-		uint64_t                                _nr_of_sbs_requested     { 0 };
-		uint64_t                                _nr_of_sbs_available     { 0 };
 		Signal_handler<Main>                    _request_handler         { _env.ep(), *this, &Main::_execute };
-		Cbe::Snapshot_ID                        _creating_snapshot_id    { 0, false };
 		bool                                    _creating_snapshot       { false };
 		bool                                    _discard_snapshot        { false };
 		bool                                    _rekey                   { false };
@@ -2156,101 +2136,6 @@ class Cbe::Main
 			}
 		}
 
-		void _execute_cbe_construction(bool &progress)
-		{
-			while (_nr_of_sbs_requested < NUM_SUPER_BLOCKS &&
-			       _blk.tx()->ready_to_submit())
-			{
-				Cbe::Request request(
-					Cbe::Request::Operation::READ,
-					Cbe::Request::Success::FALSE,
-					_nr_of_sbs_requested,
-					0,
-					1,
-					0,
-					0
-				);
-				try {
-					Block::Packet_descriptor packet {
-						_blk.alloc_packet(Cbe::BLOCK_SIZE),
-						Block::Packet_descriptor::READ,
-						request.block_number(), request.count() };
-
-					_blk.tx()->try_submit_packet(packet);
-					if (_nr_of_sbs_requested == 0) {
-						log("cbe construction started");
-					}
-					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-					}
-					_nr_of_sbs_requested++;
-					progress = true;
-				}
-				catch (Block::Session::Tx::Source::Packet_alloc_failed) {
-					break;
-				}
-			}
-
-			while (_nr_of_sbs_available < NUM_SUPER_BLOCKS &&
-			       _blk.tx()->ack_avail())
-			{
-				Block::Packet_descriptor packet =
-					_blk.tx()->try_get_acked_packet();
-
-				if (packet.block_number() >= NUM_SUPER_BLOCKS ||
-				    packet.operation() != Block::Packet_descriptor::READ)
-				{
-					_blk.tx()->release_packet(packet);
-					continue;
-				}
-
-				if (!packet.succeeded()) {
-					error("failed to read superblock");
-					_env.parent().exit(-1);
-				}
-
-				_super_blocks.block[_nr_of_sbs_available] =
-					*reinterpret_cast<Cbe::Superblock*>(
-						_blk.tx()->packet_content(packet));
-
-				_blk.tx()->release_packet(packet);
-				_nr_of_sbs_available++;
-				progress = true;
-			}
-
-			if (_nr_of_sbs_available == NUM_SUPER_BLOCKS) {
-
-				Cbe::Generation        last_gen = 0;
-				Cbe::Superblocks_index most_recent_sb { 0 };
-				bool                   most_recent_sb_valid { false };
-				for (uint64_t i = 0; i < Cbe::NUM_SUPER_BLOCKS; i++) {
-
-					Cbe::Superblock &dst = _super_blocks.block[i];
-					if (dst.valid() && dst.last_secured_generation >= last_gen) {
-						most_recent_sb.value = i;
-						most_recent_sb_valid = true;
-						last_gen = dst.last_secured_generation;
-					}
-				}
-				struct Failed : Exception { };
-				if (!most_recent_sb_valid) {
-					error("failed to find current superblock");
-					_env.parent().exit(-1);
-				}
-				_cbe.construct(_super_blocks, most_recent_sb);
-				log("cbe construction succeeded: vba range is 0 .. ", _cbe->max_vba());
-				progress = true;
-			}
-		}
-
-		void _execute_cbe_destruction(bool &progress)
-		{
-			_nr_of_sbs_available = 0;
-			_nr_of_sbs_requested = 0;
-			_cbe.destruct();
-			progress = true;
-		}
-
 		void _execute()
 		{
 			if (!_block_session.constructed()) { return; }
@@ -2316,35 +2201,29 @@ class Cbe::Main
 
 				if (_state == CBE_INIT) {
 					if (_cbe.constructed()) {
-						_execute_cbe_destruction(progress);
-					} else {
-						_execute_cbe_init(progress);
+						_cbe.destruct();
 					}
+					_execute_cbe_init(progress);
 				} else if (_state == CBE_CHECK) {
 					if (_cbe.constructed()) {
-						_execute_cbe_destruction(progress);
-					} else {
-						_execute_cbe_check(progress);
+						_cbe.destruct();
 					}
+					_execute_cbe_check(progress);
 				} else if (_state == CBE_DUMP) {
 					if (_cbe.constructed()) {
-						_execute_cbe_destruction(progress);
-					} else {
-						_execute_cbe_dump(progress);
+						_cbe.destruct();
 					}
+					_execute_cbe_dump(progress);
 				} else if (_state == CBE) {
 					if (!_cbe.constructed()) {
-						_execute_cbe_construction(progress);
-					} else {
-						_execute_cbe(progress);
+						_cbe.construct();
 					}
+					_execute_cbe(progress);
 				} else if (_state == INVALID) {
-					// XXX
 					if (!_cbe.constructed()) {
-						_execute_cbe_construction(progress);
-					} else {
-						_execute_cbe(progress);
+						_cbe.construct();
 					}
+					_execute_cbe(progress);
 				}
 			}
 			/* notify I/O backend */
@@ -2352,55 +2231,6 @@ class Cbe::Main
 
 			/* notify client */
 			_block_session->wakeup_client_if_needed();
-		}
-
-		/**
-		 *  Read super-blocks
-		 *
-		 *  The super-blocks are read one by one using blocking I/O and are
-		 *  stored in the super-block array. While reading all blocks, the
-		 *  most recent one is determined
-		 *
-		 *  \param  sb  array where the super-blocks are stored
-		 *
-		 *  \return  index of the most recent super-block or an INVALID
-		 *           index in case the super-block could not be found
-		 */
-		Cbe::Superblocks_index _read_superblocks(Cbe::Superblocks &sbs)
-		{
-			Cbe::Generation        last_gen = 0;
-			Cbe::Superblocks_index most_recent_sb { 0 };
-			bool                   most_recent_sb_valid { false };
-
-			/*
-			 * Read all super block slots and use the most recent one.
-			 */
-			for (uint64_t i = 0; i < Cbe::NUM_SUPER_BLOCKS; i++) {
-				Util::Block_io io(_blk, sizeof (Cbe::Superblock), i, 1);
-				void const       *src = io.addr<void*>();
-				Cbe::Superblock &dst = sbs.block[i];
-				Genode::memcpy(&dst, src, sizeof (Cbe::Superblock));
-
-				/*
-				 * For now this always selects the last SB if the generation
-				 * is the same and is mostly used for finding the initial SB
-				 * with generation == 0.
-				 */
-				if (dst.valid() && dst.last_secured_generation >= last_gen) {
-					most_recent_sb.value = i;
-					most_recent_sb_valid = true;
-					last_gen = dst.last_secured_generation;
-				}
-
-				Sha256_4k::Hash hash { };
-				Sha256_4k::Data const &data = *reinterpret_cast<Sha256_4k::Data const*>(&dst);
-				Sha256_4k::hash(data, hash);
-			}
-			struct Failed : Exception { };
-			if (!most_recent_sb_valid) {
-				throw Failed();
-			}
-			return most_recent_sb;
 		}
 
 	public:

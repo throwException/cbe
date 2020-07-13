@@ -25,15 +25,14 @@ is
       Convention    => C,
       External_Name => "_ZN3Cbe11object_sizeERKNS_7LibraryE";
 
-   procedure Initialize_Object (
-      Obj     : out Library.Object_Type;
-      SBs     :     CXX_Superblocks_Type;
-      Curr_SB :     CXX_Superblocks_Index_Type)
+   --
+   --  Initialize_Object
+   --
+   procedure Initialize_Object (Obj : out Library.Object_Type)
    with
       Export,
       Convention    => C,
-      External_Name =>
-         "_ZN3Cbe7LibraryC2ERKNS_11SuperblocksERKNS_17Superblocks_indexE";
+      External_Name => "_ZN3Cbe7LibraryC2Ev";
 
    procedure Active_Snapshot_IDs (
       Obj :     Library.Object_Type;

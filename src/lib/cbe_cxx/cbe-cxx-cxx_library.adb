@@ -17,18 +17,13 @@ is
    return CXX_Object_Size_Type
    is (Obj'Size / 8);
 
-   procedure Initialize_Object (
-      Obj     : out Library.Object_Type;
-      SBs     :     CXX_Superblocks_Type;
-      Curr_SB :     CXX_Superblocks_Index_Type)
+   --
+   --  Initialize_Object
+   --
+   procedure Initialize_Object (Obj : out Library.Object_Type)
    is
-      SBs_SPARK : Superblocks_Type;
    begin
-      for Idx in SBs_SPARK'Range loop
-         Superblock_From_Block_Data (SBs_SPARK (Idx), SBs (Idx));
-      end loop;
-      Library.Initialize_Object (
-         Obj, SBs_SPARK, Superblocks_Index_Type (Curr_SB.Value));
+      Library.Initialize_Object (Obj);
    end Initialize_Object;
 
    procedure Active_Snapshot_IDs (

@@ -8,21 +8,16 @@
 
 pragma Ada_2012;
 
---  with CBE.Tree_Helper;
 with CBE.Debug;
 with SHA256_4K;
 
 package body CBE.Library
 with SPARK_Mode
 is
-   -------------
-   --  public --
-   -------------
-
-   procedure Initialize_Object (
-      Obj     : out Object_Type;
-      SBs     :     Superblocks_Type;
-      Curr_SB :     Superblocks_Index_Type)
+   --
+   --  Initialize_Object
+   --
+   procedure Initialize_Object (Obj : out Object_Type)
    is
    begin
 
@@ -48,10 +43,6 @@ is
 
       Sync_Superblock.Initialize_Object (Obj.Sync_SB_Obj);
 
-      if SBs (Curr_SB).Free_Max_Level < Free_Tree_Min_Max_Level then
-         raise Program_Error;
-      end if;
-
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
       Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
@@ -61,14 +52,10 @@ is
       Obj.Secure_Superblock := False;
       Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
 
-      Obj.Superblock := SBs (Curr_SB);
-      Obj.Cur_Gen :=
-         Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap).Gen + 1;
-      Obj.Cur_SB := Curr_SB;
-      Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
-
-      --  XXX partially unused as long as snapshot creation is disabled
-      Obj.Last_Secured_Generation := 0;
+      Obj.Superblock := Superblock_Invalid;
+      Obj.Cur_Gen := Generation_Type'First;
+      Obj.Cur_SB := Superblocks_Index_Type'First;
+      Obj.Last_Secured_Generation := Generation_Type'First;
 
       Obj.SCD_State       := Inactive;
       Obj.SCD_Req         := Request.Invalid_Object;
