@@ -12,7 +12,6 @@ with CBE.Request_Pool;
 with CBE.Crypto;
 with CBE.Virtual_Block_Device;
 with CBE.Write_Back;
-with CBE.Sync_Superblock;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Primitive;
@@ -392,29 +391,28 @@ private
 
       Write_Stalled : Boolean;
 
-      Execute_Progress             : Boolean;
-      Cache_Obj                    : Cache.Cache_Type;
-      Cache_Jobs_Data              : Cache.Jobs_Data_Type;
-      Cache_Slots_Data             : Cache.Slots_Data_Type;
-      Cache_Sync_State             : Cache_Sync_State_Type;
-      Request_Pool_Obj             : Request_Pool.Object_Type;
-      Crypto_Obj                   : Crypto.Object_Type;
-      IO_Obj                       : Block_IO.Object_Type;
-      Trans_Data                   : Translation_Data_Type;
-      VBD                          : Virtual_Block_Device.Object_Type;
-      Write_Back_Obj               : Write_Back.Object_Type;
-      Write_Back_Data              : Write_Back.Data_Type;
-      Sync_SB_Obj                  : Sync_Superblock.Object_Type;
-      New_Free_Tree_Obj            : New_Free_Tree.Object_Type;
-      Free_Tree_Retry_Count        : Free_Tree_Retry_Count_Type;
-      New_Free_Tree_Prim           : Primitive.Object_Type;
-      Meta_Tree_Obj                : Meta_Tree.Object_Type;
-      Cur_SB                       : Superblocks_Index_Type;
-      Cur_Gen                      : Generation_Type;
-      Last_Secured_Generation      : Generation_Type;
-      Secure_Superblock            : Boolean;
-      Wait_For_Front_End           : Wait_For_Event_Type;
-      Superblock                   : Superblock_Type;
+      Execute_Progress        : Boolean;
+      Cache_Obj               : Cache.Cache_Type;
+      Cache_Jobs_Data         : Cache.Jobs_Data_Type;
+      Cache_Slots_Data        : Cache.Slots_Data_Type;
+      Cache_Sync_State        : Cache_Sync_State_Type;
+      Request_Pool_Obj        : Request_Pool.Object_Type;
+      Crypto_Obj              : Crypto.Object_Type;
+      IO_Obj                  : Block_IO.Object_Type;
+      Trans_Data              : Translation_Data_Type;
+      VBD                     : Virtual_Block_Device.Object_Type;
+      Write_Back_Obj          : Write_Back.Object_Type;
+      Write_Back_Data         : Write_Back.Data_Type;
+      New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
+      Free_Tree_Retry_Count   : Free_Tree_Retry_Count_Type;
+      New_Free_Tree_Prim      : Primitive.Object_Type;
+      Meta_Tree_Obj           : Meta_Tree.Object_Type;
+      Cur_SB                  : Superblocks_Index_Type;
+      Cur_Gen                 : Generation_Type;
+      Last_Secured_Generation : Generation_Type;
+      Secure_Superblock       : Boolean;
+      Wait_For_Front_End      : Wait_For_Event_Type;
+      Superblock              : Superblock_Type;
 
       SCD_State    : SCD_State_Type;
       SCD_Req      : Request.Object_Type;
@@ -561,11 +559,6 @@ private
       Obj              : in out Object_Type;
       IO_Buf           : in out Block_IO.Data_Type;
       Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
-      Progress         : in out Boolean);
-
-   procedure Execute_Sync_Superblock (
-      Obj              : in out Object_Type;
-      IO_Buf           : in out Block_IO.Data_Type;
       Progress         : in out Boolean);
 
    procedure Execute_Crypto (

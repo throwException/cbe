@@ -123,8 +123,7 @@ is
             case Primitive.Tag (Prim) is
             when
                Primitive.Tag_SB_Ctrl_TA_Encrypt_Key |
-               Primitive.Tag_SB_Init_TA_Encrypt_Key |
-               Primitive.Tag_Sync_SB_TA_Encrypt_Key
+               Primitive.Tag_SB_Init_TA_Encrypt_Key
             =>
 
                Anchor.Jobs (Idx).Operation := Encrypt_Key;

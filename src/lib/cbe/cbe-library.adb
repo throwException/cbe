@@ -39,8 +39,6 @@ is
       Obj.Write_Back_Obj   := Write_Back.Initialized_Object;
       Obj.Write_Back_Data  := (others => (others => 0));
 
-      Sync_Superblock.Initialize_Object (Obj.Sync_SB_Obj);
-
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
       Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
@@ -1565,14 +1563,6 @@ is
             Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
             Progress := True;
 
-         when Primitive.Tag_Sync_SB_Cache_Flush =>
-
-            Sync_Superblock.Mark_Generated_Primitive_Complete (
-               Obj.Sync_SB_Obj, Prim);
-
-            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-            Progress := True;
-
          when Primitive.Tag_SB_Ctrl_Cache =>
 
             Superblock_Control.Mark_Generated_Prim_Complete (
@@ -2578,17 +2568,6 @@ is
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;
 
-            when Primitive.Tag_Sync_SB_TA_Encrypt_Key =>
-
-               Sync_Superblock.
-                  Mark_Generated_Prim_Complete_Key_Value_Ciphertext (
-                     Obj.Sync_SB_Obj, Prim,
-                     Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
-                        Obj.TA, Prim));
-
-               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
-               Progress := True;
-
             when others =>
 
                raise Program_Error;
@@ -2914,115 +2893,6 @@ is
 
    end Execute_Writeback;
 
-   procedure Execute_Sync_Superblock (
-      Obj              : in out Object_Type;
-      IO_Buf           : in out Block_IO.Data_Type;
-      Progress         : in out Boolean)
-   is
-   begin
-      Sync_Superblock.Execute (Obj.Sync_SB_Obj, Progress);
-
-      Loop_Sync_SB_Completed_Prims :
-      loop
-         Declare_Prim_10 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Sync_Superblock.Peek_Completed_Primitive (Obj.Sync_SB_Obj);
-         begin
-            exit Loop_Sync_SB_Completed_Prims when
-               not Primitive.Valid (Prim);
-
-            if not Primitive.Success (Prim) then
-               raise Program_Error;
-            end if;
-
-            Obj.Cur_SB := Advance_Superblocks_Index (Obj.Cur_SB);
-
-            Obj.Cur_Gen := Obj.Cur_Gen + 1;
-
-            if not Obj.Write_Stalled then
-
-               Request_Pool.Mark_Generated_Primitive_Complete (
-                  Obj.Request_Pool_Obj,
-                  Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-                  Primitive.Success (Prim));
-
-            end if;
-
-            Obj.Secure_Superblock := False;
-
-            Sync_Superblock.Drop_Completed_Primitive (Obj.Sync_SB_Obj, Prim);
-
-            Progress := True;
-         end Declare_Prim_10;
-      end loop Loop_Sync_SB_Completed_Prims;
-
-      Loop_Sync_SB_Generated_Prims :
-      loop
-         Declare_Sync_Superblock_Prim :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Sync_Superblock.Peek_Generated_Primitive (Obj.Sync_SB_Obj);
-         begin
-            exit Loop_Sync_SB_Generated_Prims when
-               not Primitive.Valid (Prim);
-
-            if Primitive.Has_Tag_Sync_SB_Cache_Flush (Prim) then
-
-               exit Loop_Sync_SB_Generated_Prims when
-                  not Cache.Primitive_Acceptable (Obj.Cache_Obj);
-
-               Cache.Submit_Primitive_Without_Data (
-                  Obj.Cache_Obj, Prim);
-
-            elsif Primitive.Has_Tag_Sync_SB_TA_Encrypt_Key (Prim) then
-
-               exit Loop_Sync_SB_Generated_Prims when
-                  not Trust_Anchor.Primitive_Acceptable (Obj.TA);
-
-               Trust_Anchor.Submit_Primitive_Key_Value_Plaintext (
-                  Obj.TA, Prim,
-                  Sync_Superblock.Peek_Generated_Key_Value_Plaintext (
-                     Obj.Sync_SB_Obj, Prim));
-
-            elsif Primitive.Has_Tag_Sync_SB_Write_SB (Prim) then
-
-               exit Loop_Sync_SB_Generated_Prims when
-                  not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-               Declare_Write_SB_Data :
-               declare
-                  SB_Data : Block_Data_Type;
-                  Data_Idx : Block_IO.Data_Index_Type;
-               begin
-                  Block_Data_From_Superblock_Ciphertext (SB_Data,
-                     Sync_Superblock.Peek_Generated_Superblock_Ciphertext (
-                        Obj.Sync_SB_Obj, Prim));
-
-                  Block_IO.Submit_Primitive (
-                     Obj.IO_Obj, Primitive.Tag_Sync_SB_Write_SB, Prim,
-                     Data_Idx);
-
-                  IO_Buf (Data_Idx) := SB_Data;
-               end Declare_Write_SB_Data;
-
-            elsif Primitive.Has_Tag_Sync_SB_Sync (Prim) then
-
-               exit Loop_Sync_SB_Generated_Prims when
-                  not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-               Block_IO.Submit_Primitive (
-                  Obj.IO_Obj, Primitive.Tag_Sync_SB_Sync, Prim);
-
-            end if;
-
-            Sync_Superblock.Drop_Generated_Primitive (Obj.Sync_SB_Obj, Prim);
-
-            Progress := True;
-         end Declare_Sync_Superblock_Prim;
-      end loop Loop_Sync_SB_Generated_Prims;
-   end Execute_Sync_Superblock;
-
    procedure Execute_Crypto (
       Obj               : in out Object_Type;
       Crypto_Plain_Buf  :        Crypto.Plain_Buffer_Type;
@@ -3224,14 +3094,6 @@ is
                   Write_Back.Mark_Completed_IO_Primitive (
                      Obj.Write_Back_Obj, Prim);
 
-               elsif Primitive.Has_Tag_Sync_SB_Write_SB (Prim) then
-                  Sync_Superblock.Mark_Generated_Primitive_Complete (
-                     Obj.Sync_SB_Obj, Prim);
-
-               elsif Primitive.Has_Tag_Sync_SB_Sync (Prim) then
-                  Sync_Superblock.Mark_Generated_Primitive_Complete (
-                     Obj.Sync_SB_Obj, Prim);
-
                elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Prim) then
                   Superblock_Control.Mark_Generated_Prim_Complete (
                      Obj.SB_Ctrl, Prim);
@@ -3299,7 +3161,6 @@ is
       Execute_Crypto (Obj, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);
       Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
-      Execute_Sync_Superblock (Obj, IO_Buf, Progress);
       Execute_Free_Tree (Obj, Progress);
 
       Obj.Execute_Progress := Progress;
