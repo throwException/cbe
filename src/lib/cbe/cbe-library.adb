@@ -21,8 +21,6 @@ is
    is
    begin
 
-      Obj.Write_Stalled := False;
-
       Obj.Execute_Progress := False;
       Obj.Request_Pool_Obj := Request_Pool.Initialized_Object;
       Obj.Crypto_Obj       := Crypto.Initialized_Object;

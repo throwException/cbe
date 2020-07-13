@@ -372,8 +372,6 @@ private
 
    type Object_Type is record
 
-      Write_Stalled : Boolean;
-
       Execute_Progress        : Boolean;
       Cache_Obj               : Cache.Cache_Type;
       Cache_Jobs_Data         : Cache.Jobs_Data_Type;
