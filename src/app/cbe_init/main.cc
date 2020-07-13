@@ -52,7 +52,7 @@ class Main
 
 				if (req.valid()) {
 					_cbe_init.drop_completed_client_request(req);
-					if (req.success() == Cbe::Request::Success::TRUE) {
+					if (req.success()) {
 						_env.parent().exit(0);
 					} else {
 						error("request was not successful");;
@@ -140,12 +140,10 @@ class Main
 						break;
 					}
 
-					_blk_req.success(packet.succeeded() ? Cbe::Request::Success::TRUE
-						                                : Cbe::Request::Success::FALSE);
+					_blk_req.success(packet.succeeded());
 
 					Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-					bool                  const success    {
-						_blk_req.success() == Cbe::Request::Success::TRUE };
+					bool                  const success    { _blk_req.success() };
 
 					if (read && success) {
 						_blk_buf.item(data_index) =
@@ -184,7 +182,7 @@ class Main
 				_cbe_init.submit_client_request(
 					Cbe::Request(
 						Cbe::Request::Operation::READ,
-						Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0),
+						false, 0, 0, 0, 0, 0),
 					cfg.vbd_nr_of_lvls() - 1,
 					cfg.vbd_nr_of_children(),
 					cfg.vbd_nr_of_leafs(),

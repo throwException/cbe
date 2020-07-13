@@ -616,7 +616,7 @@ struct Cbe::Block_session_component
 	void create_snapshot_done(Cbe::Request const &req,
 	                          Genode::Allocator  &alloc)
 	{
-		if (req.success() == Cbe::Request::Success::TRUE) {
+		if (req.success()) {
 
 			log("create snapshot succeeded:",
 			    " id ", _test_in_progress->create_snapshot->id.value,
@@ -690,7 +690,7 @@ struct Cbe::Block_session_component
 	void discard_snapshot_done(Cbe::Request const &req,
 	                           Genode::Allocator &alloc)
 	{
-		if (req.success() == Cbe::Request::Success::TRUE) {
+		if (req.success()) {
 
 			Created_snapshot &snap {
 				_created_snapshots.find_by_id(
@@ -1224,12 +1224,10 @@ class Cbe::Main
 					break;
 				}
 
-				_blk_req.success(
-					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE);
+				_blk_req.success(packet.succeeded());
 
 				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
+				bool                  const success    { _blk_req.success() };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -1248,9 +1246,7 @@ class Cbe::Main
 
 				if (req.valid()) {
 					_cbe_check.drop_completed_client_request(req);
-					_block_session->check_done(
-						req.success() == Cbe::Request::Success::TRUE ?
-							true : false);
+					_block_session->check_done(req.success());
 					_state = INVALID;
 				}
 			}
@@ -1339,12 +1335,10 @@ class Cbe::Main
 					break;
 				}
 
-				_blk_req.success(
-					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE);
+				_blk_req.success(packet.succeeded());
 
 				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
+				bool                  const success    { _blk_req.success() };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -1363,9 +1357,7 @@ class Cbe::Main
 
 				if (req.valid()) {
 					_cbe_dump.drop_completed_client_request(req);
-					_block_session->dump_done(
-						req.success() == Cbe::Request::Success::TRUE ?
-							true : false);
+					_block_session->dump_done(req.success());
 					_state = INVALID;
 				}
 			}
@@ -1460,12 +1452,10 @@ class Cbe::Main
 					break;
 				}
 
-				_blk_req.success(
-					packet.succeeded() ? Cbe::Request::Success::TRUE
-					                   : Cbe::Request::Success::FALSE);
+				_blk_req.success(packet.succeeded());
 
 				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() == Cbe::Request::Success::TRUE };
+				bool                  const success    { _blk_req.success() };
 
 				if (read && success) {
 					_blk_buf.item(data_index) =
@@ -1484,9 +1474,7 @@ class Cbe::Main
 
 				if (req.valid()) {
 					_cbe_init.drop_completed_client_request(req);
-					_block_session->initialize_done(
-						req.success() == Cbe::Request::Success::TRUE ?
-							true : false);
+					_block_session->initialize_done(req.success());
 					_state = INVALID;
 				}
 			}
@@ -1554,7 +1542,7 @@ class Cbe::Main
 
 					Cbe::Request req {
 						Cbe::Request::Operation::CREATE_SNAPSHOT,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						1,
@@ -1600,7 +1588,7 @@ class Cbe::Main
 
 					Cbe::Request req {
 						Cbe::Request::Operation::DISCARD_SNAPSHOT,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						1,
@@ -1644,7 +1632,7 @@ class Cbe::Main
 
 					Cbe::Request req(
 						Cbe::Request::Operation::DEINITIALIZE,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						0,
@@ -1667,9 +1655,7 @@ class Cbe::Main
 					{
 						throw Unexpected_request();
 					}
-					_block_session->deinitialize_done(
-						req.success() ==
-							Cbe::Request::Success::TRUE ? true : false);
+					_block_session->deinitialize_done(req.success());
 
 					_deinitialize = false;
 					_cbe->drop_completed_client_request(req);
@@ -1705,7 +1691,7 @@ class Cbe::Main
 
 					Cbe::Request req(
 						Cbe::Request::Operation::REKEY,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						0,
@@ -1728,9 +1714,7 @@ class Cbe::Main
 					{
 						throw Unexpected_request();
 					}
-					_block_session->rekey_done(
-						req.success() ==
-							Cbe::Request::Success::TRUE ? true : false);
+					_block_session->rekey_done(req.success());
 
 					_rekey = false;
 					_cbe->drop_completed_client_request(req);
@@ -1754,7 +1738,7 @@ class Cbe::Main
 
 					Cbe::Request req(
 						Cbe::Request::Operation::EXTEND_VBD,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						extend_vbd.nr_of_phys_blocks,
@@ -1781,10 +1765,7 @@ class Cbe::Main
 					{
 						throw Unexpected_request();
 					}
-					_block_session->extend_vbd_done(
-						req.success() ==
-							Cbe::Request::Success::TRUE ? true : false);
-
+					_block_session->extend_vbd_done(req.success());
 					_extend_vbd_obj = { 0 };
 					_extend_vbd = false;
 					_cbe->drop_completed_client_request(req);
@@ -1808,7 +1789,7 @@ class Cbe::Main
 
 					Cbe::Request req(
 						Cbe::Request::Operation::EXTEND_FT,
-						Cbe::Request::Success::FALSE,
+						false,
 						0,
 						0,
 						extend_ft.nr_of_phys_blocks,
@@ -1835,9 +1816,7 @@ class Cbe::Main
 					{
 						throw Unexpected_request();
 					}
-					_block_session->extend_ft_done(
-						req.success() ==
-							Cbe::Request::Success::TRUE ? true : false);
+					_block_session->extend_ft_done(req.success());
 
 					_extend_ft_obj = { 0 };
 					_extend_ft = false;
@@ -1996,12 +1975,10 @@ class Cbe::Main
 				// assert packet descriptor belongs to stored backend request
 				if (!bn_match || !op_match) { break; }
 
-				_blk_req.success(
-					packet.succeeded() ? Cbe::Request::Success::TRUE
-									   : Cbe::Request::Success::FALSE);
+				_blk_req.success(packet.succeeded());
 
 				Io_buffer::Index const data_index { _blk_req.tag() };
-				bool             const success    { _blk_req.success() == Request::Success::TRUE };
+				bool             const success    { _blk_req.success() };
 				if (read && success) {
 					_blk_buf.item(data_index) =
 						*reinterpret_cast<Cbe::Block_data*>(
@@ -2038,7 +2015,7 @@ class Cbe::Main
 					sizeof(data.value) / sizeof(data.value[0]));
 
 				_crypto.add_key(key.id, data);
-				request.success (Cbe::Request::Success::TRUE);
+				request.success (true);
 				if (_verbose_back_end_crypto) {
 					log("    add key: id " , (unsigned)key.id.value);
 				}
@@ -2057,7 +2034,7 @@ class Cbe::Main
 				}
 				_cbe->crypto_remove_key_requested(request);
 				_crypto.remove_key(key_id);
-				request.success (Cbe::Request::Success::TRUE);
+				request.success (true);
 				if (_verbose_back_end_crypto) {
 					log("    remove key: id " , (unsigned)key_id.value);
 				}
@@ -2092,7 +2069,7 @@ class Cbe::Main
 				if (!_crypto.supply_cipher_data(request, _crypto_cipher_buf.item(data_index))) {
 					break;
 				}
-				_cbe->supply_crypto_cipher_data(data_index, request.success() == Request::Success::TRUE);
+				_cbe->supply_crypto_cipher_data(data_index, request.success());
 				progress |= true;
 			}
 
@@ -2123,7 +2100,7 @@ class Cbe::Main
 				if (!_crypto.supply_plain_data(request, _crypto_plain_buf.item(data_index))) {
 					break;
 				}
-				_cbe->supply_crypto_plain_data(data_index, request.success() == Request::Success::TRUE);
+				_cbe->supply_crypto_plain_data(data_index, request.success());
 				progress |= true;
 			}
 
@@ -2154,7 +2131,7 @@ class Cbe::Main
 					_cbe_init.submit_client_request(
 						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0),
+							false, 0, 0, 0, 0, 0),
 						cfg.vbd_nr_of_lvls() - 1,
 						cfg.vbd_nr_of_children(),
 						cfg.vbd_nr_of_leafs(),
@@ -2176,7 +2153,7 @@ class Cbe::Main
 					_cbe_check.submit_client_request(
 						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0));
+							false, 0, 0, 0, 0, 0));
 
 					_state = CBE_CHECK;
 					progress = true;
@@ -2192,7 +2169,7 @@ class Cbe::Main
 					_cbe_dump.submit_client_request(
 						Cbe::Request(
 							Cbe::Request::Operation::READ,
-							Cbe::Request::Success::FALSE, 0, 0, 0, 0, 0),
+							false, 0, 0, 0, 0, 0),
 						cfg);
 
 					_state = CBE_DUMP;

@@ -41,20 +41,6 @@ is
    end CXX_Bool_To_SPARK;
 
    --
-   --  CXX_Success_To_SPARK
-   --
-   function CXX_Success_To_SPARK (Input : CXX_Success_Type)
-   return Request.Success_Type
-   is
-   begin
-      case Input is
-      when 0 => return False;
-      when 1 => return True;
-      when others => raise Program_Error;
-      end case;
-   end CXX_Success_To_SPARK;
-
-   --
    --  CXX_Request_To_SPARK
    --
    function CXX_Request_To_SPARK (Input : CXX_Request_Type)

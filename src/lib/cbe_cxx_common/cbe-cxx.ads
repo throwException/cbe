@@ -21,7 +21,6 @@ is
 
    type CXX_Bool_Type                 is new CXX_UInt8_Type;
    type CXX_Operation_Type            is new CXX_UInt32_Type;
-   type CXX_Success_Type              is new CXX_UInt32_Type;
    type CXX_Object_Size_Type          is new CXX_UInt32_Type;
    type CXX_Block_Number_Type         is new CXX_UInt64_Type;
    type CXX_Timestamp_Type            is new CXX_UInt64_Type;
@@ -74,7 +73,7 @@ is
 
    type CXX_Request_Type is record
       Operation    : CXX_Operation_Type;
-      Success      : CXX_Success_Type;
+      Success      : CXX_Bool_Type;
       Block_Number : CXX_Block_Number_Type;
       Offset       : CXX_Block_Offset_Type;
       Count        : CXX_Block_Count_Type;
@@ -95,19 +94,6 @@ is
    --
    function CXX_Bool_To_SPARK (Input : CXX_Bool_Type)
    return Boolean;
-
-   function CXX_Success_From_SPARK (Input : Request.Success_Type)
-   return CXX_Success_Type
-   is (
-      case Input is
-      when False => 0,
-      when True  => 1);
-
-   --
-   --  CXX_Success_To_SPARK
-   --
-   function CXX_Success_To_SPARK (Input : CXX_Success_Type)
-   return Request.Success_Type;
 
    function CXX_Operation_From_SPARK (Input : Request_Operation_Type)
    return CXX_Operation_Type
@@ -132,12 +118,12 @@ is
    is (
       Request.Valid_Object (
          Op,
-         CXX_Success_To_SPARK (Req.Success),
-         Block_Number_Type    (Req.Block_Number),
-         Request.Offset_Type  (Req.Offset),
-         Request.Count_Type   (Req.Count),
-         Key_ID_Type          (Req.Key_ID),
-         Request.Tag_Type     (Req.Tag)));
+         CXX_Bool_To_SPARK   (Req.Success),
+         Block_Number_Type   (Req.Block_Number),
+         Request.Offset_Type (Req.Offset),
+         Request.Count_Type  (Req.Count),
+         Key_ID_Type         (Req.Key_ID),
+         Request.Tag_Type    (Req.Tag)));
 
    --
    --  CXX_Request_To_SPARK
@@ -151,7 +137,7 @@ is
       case Request.Valid (Obj) is
       when True => (
          Operation    => CXX_Operation_From_SPARK (Request.Operation (Obj)),
-         Success      => CXX_Success_From_SPARK   (Request.Success (Obj)),
+         Success      => CXX_Bool_From_SPARK      (Request.Success (Obj)),
          Block_Number => CXX_Block_Number_Type    (Request.Block_Number (Obj)),
          Offset       => CXX_Block_Offset_Type    (Request.Offset (Obj)),
          Count        => CXX_Block_Count_Type     (Request.Count (Obj)),

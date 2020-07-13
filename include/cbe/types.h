@@ -50,12 +50,10 @@ namespace Cbe {
 				INITIALIZE = 12,
 			};
 
-			enum class Success : uint32_t { FALSE = 0, TRUE = 1 };
-
 		private:
 
 			Operation        _operation;
-			Success          _success;
+			bool             _success;
 			uint64_t         _block_number;
 			uint64_t         _offset;
 			Number_of_blocks _count;
@@ -65,7 +63,7 @@ namespace Cbe {
 		public:
 
 			Request(Operation        operation,
-			        Success          success,
+			        bool             success,
 			        uint64_t         block_number,
 			        uint64_t         offset,
 			        Number_of_blocks count,
@@ -84,7 +82,7 @@ namespace Cbe {
 			Request()
 			:
 				_operation    { Operation::INVALID },
-				_success      { Success::FALSE },
+				_success      { false },
 				_block_number { 0 },
 				_offset       { 0 },
 				_count        { 0 },
@@ -117,14 +115,14 @@ namespace Cbe {
 			bool initialize()       const { return _operation == Operation::INITIALIZE; }
 
 			Operation        operation()    const { return _operation; }
-			Success          success()      const { return _success; }
+			bool             success()      const { return _success; }
 			uint64_t         block_number() const { return _block_number; }
 			uint64_t         offset()       const { return _offset; }
 			Number_of_blocks count()        const { return _count; }
 			uint32_t         key_id()       const { return _key_id; }
 			uint32_t         tag()          const { return _tag; }
 
-			void success(Success arg) { _success = arg; }
+			void success(bool arg) { _success = arg; }
 			void tag(uint32_t arg)    { _tag = arg; }
 
 	} __attribute__((packed));
@@ -317,16 +315,13 @@ namespace Cbe {
 			}
 			return Block::Operation::Type::INVALID;
 		};
-		auto convert_success = [&] (Cbe::Request::Success s) {
-			return s == Cbe::Request::Success::TRUE ? true : false;
-		};
 		return Block::Request {
 			.operation = {
 				.type         = convert_op(r.operation()),
 				.block_number = r.block_number(),
 				.count        = r.count(),
 			},
-			.success   = convert_success(r.success()),
+			.success   = r.success(),
 			.offset    = (Block::off_t)r.offset(),
 			.tag       = { .value = r.tag() },
 		};
@@ -341,17 +336,13 @@ namespace Cbe {
 			case Block::Operation::Type::READ:    return Cbe::Request::Operation::READ;
 			case Block::Operation::Type::WRITE:   return Cbe::Request::Operation::WRITE;
 			case Block::Operation::Type::SYNC:    return Cbe::Request::Operation::SYNC;
-			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID; // XXX fix
+			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID;
 			}
 			return Cbe::Request::Operation::INVALID;
 		};
-		auto convert_success = [&] (bool success) {
-			return success ? Cbe::Request::Success::TRUE : Cbe::Request::Success::FALSE;
-		};
-
 		return Cbe::Request(
 			convert_op(r.operation.type),
-			convert_success(r.success),
+			r.success,
 			r.operation.block_number,
 			(Genode::uint64_t)r.offset,
 			(Number_of_blocks)r.operation.count,
@@ -374,11 +365,7 @@ void Cbe::Request::print(Genode::Output &out) const
 	Genode::print(out, " key_id: ", _key_id);
 	Genode::print(out, " offset: ", _offset);
 	Genode::print(out, " op: ", to_string (_operation));
-	Genode::print(out, " success: ");
-	switch (_success) {
-	case Success::FALSE: Genode::print(out, "no"); break;
-	case Success::TRUE:  Genode::print(out, "yes"); break;
-	}
+	Genode::print(out, " success: ", _success);
 }
 
 #endif /* _CBE_TYPES_H_ */
