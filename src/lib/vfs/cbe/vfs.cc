@@ -891,6 +891,28 @@ class Vfs_cbe::Wrapper
 
 				if (!progress) { break; }
 			}
+
+			Cbe::Info const info = _cbe->info();
+
+			using ES = Extending::State;
+			if (_extend_obj.state == ES::UNKNOWN && info.valid) {
+				if (info.extending_ft) {
+					_extend_obj.state = ES::IN_PROGRESS;
+					_extend_obj.type  = Extending::Type::FT;
+				} else
+
+				if (info.extending_vbd) {
+					_extend_obj.state = ES::IN_PROGRESS;
+					_extend_obj.type  = Extending::Type::VBD;
+				} else {
+					_extend_obj.state = ES::IDLE;
+				}
+			}
+			using RS = Rekeying::State;
+			if (_rekey_obj.state == RS::UNKNOWN && info.valid) {
+				_rekey_obj.state =
+					info.rekeying ? RS::IN_PROGRESS : RS::IDLE;
+			}
 		}
 
 		bool client_request_acceptable() const

@@ -173,4 +173,23 @@ is
    function CXX_Key_From_SPARK (SPARK_Key : Key_Plaintext_Type)
    return CXX_Key_Type;
 
+   type CXX_Info_Type is record
+      Valid         : CXX_Bool_Type;
+      Rekeying      : CXX_Bool_Type;
+      Extending_FT  : CXX_Bool_Type;
+      Extending_VBD : CXX_Bool_Type;
+   end record;
+   pragma Pack (CXX_Info_Type);
+
+   --
+   --  CXX_Info_From_SPARK
+   --
+   function CXX_Info_From_SPARK (Info : Info_Type)
+   return CXX_Info_Type
+   is (
+      Valid         => CXX_Bool_From_SPARK (Info.Valid),
+      Rekeying      => CXX_Bool_From_SPARK (Info.Rekeying),
+      Extending_FT  => CXX_Bool_From_SPARK (Info.Extending_FT),
+      Extending_VBD => CXX_Bool_From_SPARK (Info.Extending_VBD));
+
 end CBE.CXX;

@@ -27,6 +27,13 @@ is
    procedure Initialize_Control (Ctrl : out Control_Type);
 
    --
+   --  Info
+   --
+   procedure Info (
+      SB   :     Superblock_Type;
+      Info : out Info_Type);
+
+   --
    --  Primitive_Acceptable
    --
    function Primitive_Acceptable (Ctrl : Control_Type)

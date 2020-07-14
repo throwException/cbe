@@ -255,6 +255,15 @@ namespace Cbe {
 	{
 		uint64_t values[NR_OF_SNAPSHOTS];
 	} __attribute__((packed));
+
+
+	struct Info
+	{
+		bool valid;
+		bool rekeying;
+		bool extending_vbd;
+		bool extending_ft;
+	} __attribute__((packed));
 }
 
 

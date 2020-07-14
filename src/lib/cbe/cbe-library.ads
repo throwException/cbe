@@ -47,6 +47,13 @@ is
       List : out Active_Snapshot_IDs_Type);
 
    --
+   --  Info
+   --
+   procedure Info (
+      Obj  :     Object_Type;
+      Info : out Info_Type);
+
+   --
    --  Check if the CBE can accept a new requeust
    --
    --  \return true if a request can be accepted, otherwise false

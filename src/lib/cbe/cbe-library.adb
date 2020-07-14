@@ -117,6 +117,17 @@ is
 
    end Discard_Disposable_Snapshots;
 
+   --
+   --  Info
+   --
+   procedure Info (
+      Obj  :     Object_Type;
+      Info : out Info_Type)
+   is
+   begin
+      Superblock_Control.Info (Obj.Superblock, Info);
+   end Info;
+
    procedure Active_Snapshot_IDs (
       Obj  :     Object_Type;
       List : out Active_Snapshot_IDs_Type)

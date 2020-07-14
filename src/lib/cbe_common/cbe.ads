@@ -382,6 +382,13 @@ is
    type Superblocks_Ciphertext_Type is array (Superblocks_Index_Type)
       of Superblock_Ciphertext_Type;
 
+   type Info_Type is record
+      Valid         : Boolean;
+      Rekeying      : Boolean;
+      Extending_FT  : Boolean;
+      Extending_VBD : Boolean;
+   end record;
+
    type Timeout_Request_Type is record
       Valid   : Boolean;
       Timeout : Timestamp_Type;

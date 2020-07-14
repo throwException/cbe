@@ -26,6 +26,19 @@ is
       Library.Initialize_Object (Obj);
    end Initialize_Object;
 
+   --
+   --  Info
+   --
+   procedure Info (
+      Obj  :     Library.Object_Type;
+      Info : out CXX_Info_Type)
+   is
+      SPARK_Info : Info_Type;
+   begin
+      Library.Info (Obj, SPARK_Info);
+      Info := CXX_Info_From_SPARK (SPARK_Info);
+   end Info;
+
    procedure Active_Snapshot_IDs (
       Obj :     Library.Object_Type;
       IDs : out Active_Snapshot_IDs_Type)

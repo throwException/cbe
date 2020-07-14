@@ -94,6 +94,33 @@ is
    end Hash_Of_Superblock;
 
    --
+   --  Info
+   --
+   procedure Info (
+      SB   :     Superblock_Type;
+      Info : out Info_Type)
+   is
+   begin
+
+      if Superblock_Valid (SB) then
+
+         Info.Valid := True;
+         Info.Rekeying := (SB.State = Rekeying);
+         Info.Extending_FT := (SB.State = Extending_FT);
+         Info.Extending_VBD := (SB.State = Extending_VBD);
+
+      else
+
+         Info.Valid := False;
+         Info.Rekeying := Boolean'First;
+         Info.Extending_FT := Boolean'First;
+         Info.Extending_VBD := Boolean'First;
+
+      end if;
+
+   end Info;
+
+   --
    --  Initialize_Control
    --
    procedure Initialize_Control (Ctrl : out Control_Type)
