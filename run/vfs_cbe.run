@@ -27,7 +27,10 @@ import_from_depot [depot_user]/pkg/[drivers_interactive_pkg] \
                   [depot_user]/pkg/terminal \
                   [depot_user]/src/ncurses \
                   [depot_user]/src/bash \
-                  [depot_user]/src/coreutils
+                  [depot_user]/src/coreutils \
+                  [depot_user]/src/nitpicker \
+                  [depot_user]/src/gui_fb
+
 
 build {
 	core
@@ -73,20 +76,48 @@ set config {
 		<route>
 			<service name="ROM" label="config"> <parent label="drivers.config"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
+			<service name="Capture"> <child name="nitpicker"/> </service>
 			<any-service> <parent/> </any-service>
 		</route>
 		<provides>
-			<service name="Input"/> <service name="Framebuffer"/>
+			<service name="Input"/>
 		</provides>
 	</start>}
 
 append_if $use_interactively config {
+
+	<start name="nitpicker">
+		<resource name="RAM" quantum="4M"/>
+		<provides> <service name="Gui"/> <service name="Capture"/> </provides>
+		<config focus="rom" request_framebuffer="no">
+			<capture/>
+			<domain name="default" layer="2" content="client" label="no" hover="always"/>
+			<default-policy domain="default"/>
+		</config>
+		<route>
+			<service name="Input">  <child name="drivers"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
+	<start name="gui_fb">
+		<resource name="RAM" quantum="4M"/>
+		<provides> <service name="Framebuffer"/> <service name="Input"/> </provides>
+		<config/>
+		<route>
+			<service name="Gui"> <child name="nitpicker"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
+	</start>
+
 	<start name="terminal_service" caps="110">
 		<binary name="terminal"/>
 		<resource name="RAM" quantum="2M"/>
 		<provides><service name="Terminal"/></provides>
 		<route>
 			<service name="ROM" label="config"> <parent label="terminal.config"/> </service>
+			<service name="Input">       <child name="gui_fb"/> </service>
+			<service name="Framebuffer"> <child name="gui_fb"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>}
@@ -225,6 +256,10 @@ append boot_modules {
 }
 
 append boot_modules [cbe_image_file]
+
+set fd [open [run_dir]/genode/focus w]
+puts $fd "<focus label=\"gui_fb -> \" domain=\"default\"/>"
+close $fd
 
 build_boot_image $boot_modules
 
