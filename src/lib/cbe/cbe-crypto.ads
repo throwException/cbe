@@ -137,12 +137,6 @@ is
       Prim : Primitive.Object_Type)
    return Item_Index_Type;
 
-   -----------------
-   --  Accessors  --
-   -----------------
-
-   function Execute_Progress (Obj : Object_Type) return Boolean;
-
 private
 
    --

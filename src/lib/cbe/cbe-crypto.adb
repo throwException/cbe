@@ -335,11 +335,4 @@ is
       raise Program_Error;
    end Data_Index;
 
-   -----------------
-   --  Accessors  --
-   -----------------
-
-   function Execute_Progress (Obj : Object_Type) return Boolean
-   is (Obj.Execute_Progress);
-
 end CBE.Crypto;
