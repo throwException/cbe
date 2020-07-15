@@ -19,6 +19,7 @@
 /* cbe includes */
 #include <cbe/library.h>
 #include <cbe/external_crypto.h>
+#include <cbe/external_ta.h>
 
 /* local includes */
 #include "io_job.h"
@@ -118,6 +119,8 @@ class Vfs_cbe::Wrapper
 		Cbe::Crypto_cipher_buffer _cipher_data { };
 		Cbe::Crypto_plain_buffer  _plain_data { };
 		External::Crypto _crypto { };
+
+		External::Trust_anchor _trust_anchor { };
 
 		Constructible<Cbe::Library> _cbe;
 
@@ -759,6 +762,105 @@ class Vfs_cbe::Wrapper
 			return progress;
 		}
 
+		bool _handle_ta(Cbe::Library &cbe)
+		{
+			bool progress = false;
+
+			progress |= _trust_anchor.execute();
+
+			using Op = Cbe::Trust_anchor_request::Operation;
+
+			while (true) {
+
+				Cbe::Trust_anchor_request const request =
+					_cbe->peek_generated_ta_request();
+
+				if (!request.valid()) { break; }
+				if (!_trust_anchor.request_acceptable()) { break; }
+
+				switch (request.operation()) {
+				case Op::CREATE_KEY:
+					_trust_anchor.submit_create_key_request(request);
+					break;
+				case Op::SECURE_SUPERBLOCK:
+				{
+					Cbe::Hash const sb_hash = _cbe->peek_generated_ta_sb_hash(request);
+					_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+					break;
+				}
+				case Op::ENCRYPT_KEY:
+				{
+					Cbe::Key_plaintext_value const pk =
+						_cbe->peek_generated_ta_key_value_plaintext(request);
+
+					_trust_anchor.submit_encrypt_key_request(request, pk);
+					break;
+				}
+				case Op::DECRYPT_KEY:
+				{
+					Cbe::Key_ciphertext_value const ck =
+						_cbe->peek_generated_ta_key_value_ciphertext(request);
+
+					_trust_anchor.submit_decrypt_key_request(request, ck);
+					break;
+				}
+				case Op::INVALID:
+					/* never reached */
+					break;
+				}
+				_cbe->drop_generated_ta_request(request);
+				progress |= true;
+			}
+
+			while (true) {
+
+				Cbe::Trust_anchor_request const request =
+					_trust_anchor.peek_completed_request();
+
+				if (!request.valid()) { break; }
+
+				switch (request.operation()) {
+				case Op::CREATE_KEY:
+				{
+					Cbe::Key_plaintext_value const pk =
+						_trust_anchor.peek_completed_key_value_plaintext(request);
+
+					_cbe->mark_generated_ta_create_key_request_complete(request, pk);
+					break;
+				}
+				case Op::SECURE_SUPERBLOCK:
+				{
+					_cbe->mark_generated_ta_secure_sb_request_complete(request);
+					break;
+				}
+				case Op::ENCRYPT_KEY:
+				{
+					Cbe::Key_ciphertext_value const ck =
+						_trust_anchor.peek_completed_key_value_ciphertext(request);
+
+					_cbe->mark_generated_ta_encrypt_key_request_complete(request, ck);
+					break;
+				}
+				case Op::DECRYPT_KEY:
+				{
+					Cbe::Key_plaintext_value const pk =
+						_trust_anchor.peek_completed_key_value_plaintext(request);
+
+					_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
+					break;
+				}
+				case Op::INVALID:
+					/* never reached */
+					break;
+				}
+				_trust_anchor.drop_completed_request(request);
+				progress |= true;
+			}
+
+			return progress;
+		}
+
+
 		bool _handle_crypto(Cbe::Library              &cbe,
 		                    External::Crypto          &cry,
 		                    Cbe::Crypto_cipher_buffer &cipher,
@@ -888,6 +990,9 @@ class Vfs_cbe::Wrapper
 				bool const crypto_progress =
 					_handle_crypto(*_cbe, _crypto, _cipher_data, _plain_data);
 				progress |= crypto_progress;
+
+				bool const ta_progress = _handle_ta(*_cbe);
+				progress |= ta_progress;
 
 				if (!progress) {
 					_dump_state();
@@ -2583,6 +2688,8 @@ extern "C" Vfs::File_system_factory *vfs_file_system_factory(void)
 	adainit();
 
 	Cbe::assert_valid_object_size<Cbe::Library>();
+	Cbe::assert_valid_object_size<External::Crypto>();
+	Cbe::assert_valid_object_size<External::Trust_anchor>();
 
 	static Factory factory;
 	return &factory;
