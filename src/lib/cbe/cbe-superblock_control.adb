@@ -121,6 +121,50 @@ is
    end Info;
 
    --
+   --  Active_Snapshot_IDs
+   --
+   procedure Active_Snapshot_IDs (
+      SB   :     Superblock_Type;
+      List : out Active_Snapshot_IDs_Type)
+   is
+   begin
+
+      if Superblock_Valid (SB) then
+
+         For_Each_Snapshot :
+         for Snap_Idx in List'Range loop
+
+            if SB.Snapshots (Snap_Idx).Valid and then
+               SB.Snapshots (Snap_Idx).Keep
+            then
+               List (Snap_Idx) := SB.Snapshots (Snap_Idx).Gen;
+            else
+               List (Snap_Idx) := 0;
+            end if;
+
+         end loop For_Each_Snapshot;
+
+      else
+
+         List := (others => 0);
+
+      end if;
+
+   end Active_Snapshot_IDs;
+
+   --
+   --  Max_VBA
+   --
+   function Max_VBA (SB : Superblock_Type)
+   return Virtual_Block_Address_Type
+   is (
+      if Superblock_Valid (SB) then
+         Virtual_Block_Address_Type (
+            SB.Snapshots (SB.Curr_Snap).Nr_Of_Leafs) - 1
+      else
+         0);
+
+   --
    --  Initialize_Control
    --
    procedure Initialize_Control (Ctrl : out Control_Type)

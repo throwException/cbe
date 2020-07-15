@@ -38,9 +38,7 @@ is
    procedure Initialize_Object (Obj : out Object_Type);
 
    --
-   --  Return active snapshot ids
-   --
-   --  \param reference to id array
+   --  Active_Snapshot_IDs
    --
    procedure Active_Snapshot_IDs (
       Obj  :     Object_Type;
@@ -305,9 +303,7 @@ is
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type);
 
    --
-   --  Get highest virtual-block-address useable by the current active snapshot
-   --
-   --  \return  highest addressable virtual-block-address
+   --  Max_VBA
    --
    function Max_VBA (Obj : Object_Type)
    return Virtual_Block_Address_Type;

@@ -128,22 +128,15 @@ is
       Superblock_Control.Info (Obj.Superblock, Info);
    end Info;
 
+   --
+   --  Active_Snapshot_IDs
+   --
    procedure Active_Snapshot_IDs (
       Obj  :     Object_Type;
       List : out Active_Snapshot_IDs_Type)
    is
    begin
-      For_Snapshots :
-      for Snap_ID in Snapshots_Index_Type loop
-
-         if Obj.Superblock.Snapshots (Snap_ID).Valid and then
-            Obj.Superblock.Snapshots (Snap_ID).Keep
-         then
-            List (Snap_ID) := Obj.Superblock.Snapshots (Snap_ID).Gen;
-         else
-            List (Snap_ID) := Generation_Type (0);
-         end if;
-      end loop For_Snapshots;
+      Superblock_Control.Active_Snapshot_IDs (Obj.Superblock, List);
    end Active_Snapshot_IDs;
 
    function Client_Request_Acceptable (Obj : Object_Type)
@@ -740,14 +733,13 @@ is
       raise Program_Error;
    end Idx_Of_Any_Invalid_Snap;
 
+   --
+   --  Max_VBA
+   --
    function Max_VBA (Obj : Object_Type)
    return Virtual_Block_Address_Type
-   is
-   begin
-      return
-         Virtual_Block_Address_Type (
-            Obj.Superblock.Snapshots (Curr_Snap (Obj)).Nr_Of_Leafs - 1);
-   end Max_VBA;
+   is (
+      Superblock_Control.Max_VBA (Obj.Superblock));
 
    procedure Execute_VBD (
       Obj              : in out Object_Type;

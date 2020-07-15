@@ -34,6 +34,19 @@ is
       Info : out Info_Type);
 
    --
+   --  Active_Snapshot_IDs
+   --
+   procedure Active_Snapshot_IDs (
+      SB   :     Superblock_Type;
+      List : out Active_Snapshot_IDs_Type);
+
+   --
+   --  Max_VBA
+   --
+   function Max_VBA (SB : Superblock_Type)
+   return Virtual_Block_Address_Type;
+
+   --
    --  Primitive_Acceptable
    --
    function Primitive_Acceptable (Ctrl : Control_Type)
