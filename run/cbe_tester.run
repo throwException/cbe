@@ -99,7 +99,7 @@ append config {
 
 				<initialize>
 					<virtual-block-device
-						nr_of_levels="4"
+						nr_of_levels="3"
 						nr_of_children="16"
 						nr_of_leafs="256" />
 
@@ -112,27 +112,27 @@ append config {
 				<replay verbose="yes" bulk="no">
 
 					<request type="write" lba="10" count="100"/>
-					<request type="read" lba="150" count="100"/>
+					<request type="read" lba="150" count="20"/>
 					<create-snapshot id="1" quarantine="yes"/>
 					<extend-ft nr_of_phys_blocks="1" />
-					<request type="write" lba="20" count="100"/>
-					<request type="read" lba="140" count="100"/>
+					<request type="write" lba="20" count="10"/>
+					<request type="read" lba="140" count="10"/>
 					<extend-ft nr_of_phys_blocks="100" />
 					<extend-vbd nr_of_phys_blocks="1" />
-					<request type="write" lba="30" count="100"/>
+					<request type="write" lba="30" count="40"/>
 					<create-snapshot id="2" quarantine="yes"/>
-					<request type="read" lba="130" count="100"/>
+					<request type="read" lba="130" count="30"/>
 					<rekey />
-					<request type="write" lba="40" count="100"/>
-					<request type="read" lba="120" count="100"/>
+					<request type="write" lba="40" count="1"/>
+					<request type="read" lba="120" count="5"/>
 					<extend-vbd nr_of_phys_blocks="100" />
-					<request type="write" lba="50" count="100"/>
-					<request type="read" lba="110" count="100"/>
+					<request type="write" lba="50" count="50"/>
+					<request type="read" lba="110" count="70"/>
 					<extend-ft nr_of_phys_blocks="100" />
 					<rekey />
-					<request type="write" lba="60" count="100"/>
+					<request type="write" lba="60" count="10"/>
 					<create-snapshot id="3" quarantine="yes"/>
-					<request type="read" lba="100" count="100"/>
+					<request type="read" lba="100" count="10"/>
 
 				</replay>
 
