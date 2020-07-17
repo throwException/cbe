@@ -1350,11 +1350,6 @@ is
             raise Program_Error;
          end if;
 
-         Debug.Print_String ("Read SB " &
-            Debug.To_String (Debug.Uint64_Type (Job.Read_SB_Idx)) &
-            " " &
-            Job.SB_Ciphertext.State'Image);
-
          if Superblock_Ciphertext_Valid (Job.SB_Ciphertext) then
 
             Declare_SB_Generation :
@@ -1432,11 +1427,6 @@ is
             Tg     => Primitive.Tag_SB_Ctrl_TA_Decrypt_Key,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type (Job_Idx));
-
-         Debug.Print_String ("Read Current SB " &
-            Debug.To_String (Debug.Uint64_Type (Job.SB_Idx)) &
-            " " &
-            Job.SB_Ciphertext.State'Image);
 
          Job.State := Decrypt_Current_Key_Pending;
          Progress := True;
@@ -1560,7 +1550,7 @@ is
          Declare_Result_Of_Snapshot_Search :
          declare
             Snapshot_Found : Boolean := False;
-            Snapshot_Idx : Snapshots_Index_Type;
+            Snapshot_Idx : Snapshots_Index_Type := Snapshots_Index_Type'First;
          begin
 
             Search_For_Snapshot :
