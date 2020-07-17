@@ -88,36 +88,6 @@ is
    end Initialize_Object;
 
    --
-   --  Discard_Disposable_Snapshots
-   --
-   procedure Discard_Disposable_Snapshots (
-      Snapshots        : in out Snapshots_Type;
-      Curr_Gen         :        Generation_Type;
-      Last_Secured_Gen :        Generation_Type);
-
-   procedure Discard_Disposable_Snapshots (
-      Snapshots        : in out Snapshots_Type;
-      Curr_Gen         :        Generation_Type;
-      Last_Secured_Gen :        Generation_Type)
-   is
-   begin
-
-      For_Each_Snap :
-      for Idx in Snapshots'Range loop
-
-         if Snapshots (Idx).Valid and then
-            not Snapshots (Idx).Keep and then
-            Snapshots (Idx).Gen /= Curr_Gen and then
-            Snapshots (Idx).Gen /= Last_Secured_Gen
-         then
-            Snapshots (Idx).Valid := False;
-         end if;
-
-      end loop For_Each_Snap;
-
-   end Discard_Disposable_Snapshots;
-
-   --
    --  Info
    --
    procedure Info (
