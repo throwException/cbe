@@ -1290,7 +1290,10 @@ is
                         & " Npba: "
                         & Debug.To_String (Debug.Uint64_Type (
                            Nodes (Natural (Child_Idx)).PBA))));
-                     if Gen = Obj.Cur_Gen or else Gen = 0 then
+
+                     if Gen = Obj.Cur_Gen or else
+                        (Curr_Lvl = 1 and then Gen = 0)
+                     then
 
                         Obj.SCD_New_PBAs (Tree_Level_Index_Type (Level - 1)) :=
                            Old_PBAs (Tree_Level_Index_Type (Level - 1)).PBA;
