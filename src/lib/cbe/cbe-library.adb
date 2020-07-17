@@ -2817,6 +2817,7 @@ is
                      Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
 
                   Obj.Superblock.Snapshots (Snap_Idx).Gen := Obj.Cur_Gen;
+                  Obj.Superblock.Snapshots (Snap_Idx).Keep := False;
                   Obj.Superblock.Curr_Snap := Snap_Idx;
                end;
             end if;
