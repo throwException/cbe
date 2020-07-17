@@ -293,41 +293,13 @@ is
    return Key_Plaintext_Type;
 
    type Superblock_State_Type is (
+      Invalid,
       Normal,
       Rekeying,
       Extending_VBD,
       Extending_FT);
 
-   --
-   --  The CBE::Superblock contains all information of a CBE
-   --  instance including the list of active snapshots. For now
-   --  the super-blocks are stored consecutively at the beginning
-   --  of the block device, i.e., there is a 1:1 mapping between
-   --  the physical-block-address and the SB id.
-   --
-   --  Per super-block we have a fixed number of snapshots (about
-   --  the amount we can store within one disk sector). Whenever
-   --  a generation is sealed, a new snapshot will be created
-   --  automatically. If a snapshot is flagged as KEEP, it will never
-   --  be overriden.
-   --
    type Superblock_Type is record
-      --
-      --  FIXME w/o snapshots about 265 bytes,
-      --       snapshots about 68 bytes each, all in all 3529 bytes
-      --       + meta tree
-      --
-
-      --
-      --  (At the moment we just check the active snapshots of
-      --  the active super-block but should it not make sense
-      --  to iterate overall super-blocks when trying to determine
-      --  if a block may be safely freed? Because if the most
-      --  recent SB is corrupted and we try to use an older one,
-      --  chances are that the snapshot in the corrupt SB has
-      --  reused blocks reference by a snapshot in the older SB.)
-      --
-
       State                   : Superblock_State_Type;
       Rekeying_VBA            : Virtual_Block_Address_Type;
       Resizing_Nr_Of_PBAs     : Number_Of_Blocks_Type;
@@ -393,9 +365,15 @@ is
    function Superblock_Ciphertext_Valid (SB : Superblock_Ciphertext_Type)
    return Boolean;
 
+   --
+   --  Superblock_Invalid
+   --
    function Superblock_Invalid
    return Superblock_Type;
 
+   --
+   --  Superblock_Valid
+   --
    function Superblock_Valid (SB : Superblock_Type)
    return Boolean;
 

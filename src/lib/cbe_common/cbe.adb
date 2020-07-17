@@ -245,30 +245,36 @@ is
       return Result;
    end Key_Plaintext_Valid;
 
+   --
+   --  Superblock_Valid
+   --
    function Superblock_Valid (SB : Superblock_Type)
    return Boolean
-   is (SB.Last_Secured_Generation /= Generation_Type'Last);
+   is (SB.State /= Invalid);
 
    --
    --  Superblock_Ciphertext_Valid
    --
    function Superblock_Ciphertext_Valid (SB : Superblock_Ciphertext_Type)
    return Boolean
-   is (SB.Last_Secured_Generation /= Generation_Type'Last);
+   is (SB.State /= Invalid);
 
+   --
+   --  Superblock_Invalid
+   --
    function Superblock_Invalid
    return Superblock_Type
    is
       Result : Superblock_Type;
    begin
-      Result.State                   := Superblock_State_Type'First;
+      Result.State                   := Invalid;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
       Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
       Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Plaintext_Invalid;
       Result.Current_Key             := Key_Plaintext_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
-      Result.Last_Secured_Generation := Generation_Type'Last;
+      Result.Last_Secured_Generation := Generation_Type'First;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
       Result.Degree                  := Tree_Degree_Type'First;
       Result.First_PBA               := Physical_Block_Address_Type'First;
@@ -296,14 +302,14 @@ is
    is
       Result : Superblock_Ciphertext_Type;
    begin
-      Result.State                   := Superblock_State_Type'First;
+      Result.State                   := Invalid;
       Result.Rekeying_VBA            := Virtual_Block_Address_Type'First;
       Result.Resizing_Nr_Of_PBAs     := Number_Of_Blocks_Type'First;
       Result.Resizing_Nr_Of_Leaves   := Tree_Number_Of_Leafs_Type'First;
       Result.Previous_Key            := Key_Ciphertext_Invalid;
       Result.Current_Key             := Key_Ciphertext_Invalid;
       Result.Snapshots               := (others => Snapshot_Invalid);
-      Result.Last_Secured_Generation := Generation_Type'Last;
+      Result.Last_Secured_Generation := Generation_Type'First;
       Result.Curr_Snap               := Snapshots_Index_Type'First;
       Result.Degree                  := Tree_Degree_Type'First;
       Result.First_PBA               := Physical_Block_Address_Type'First;
@@ -468,10 +474,11 @@ is
    is
    begin
       case Data (Off) is
-      when 0 => return Normal;
-      when 1 => return Rekeying;
-      when 2 => return Extending_VBD;
-      when 3 => return Extending_FT;
+      when 0 => return Invalid;
+      when 1 => return Normal;
+      when 2 => return Rekeying;
+      when 3 => return Extending_VBD;
+      when 4 => return Extending_FT;
       when others => raise Program_Error;
       end case;
    end SB_State_From_Block_Data;
@@ -486,10 +493,11 @@ is
    is
    begin
       case State is
-      when Normal => Data (Off) := 0;
-      when Rekeying => Data (Off) := 1;
-      when Extending_VBD => Data (Off) := 2;
-      when Extending_FT => Data (Off) := 3;
+      when Invalid => Data (Off) := 0;
+      when Normal => Data (Off) := 1;
+      when Rekeying => Data (Off) := 2;
+      when Extending_VBD => Data (Off) := 3;
+      when Extending_FT => Data (Off) := 4;
       end case;
    end Block_Data_From_SB_State;
 

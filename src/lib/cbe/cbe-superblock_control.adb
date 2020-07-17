@@ -561,6 +561,10 @@ is
       when Submitted =>
 
          case SB.State is
+         when Invalid =>
+
+            raise Program_Error;
+
          when Normal =>
 
             Job.Request_Finished := False;
@@ -851,6 +855,10 @@ is
       when Submitted =>
 
          case SB.State is
+         when Invalid =>
+
+            raise Program_Error;
+
          when Normal =>
 
             Job.Request_Finished := False;
@@ -1006,6 +1014,7 @@ is
          pragma Debug (Debug.Print_String (
             "      STATE " &
             (case SB.State is
+             when Invalid => "Invalid",
              when Normal => "Normal",
              when Extending_VBD => "Ext_VBD",
              when Extending_FT => "Ext_FT",
@@ -1169,7 +1178,7 @@ is
    procedure Execute_Deinitialize (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
-      SB            :        Superblock_Type;
+      SB            : in out Superblock_Type;
       Progress      : in out Boolean)
    is
    begin
@@ -1194,6 +1203,10 @@ is
          end if;
 
          case SB.State is
+         when Invalid =>
+
+            raise Program_Error;
+
          when Rekeying =>
 
             Job.Prev_Key_Plaintext.ID := SB.Previous_Key.ID;
@@ -1221,6 +1234,7 @@ is
             raise Program_Error;
          end if;
 
+         SB.State := Invalid;
          Primitive.Success (Job.Submitted_Prim, True);
          Job.State := Completed;
          Progress := True;
@@ -1264,6 +1278,11 @@ is
          if not Primitive.Success (Job.Generated_Prim) then
             raise Program_Error;
          end if;
+
+         Debug.Print_String ("Read SB " &
+            Debug.To_String (Debug.Uint64_Type (Job.Read_SB_Idx)) &
+            " " &
+            Job.SB_Ciphertext.State'Image);
 
          if Superblock_Ciphertext_Valid (Job.SB_Ciphertext) then
 
@@ -1343,6 +1362,11 @@ is
             Blk_Nr => Block_Number_Type'First,
             Idx    => Primitive.Index_Type (Job_Idx));
 
+         Debug.Print_String ("Read Current SB " &
+            Debug.To_String (Debug.Uint64_Type (Job.SB_Idx)) &
+            " " &
+            Job.SB_Ciphertext.State'Image);
+
          Job.State := Decrypt_Current_Key_Pending;
          Progress := True;
 
@@ -1369,7 +1393,11 @@ is
             raise Program_Error;
          end if;
 
-         case SB.State is
+         case Job.SB_Ciphertext.State is
+         when Invalid =>
+
+            raise Program_Error;
+
          when Rekeying =>
 
             Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (

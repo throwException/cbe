@@ -861,6 +861,10 @@ is
          end if;
 
          case Jobs (Idx).SB_State is
+         when Invalid =>
+
+            raise Program_Error;
+
          when Normal =>
 
             Index_Queue.Dequeue (Indices, Idx);

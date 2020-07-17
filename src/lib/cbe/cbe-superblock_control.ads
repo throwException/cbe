@@ -560,7 +560,7 @@ private
    procedure Execute_Deinitialize (
       Job           : in out Job_Type;
       Job_Idx       :        Jobs_Index_Type;
-      SB            :        Superblock_Type;
+      SB            : in out Superblock_Type;
       Progress      : in out Boolean);
 
    --
