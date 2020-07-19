@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
+with CBE.Request;
 
 package CBE.Superblock_Control
 with SPARK_Mode
@@ -58,6 +59,14 @@ is
    procedure Submit_Primitive (
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type);
+
+   --
+   --  Submit_Primitive_Req
+   --
+   procedure Submit_Primitive_Req (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Req  :        Request.Object_Type);
 
    --
    --  Submit_Primitive_Nr_Of_Blks
@@ -287,6 +296,14 @@ is
    return Tree_Degree_Type;
 
    --
+   --  Peek_Generated_Req
+   --
+   function Peek_Generated_Req (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Request.Object_Type;
+
+   --
    --  Peek_Generated_FT_Nr_Of_Leaves
    --
    function Peek_Generated_FT_Nr_Of_Leaves (
@@ -321,6 +338,15 @@ is
       Prim : Primitive.Object_Type;
       SB   : Superblock_Type)
    return Key_ID_Type;
+
+   --
+   --  Peek_Generated_Snapshot
+   --
+   function Peek_Generated_Snapshot (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshot_Type;
 
    --
    --  Drop_Generated_Primitive
@@ -397,6 +423,7 @@ private
    type Job_Operation_Type is (
       Invalid,
       Sync,
+      Read_VBA,
       Initialize,
       Deinitialize,
       VBD_Extension_Step,
@@ -408,6 +435,9 @@ private
 
    type Job_State_Type is (
       Submitted,
+      Read_VBA_At_VBD_Pending,
+      Read_VBA_At_VBD_In_Progress,
+      Read_VBA_At_VBD_Completed,
       Read_SB_Pending,
       Read_SB_In_Progress,
       Read_SB_Completed,
@@ -484,6 +514,7 @@ private
       Snapshots : Snapshots_Type;
       PBA : Physical_Block_Address_Type;
       Nr_Of_Blks : Number_Of_Blocks_Type;
+      Req : Request.Object_Type;
       FT_Root : Type_1_Node_Type;
       FT_Max_Lvl_Idx : Tree_Level_Index_Type;
       FT_Nr_Of_Leaves : Tree_Number_Of_Leafs_Type;
@@ -528,6 +559,15 @@ private
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
       Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Read_VBA
+   --
+   procedure Execute_Read_VBA (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            :        Superblock_Type;
       Progress      : in out Boolean);
 
    --

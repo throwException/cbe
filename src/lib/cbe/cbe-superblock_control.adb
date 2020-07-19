@@ -187,6 +187,7 @@ is
             SB_Idx => Superblocks_Index_Type'First,
             SB_Found => Boolean'First,
             Read_SB_Idx => Superblocks_Index_Type'First,
+            Req => Request.Invalid_Object,
             Request_Finished => Boolean'First,
             Snapshots => (others => Snapshot_Invalid),
             FT_Root => Type_1_Node_Invalid,
@@ -268,6 +269,38 @@ is
 
       raise Program_Error;
    end Submit_Primitive_Nr_Of_Blks;
+
+   --
+   --  Submit_Primitive_Req
+   --
+   procedure Submit_Primitive_Req (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Req  :        Request.Object_Type)
+   is
+   begin
+      Find_Invalid_Job :
+      for Idx in Ctrl.Jobs'Range loop
+         if Ctrl.Jobs (Idx).Operation = Invalid then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Pool_SB_Ctrl_Read_VBA =>
+
+               Ctrl.Jobs (Idx).Operation := Read_VBA;
+               Ctrl.Jobs (Idx).State := Submitted;
+               Ctrl.Jobs (Idx).Submitted_Prim := Prim;
+               Ctrl.Jobs (Idx).Req := Req;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+         end if;
+      end loop Find_Invalid_Job;
+
+      raise Program_Error;
+   end Submit_Primitive_Req;
 
    --
    --  Submit_Primitive_Gen
@@ -1863,6 +1896,75 @@ is
    end Execute_Create_Snapshot;
 
    --
+   --  Execute_Read_VBA
+   --
+   procedure Execute_Read_VBA (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            :        Superblock_Type;
+      Progress      : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         case SB.State is
+         when Rekeying =>
+
+            Declare_VBA :
+            declare
+               VBA : constant Virtual_Block_Address_Type :=
+                  Virtual_Block_Address_Type (
+                     Primitive.Block_Number (Job.Submitted_Prim));
+            begin
+
+               if VBA < SB.Rekeying_VBA  then
+                  Job.Curr_Key_Plaintext.ID := SB.Current_Key.ID;
+               else
+                  Job.Curr_Key_Plaintext.ID := SB.Previous_Key.ID;
+               end if;
+
+            end Declare_VBA;
+
+         when Normal | Extending_FT | Extending_VBD =>
+
+            Job.Curr_Key_Plaintext.ID := SB.Current_Key.ID;
+
+         when Invalid =>
+
+            raise Program_Error;
+
+         end case;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_VBD_Rkg_Read_VBA,
+            Blk_Nr => Primitive.Block_Number (Job.Submitted_Prim),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Read_VBA_At_VBD_Pending;
+         Progress := True;
+
+      when Read_VBA_At_VBD_Completed =>
+
+         Primitive.Success (
+            Job.Submitted_Prim,
+            Primitive.Success (Job.Generated_Prim));
+
+         Job.State := Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Read_VBA;
+
+   --
    --  Execute_Sync
    --
    procedure Execute_Sync (
@@ -2446,6 +2548,9 @@ is
       for Idx in Ctrl.Jobs'Range loop
 
          case Ctrl.Jobs (Idx).Operation is
+         when Read_VBA =>
+
+            Execute_Read_VBA (Ctrl.Jobs (Idx), Idx, SB, Progress);
 
          when Sync =>
 
@@ -2585,6 +2690,7 @@ is
 
             case Ctrl.Jobs (Idx).State is
             when
+               Read_VBA_At_VBD_Pending |
                Rekey_VBA_In_VBD_Pending |
                VBD_Ext_Step_In_VBD_Pending
             =>
@@ -2632,6 +2738,38 @@ is
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
    end Peek_Generated_FT_Rszg_Primitive;
+
+   --
+   --  Peek_Generated_Req
+   --
+   function Peek_Generated_Req (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type)
+   return Request.Object_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Read_VBA_At_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Req;
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Req;
 
    --
    --  Peek_Generated_Hash
@@ -2856,6 +2994,41 @@ is
    end Peek_Generated_Nr_Of_Blks;
 
    --
+   --  Peek_Generated_Snapshot
+   --
+   function Peek_Generated_Snapshot (
+      Ctrl : Control_Type;
+      Prim : Primitive.Object_Type;
+      SB   : Superblock_Type)
+   return Snapshot_Type
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Read_VBA_At_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return SB.Snapshots (SB.Curr_Snap);
+            else
+               raise Program_Error;
+            end if;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Peek_Generated_Snapshot;
+
+   --
    --  Peek_Generated_Snapshots
    --
    function Peek_Generated_Snapshots (
@@ -2918,6 +3091,14 @@ is
       if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
+         when Read_VBA_At_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return SB.Degree;
+            else
+               raise Program_Error;
+            end if;
+
          when Rekey_VBA_In_VBD_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) and then
@@ -3253,6 +3434,13 @@ is
             end if;
             raise Program_Error;
 
+         when Read_VBA_At_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               return Ctrl.Jobs (Idx).Curr_Key_Plaintext.ID;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -3461,6 +3649,14 @@ is
       if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
+         when Read_VBA_At_VBD_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Read_VBA_At_VBD_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when Create_Key_Pending =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
@@ -3922,6 +4118,17 @@ is
       if Ctrl.Jobs (Idx).Operation /= Invalid then
 
          case Ctrl.Jobs (Idx).State is
+         when Read_VBA_At_VBD_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Read_VBA_At_VBD_Completed;
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
          when Sync_Cache_In_Progress =>
 
             if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then

@@ -130,14 +130,28 @@ is
       Success    :        Boolean);
 
    --
-   --  Return a client request that provides data to the frontend block data
+   --  Client_Transfer_Read_Data_Required
    --
-   --  \param Req  return valid request in case the is one pending that
-   --             needs data, otherwise an invalid one is returned
+   procedure Client_Transfer_Read_Data_Required (
+      Obj           :     Object_Type;
+      Req           : out Request.Object_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out Crypto.Plain_Buffer_Index_Type);
+
    --
-   procedure Client_Data_Ready (
-      Obj : in out Object_Type;
-      Req :    out Request.Object_Type);
+   --  Client_Transfer_Read_Data_In_Progress
+   --
+   procedure Client_Transfer_Read_Data_In_Progress (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type);
+
+   --
+   --  Client_Transfer_Read_Data_Completed
+   --
+   procedure Client_Transfer_Read_Data_Completed (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type;
+      Success       :        Boolean);
 
    --
    --  Get primitive index
@@ -148,25 +162,7 @@ is
    return Primitive.Index_Type;
 
    --
-   --  Return data index for the given client read request
-   --
-   --  \param Req              reference to the request processed by the CBE
-   --  \param Data_Index       returns index of client data in crypto
-   --                          plain-data buffer if Data_Index_Valid returns
-   --                          True
-   --  \param Data_Index_Valid returns whether Data_Index is valid
-   --
-   procedure Obtain_Client_Data (
-      Obj              : in out Object_Type;
-      Req              :        Request.Object_Type;
-      Data_Index       :    out Crypto.Plain_Buffer_Index_Type;
-      Data_Index_Valid :    out Boolean);
-
-   --
-   --  Return a client request that provides data to the frontend block data
-   --
-   --  \param Req  return valid request in case the is one pending that
-   --             needs data, otherwise an invalid one is returned
+   --  Client_Data_Required
    --
    procedure Client_Data_Required (
       Obj : in out Object_Type;
@@ -272,13 +268,11 @@ is
       Data_Index : out Crypto.Cipher_Buffer_Index_Type);
 
    --
-   --  Acknowledge that required crypto plain-data was requested
-   --
-   --  \param Data_Index  index of the data in crypto buffer
+   --  Crypto_Plain_Data_Requested
    --
    procedure Crypto_Plain_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        Crypto.Cipher_Buffer_Index_Type);
+      Obj            : in out Library.Object_Type;
+      Cipher_Buf_Idx :        Crypto.Cipher_Buffer_Index_Type);
 
    --
    --  Collect plain data for given completed decryption request

@@ -670,50 +670,60 @@ class Vfs_cbe::Wrapper
 			}
 
 			/* read */
-			Cbe::Request cbe_request = cbe.client_data_ready();
-			if (cbe_request.valid() && cbe_request.read()) {
+			{
+				struct Data_pointer_is_null : Genode::Exception { };
+				struct Front_end_request_should_be_in_progress :
+					Genode::Exception { };
 
-				uint64_t const prim_index = cbe.client_data_index(cbe_request);
-				if (prim_index == ~0ull) {
-					Genode::error("prim_index invalid: ", cbe_request);
+				Cbe::Request cbe_req { };
+				uint64_t vba { 0 };
+				Cbe::Crypto_plain_buffer::Index plain_buf_idx { 0 };
 
-					frontend_request.state = ST::ERROR;
-					return progress;
-				}
+				_cbe->client_transfer_read_data_required(
+					cbe_req, vba, plain_buf_idx);
 
-				Cbe::Block_data *data = nullptr;
+				if (cbe_req.valid()) {
 
-				if (_helper_read_request.in_progress()) {
-					data = reinterpret_cast<Cbe::Block_data*>(
-						&_helper_read_request.block_data);
-				} else
+					Cbe::Block_data *data { nullptr };
 
-				if (_frontend_request.in_progress()) {
-					// XXX check after helper request because it will be IN_PROGRESS
-					//     in case helper request is used
-					data = reinterpret_cast<Cbe::Block_data*>(
-						cbe_request.offset() + (prim_index * Cbe::BLOCK_SIZE));
-				} else
-					throw -1;
+					if (_helper_read_request.in_progress()) {
+						data = reinterpret_cast<Cbe::Block_data*>(
+							&_helper_read_request.block_data);
+					} else {
 
-				if (data == nullptr) {
-					struct Data_nullptr { };
-					throw Data_nullptr();
-				}
+						if (_frontend_request.in_progress()) {
+							// XXX check after helper request because it will be IN_PROGRESS
+							//     in case helper request is used
 
-				Cbe::Crypto_plain_buffer::Index data_index(~0);
-				bool const data_index_valid =
-					cbe.obtain_client_data(cbe_request, data_index);
+							uint64_t buf_base { cbe_req.offset() };
+							uint64_t blk_off { vba - cbe_req.block_number() };
+							data = reinterpret_cast<Cbe::Block_data*>(
+								buf_base + (blk_off * Cbe::BLOCK_SIZE));
 
-				if (data_index_valid) {
-					Genode::memcpy(data, &_plain_data.item(data_index), sizeof (Cbe::Block_data));
+						} else {
+							throw Front_end_request_should_be_in_progress();
+						}
+					}
+					if (data == nullptr) {
+						throw Data_pointer_is_null();
+					}
+					Genode::memcpy(
+						data,
+						&_plain_data.item(plain_buf_idx),
+						sizeof (Cbe::Block_data));
+
+					_cbe->client_transfer_read_data_in_progress(
+						plain_buf_idx);
+
+					_cbe->client_transfer_read_data_completed(
+						plain_buf_idx, true);
 
 					progress = true;
 				}
 			}
 
 			/* write */
-			cbe_request = cbe.client_data_required();
+			Cbe::Request cbe_request = cbe.client_data_required();
 			if (cbe_request.valid() && cbe_request.write()) {
 				uint64_t const prim_index = cbe.client_data_index(cbe_request);
 				if (prim_index == ~0ull) {

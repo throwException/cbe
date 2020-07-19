@@ -494,12 +494,6 @@ struct Cbe::Block_session_component
 				request.operation.block_number, ", cnt ",
 				request.operation.count);
 		}
-		for (unsigned idx = 0;
-		     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
-		     idx++)
-		{
-			_blk_data.values[idx] = _blk_data.values[idx] + 1;
-		}
 		_test_in_progress.destruct();
 	}
 
@@ -570,10 +564,18 @@ struct Cbe::Block_session_component
 	}
 
 	template <typename FN>
-	void with_payload(FN const &fn) const
+	void with_payload(FN const &fn)
 	{
 		Payload payload { (addr_t)&_blk_data };
-		fn(payload);
+		if  (fn(payload)) {
+
+			for (unsigned idx = 0;
+			     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
+			     idx++)
+			{
+				_blk_data.values[idx] = _blk_data.values[idx] + 1;
+			}
+		}
 	}
 
 	void wakeup_client_if_needed() { }
@@ -1842,55 +1844,62 @@ class Cbe::Main
 
 				/* read */
 				{
-					Cbe::Request const cbe_request = _cbe->client_data_ready();
-					if (!cbe_request.valid()) { return; }
+					Cbe::Request cbe_req { };
+					uint64_t vba { 0 };
+					Crypto_plain_buffer::Index plain_buf_idx { 0 };
 
-					uint64_t const prim_index = _cbe->client_data_index(cbe_request);
-					if (prim_index == ~0ull) {
-						Genode::error("prim_index invalid: ", cbe_request);
-						return;
+					_cbe->client_transfer_read_data_required(
+						cbe_req, vba, plain_buf_idx);
+
+					if (!cbe_req.valid()) {
+						return false;
 					}
+					Block::Request blk_req { };
+					uint64_t buf_base { cbe_req.offset() };
+					uint64_t blk_off { vba - cbe_req.block_number() };
+					blk_req.offset = buf_base + (blk_off * BLOCK_SIZE);
+					blk_req.operation.count = 1;
 
-					Block::Request request { };
-					request.offset = cbe_request.offset() + (prim_index * BLOCK_SIZE);
-					request.operation.count = 1;
+					payload.with_content(blk_req, [&] (void *addr, Genode::size_t) {
 
-					payload.with_content(request, [&] (void *addr, Genode::size_t) {
+						Cbe::Block_data &data {
+							*reinterpret_cast<Cbe::Block_data*>(addr) };
 
-						Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(addr);
-						Crypto_plain_buffer::Index data_index(~0);
-						bool const data_index_valid =
-							_cbe->obtain_client_data(cbe_request, data_index);
-
-						if (data_index_valid) {
-							progress |= true;
-							data = _crypto_plain_buf.item(data_index);
-						}
+						data = _crypto_plain_buf.item(plain_buf_idx);
 					});
+					_cbe->client_transfer_read_data_in_progress(
+						plain_buf_idx);
+
+					_cbe->client_transfer_read_data_completed(
+						plain_buf_idx, true);
+
+					progress |= true;
+					return true;
 				}
 			});
 
 			_block_session->with_payload([&] (Payload const &payload) {
 				/* write */
 				{
-					Cbe::Request const cbe_request = _cbe->client_data_required();
-					if (!cbe_request.valid()) { return; }
+					Cbe::Request const cbe_req = _cbe->client_data_required();
+					if (!cbe_req.valid()) { return false; }
 
-					uint64_t const prim_index = _cbe->client_data_index(cbe_request);
+					uint64_t const prim_index = _cbe->client_data_index(cbe_req);
 					if (prim_index == ~0ull) {
-						Genode::error("prim_index invalid: ", cbe_request);
-						return;
+						Genode::error("prim_index invalid: ", cbe_req);
+						return false;
 					}
 
-					Block::Request request { };
-					request.offset = cbe_request.offset() + (prim_index * BLOCK_SIZE);
-					request.operation.count = 1;
+					Block::Request blk_req { };
+					blk_req.offset = cbe_req.offset() + (prim_index * BLOCK_SIZE);
+					blk_req.operation.count = 1;
 
-					payload.with_content(request, [&] (void *addr, Genode::size_t) {
+					payload.with_content(blk_req, [&] (void *addr, Genode::size_t) {
 
 						Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(addr);
-						progress |= _cbe->supply_client_data(cbe_request, data);
+						progress |= _cbe->supply_client_data(cbe_req, data);
 					});
+					return true;
 				}
 			});
 

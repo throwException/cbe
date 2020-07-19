@@ -129,15 +129,55 @@ is
          Obj, Block_IO.Data_Index_Type (Data_Index.Value));
    end IO_Request_In_Progress;
 
-   procedure Client_Data_Ready (
-      Obj : in out Library.Object_Type;
-      Req :    out CXX_Request_Type)
+   --
+   --  Client_Transfer_Read_Data_Required
+   --
+   procedure Client_Transfer_Read_Data_Required (
+      Obj           :     Library.Object_Type;
+      Req           : out CXX_Request_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out CXX_Crypto_Plain_Buffer_Index_Type)
    is
       SPARK_Req : Request.Object_Type;
+      SPARK_Plain_Buf_Idx : Crypto.Plain_Buffer_Index_Type;
    begin
-      Library.Client_Data_Ready (Obj, SPARK_Req);
+
+      Library.Client_Transfer_Read_Data_Required (
+         Obj, SPARK_Req, VBA, SPARK_Plain_Buf_Idx);
+
       Req := CXX_Request_From_SPARK (SPARK_Req);
-   end Client_Data_Ready;
+      Plain_Buf_Idx := (Value => CXX_UInt32_Type (SPARK_Plain_Buf_Idx));
+
+   end Client_Transfer_Read_Data_Required;
+
+   --
+   --  Client_Transfer_Read_Data_In_Progress
+   --
+   procedure Client_Transfer_Read_Data_In_Progress (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
+   is
+   begin
+      Library.Client_Transfer_Read_Data_In_Progress (
+         Obj, Crypto.Plain_Buffer_Index_Type (Plain_Buf_Idx.Value));
+
+   end Client_Transfer_Read_Data_In_Progress;
+
+   --
+   --  Client_Transfer_Read_Data_Completed
+   --
+   procedure Client_Transfer_Read_Data_Completed (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type;
+      Success       :        CXX_Bool_Type)
+   is
+   begin
+      Library.Client_Transfer_Read_Data_Completed (
+         Obj,
+         Crypto.Plain_Buffer_Index_Type (Plain_Buf_Idx.Value),
+         CXX_Bool_To_SPARK (Success));
+
+   end Client_Transfer_Read_Data_Completed;
 
    function Client_Data_Index (
       Obj : Library.Object_Type;
@@ -148,23 +188,6 @@ is
       return CXX_Primitive_Index_Type (
          Library.Client_Data_Index (Obj, CXX_Request_To_SPARK (Req)));
    end Client_Data_Index;
-
-   procedure Obtain_Client_Data (
-      Obj              : in out Library.Object_Type;
-      Req              :        CXX_Request_Type;
-      Data_Index       :    out CXX_Crypto_Plain_Buffer_Index_Type;
-      Data_Index_Valid :    out CXX_Bool_Type)
-   is
-      SPARK_Data_Index       : Crypto.Plain_Buffer_Index_Type;
-      SPARK_Data_Index_Valid : Boolean;
-   begin
-      Library.Obtain_Client_Data (
-         Obj, CXX_Request_To_SPARK (Req), SPARK_Data_Index,
-         SPARK_Data_Index_Valid);
-
-      Data_Index       := (Value => CXX_UInt32_Type (SPARK_Data_Index));
-      Data_Index_Valid := CXX_Bool_From_SPARK (SPARK_Data_Index_Valid);
-   end Obtain_Client_Data;
 
    procedure Client_Data_Required (
       Obj : in out Library.Object_Type;
@@ -301,13 +324,16 @@ is
       Data_Index := (Value => CXX_UInt32_Type (SPARK_Data_Index));
    end Crypto_Plain_Data_Required;
 
+   --
+   --  Crypto_Plain_Data_Requested
+   --
    procedure Crypto_Plain_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        CXX_Crypto_Cipher_Buffer_Index_Type)
+      Obj            : in out Library.Object_Type;
+      Cipher_Buf_Idx :        CXX_Crypto_Cipher_Buffer_Index_Type)
    is
    begin
       Library.Crypto_Plain_Data_Requested (
-         Obj, Crypto.Cipher_Buffer_Index_Type (Data_Index.Value));
+         Obj, Crypto.Cipher_Buffer_Index_Type (Cipher_Buf_Idx.Value));
    end Crypto_Plain_Data_Requested;
 
    procedure Supply_Crypto_Plain_Data (

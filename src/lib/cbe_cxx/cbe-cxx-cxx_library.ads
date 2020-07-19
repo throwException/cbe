@@ -139,13 +139,47 @@ is
       External_Name =>
          "_ZN3Cbe7Library22io_request_in_progressERKNS_9Io_buffer5IndexE";
 
-   procedure Client_Data_Ready (
-      Obj : in out Library.Object_Type;
-      Req :    out CXX_Request_Type)
+   --
+   --  Client_Transfer_Read_Data_Required
+   --
+   procedure Client_Transfer_Read_Data_Required (
+      Obj           :     Library.Object_Type;
+      Req           : out CXX_Request_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out CXX_Crypto_Plain_Buffer_Index_Type)
    with
       Export,
       Convention    => C,
-      External_Name => "_ZN3Cbe7Library18_client_data_readyERNS_7RequestE";
+      External_Name =>
+         "_ZNK3Cbe7Library34client_transfer_read_data_requiredERNS_" &
+         "7RequestERyRNS_19Crypto_plain_buffer5IndexE";
+
+   --
+   --  Client_Transfer_Read_Data_In_Progress
+   --
+   procedure Client_Transfer_Read_Data_In_Progress (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library37client_transfer_read_data_in_progressERKNS_" &
+         "19Crypto_plain_buffer5IndexE";
+
+   --
+   --  Client_Transfer_Read_Data_Completed
+   --
+   procedure Client_Transfer_Read_Data_Completed (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type;
+      Success       :        CXX_Bool_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library35client_transfer_read_data_completedERKNS_" &
+         "19Crypto_plain_buffer5IndexEb";
 
    function Client_Data_Index (
       Obj : Library.Object_Type;
@@ -155,18 +189,6 @@ is
       Export,
       Convention    => C,
       External_Name => "_ZNK3Cbe7Library17client_data_indexERKNS_7RequestE";
-
-   procedure Obtain_Client_Data (
-      Obj              : in out Library.Object_Type;
-      Req              :        CXX_Request_Type;
-      Data_Index       :    out CXX_Crypto_Plain_Buffer_Index_Type;
-      Data_Index_Valid :    out CXX_Bool_Type)
-   with
-      Export,
-      Convention    => C,
-      External_Name =>
-         "_ZN3Cbe7Library19_obtain_client_dataERKNS_7RequestERNS_" &
-         "19Crypto_plain_buffer5IndexERb";
 
    procedure Client_Data_Required (
       Obj : in out Library.Object_Type;
@@ -298,9 +320,12 @@ is
          "_ZNK3Cbe7Library27_crypto_plain_data_requiredERNS_7RequestERNS_" &
          "20Crypto_cipher_buffer5IndexE";
 
+   --
+   --  Crypto_Plain_Data_Requested
+   --
    procedure Crypto_Plain_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        CXX_Crypto_Cipher_Buffer_Index_Type)
+      Obj            : in out Library.Object_Type;
+      Cipher_Buf_Idx :        CXX_Crypto_Cipher_Buffer_Index_Type)
    with
       Export,
       Convention    => C,

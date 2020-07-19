@@ -9,6 +9,7 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
+with CBE.Request;
 
 package CBE.Block_IO
 with SPARK_Mode
@@ -65,6 +66,16 @@ is
       Tag        :        Primitive.Tag_Type;
       Prim       :        Primitive.Object_Type;
       Data_Index :    out Data_Index_Type);
+
+   --
+   --  Submit_Primitive_Client_Data
+   --
+   procedure Submit_Primitive_Client_Data (
+      Obj    : in out Object_Type;
+      Prim   :        Primitive.Object_Type;
+      Req    :        Request.Object_Type;
+      VBA    :        Virtual_Block_Address_Type;
+      Key_ID :        Key_ID_Type);
 
    --
    --  FIXME This function is currently only needed for reading actual data
@@ -140,16 +151,36 @@ is
       Prim :        Primitive.Object_Type);
 
    --
-   --  Check for any generated primitive
+   --  Drop_Completed_Primitive_New
    --
-   --  The method will always a return a primitive and the caller
-   --  always has to check if the returned primitive is in fact a
-   --  valid one.
+   procedure Drop_Completed_Primitive_New (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type);
+
    --
-   --  \return a valid Primitive will be returned if there is an
-   --         generated primitive pending, otherwise an invalid one
+   --  Drop_Generated_Primitive_New
    --
-   function Peek_Generated_Primitive (Obj : Object_Type)
+   procedure Drop_Generated_Primitive_New (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type);
+
+   --
+   --  Execute
+   --
+   procedure Execute (
+      Obj      : in out Object_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Peek_Generated_Blk_Dev_Primitive
+   --
+   function Peek_Generated_Blk_Dev_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_Crypto_Primitive
+   --
+   function Peek_Generated_Crypto_Primitive (Obj : Object_Type)
    return Primitive.Object_Type;
 
    --
@@ -166,6 +197,30 @@ is
       Obj  : Object_Type;
       Prim : Primitive.Object_Type)
    return Data_Index_Type;
+
+   --
+   --  Peek_Generated_Key_ID
+   --
+   function Peek_Generated_Key_ID (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Key_ID_Type;
+
+   --
+   --  Peek_Generated_Req
+   --
+   function Peek_Generated_Req (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Request.Object_Type;
+
+   --
+   --  Peek_Generated_VBA
+   --
+   function Peek_Generated_VBA (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Virtual_Block_Address_Type;
 
    --
    --  Discard given generated primitive
@@ -196,20 +251,48 @@ is
       Data_Idx :        Data_Index_Type;
       Success  :        Boolean);
 
+   --
+   --  Mark_Generated_Primitive_Complete_New
+   --
+   procedure Mark_Generated_Primitive_Complete_New (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type);
+
 private
 
-   type Entry_State_Type is (Unused, Pending, In_Progress, Complete);
+   type Entry_State_Type is (
+      Unused,
+      Read_Client_Data_Submitted,
+      Read_Client_Data_Completed,
+
+      Read_Client_Data_Read_Data_Pending,
+      Read_Client_Data_Read_Data_In_Progress,
+      Read_Client_Data_Read_Data_Completed,
+
+      Read_Client_Data_Decrypt_And_Supply_Data_Pending,
+      Read_Client_Data_Decrypt_And_Supply_Data_In_Progress,
+      Read_Client_Data_Decrypt_And_Supply_Data_Completed,
+
+      Pending,
+      In_Progress,
+      Complete);
 
    type Entry_Type is record
-      Orig_Tag   : Primitive.Tag_Type;
-      Prim       : Primitive.Object_Type;
-      Hash       : Hash_Type;
-      Hash_Valid : Boolean;
-      State      : Entry_State_Type;
-      Key_ID     : Key_ID_Type;
+      Orig_Tag       : Primitive.Tag_Type;
+      Prim           : Primitive.Object_Type;
+      Hash           : Hash_Type;
+      Hash_Valid     : Boolean;
+      State          : Entry_State_Type;
+      Key_ID         : Key_ID_Type;
+      Req            : Request.Object_Type;
+      VBA            : Virtual_Block_Address_Type;
+      Submitted_Prim : Primitive.Object_Type;
+      Generated_Prim : Primitive.Object_Type;
    end record;
 
-   type Entries_Type is array (Data_Index_Type'Range) of Entry_Type;
+   subtype Entries_Index_Type is Data_Index_Type;
+
+   type Entries_Type is array (Entries_Index_Type) of Entry_Type;
 
    --
    --  Object_Type
@@ -218,5 +301,13 @@ private
       Entries      : Entries_Type;
       Used_Entries : Num_Entries_Type;
    end record;
+
+   --
+   --  Execute_Read_Client_Data
+   --
+   procedure Execute_Read_Client_Data (
+      Entr      : in out Entry_Type;
+      Entry_Idx :        Entries_Index_Type;
+      Progress  : in out Boolean);
 
 end CBE.Block_IO;

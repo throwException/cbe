@@ -42,6 +42,7 @@ is
                raise Program_Error;
 
             when
+               Read |
                Sync |
                Rekey |
                Extend_VBD |
@@ -72,7 +73,7 @@ is
                Index_Queue.Enqueue (Obj.Indices, Idx);
                return;
 
-            when Read | Write =>
+            when Write =>
 
                Obj.Jobs (Idx) := (
                   State                   => Pending,
@@ -81,6 +82,7 @@ is
                   Prim                    => Primitive.Invalid_Object,
                   Request_Finished        => Boolean'First,
                   Nr_Of_Requests_Preponed => 0,
+                  Nr_Of_Blks              => Number_Of_Blocks_Type'First,
                   Nr_Of_Prims_Completed   => 0,
                   SB_State                => Superblock_State_Type'First,
                   Gen                     => Generation_Type'First);
@@ -115,9 +117,8 @@ is
          Idx : constant Pool_Index_Type := Index_Queue.Head (Obj.Indices);
          Job : constant Job_Type := Obj.Jobs (Idx);
       begin
-         if Job.State /= Pending or else (
-               Request.Operation (Job.Req) /= Read and then
-               Request.Operation (Job.Req) /= Write)
+         if Job.State /= Pending or else
+            Request.Operation (Job.Req) /= Write
          then
             return Primitive.Invalid_Object;
          end if;
@@ -153,6 +154,7 @@ is
 
             case Job.State is
             when
+               Read_VBA_At_SB_Ctrl_Pending |
                Sync_At_SB_Ctrl_Pending |
                Rekey_Init_Pending |
                Rekey_VBA_Pending |
@@ -190,9 +192,8 @@ is
    begin
       if Index_Queue.Empty (Obj.Indices) or else
          Index_Queue.Head (Obj.Indices) /= Idx or else
-         Obj.Jobs (Idx).State /= Pending or else (
-            Request.Operation (Obj.Jobs (Idx).Req) /= Read and then
-            Request.Operation (Obj.Jobs (Idx).Req) /= Write)
+         Obj.Jobs (Idx).State /= Pending or else
+         Request.Operation (Obj.Jobs (Idx).Req) /= Write
       then
          raise Program_Error;
       end if;
@@ -264,6 +265,35 @@ is
    end Peek_Generated_Gen;
 
    --
+   --  Peek_Generated_Req
+   --
+   function Peek_Generated_Req (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Request.Object_Type
+   is
+      Idx : constant Pool_Index_Type :=
+         Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim));
+   begin
+
+      case Obj.Jobs (Idx).State is
+      when Read_VBA_At_SB_Ctrl_Pending =>
+
+         if Primitive.Equal (Prim, Obj.Jobs (Idx).Prim) then
+            return Obj.Jobs (Idx).Req;
+         else
+            raise Program_Error;
+         end if;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Peek_Generated_Req;
+
+   --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
@@ -277,6 +307,9 @@ is
          case Obj.Jobs (Idx).State is
          when Pending =>
             Obj.Jobs (Idx).State := In_Progress;
+            return;
+         when Read_VBA_At_SB_Ctrl_Pending =>
+            Obj.Jobs (Idx).State := Read_VBA_At_SB_Ctrl_In_Progress;
             return;
          when Sync_At_SB_Ctrl_Pending =>
             Obj.Jobs (Idx).State := Sync_At_SB_Ctrl_In_Progress;
@@ -543,6 +576,81 @@ is
       end case;
 
    end Execute_Extend_FT;
+
+   --
+   --  Execute_Read
+   --
+   procedure Execute_Read (
+      Jobs     : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Jobs (Idx).State is
+      when Submitted =>
+
+         Jobs (Idx).Nr_Of_Blks := 0;
+         Jobs (Idx).Prim := Primitive.Valid_Object (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_Pool_SB_Ctrl_Read_VBA,
+            Pl_Idx => Idx,
+            Blk_Nr => Request.Block_Number (Jobs (Idx).Req) +
+                         Block_Number_Type (Jobs (Idx).Nr_Of_Blks),
+            Idx    => Primitive.Index_Type'First);
+
+         Jobs (Idx).State := Read_VBA_At_SB_Ctrl_Pending;
+         Progress := True;
+
+      when Read_VBA_At_SB_Ctrl_Complete =>
+
+         if Primitive.Success (Jobs (Idx).Prim) then
+
+            Jobs (Idx).Nr_Of_Blks := Jobs (Idx).Nr_Of_Blks + 1;
+
+            if Jobs (Idx).Nr_Of_Blks <
+                  Number_Of_Blocks_Type (Request.Count (Jobs (Idx).Req))
+            then
+
+               Jobs (Idx).Prim := Primitive.Valid_Object (
+                  Op     => Read,
+                  Succ   => False,
+                  Tg     => Primitive.Tag_Pool_SB_Ctrl_Read_VBA,
+                  Pl_Idx => Idx,
+                  Blk_Nr => Request.Block_Number (Jobs (Idx).Req) +
+                               Block_Number_Type (Jobs (Idx).Nr_Of_Blks),
+                  Idx    => Primitive.Index_Type'First);
+
+               Jobs (Idx).State := Read_VBA_At_SB_Ctrl_Pending;
+               Progress := True;
+
+            else
+
+               Request.Success (Jobs (Idx).Req, True);
+               Jobs (Idx).State := Complete;
+               Index_Queue.Dequeue (Indices, Idx);
+               Progress := True;
+
+            end if;
+
+         else
+
+            Request.Success (Jobs (Idx).Req, False);
+            Jobs (Idx).State := Complete;
+            Index_Queue.Dequeue (Indices, Idx);
+            Progress := True;
+
+         end if;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Read;
 
    --
    --  Execute_Sync
@@ -989,6 +1097,10 @@ is
          begin
 
             case Request.Operation (Obj.Jobs (Idx).Req) is
+            when Read =>
+
+               Execute_Read (Obj.Jobs, Obj.Indices, Idx, Progress);
+
             when Sync =>
 
                Execute_Sync (Obj.Jobs, Obj.Indices, Idx, Progress);
@@ -1091,6 +1203,20 @@ is
       end if;
 
       case Request.Operation (Obj.Jobs (Idx).Req) is
+      when Read =>
+
+         case Obj.Jobs (Idx).State is
+         when Read_VBA_At_SB_Ctrl_In_Progress =>
+
+            Primitive.Success (Obj.Jobs (Idx).Prim, Success);
+            Obj.Jobs (Idx).State := Read_VBA_At_SB_Ctrl_Complete;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
       when Sync =>
 
          case Obj.Jobs (Idx).State is
@@ -1118,6 +1244,7 @@ is
             raise Program_Error;
 
          end case;
+
       when Rekey =>
 
          case Obj.Jobs (Idx).State is
@@ -1146,7 +1273,7 @@ is
 
          end case;
 
-      when Read | Write =>
+      when Write =>
 
          if Obj.Jobs (Idx).State /= In_Progress then
             raise Program_Error;
@@ -1346,9 +1473,10 @@ is
    return Number_Of_Primitives_Type
    is (
       case Request.Operation (Job.Req) is
-      when Read | Write =>
+      when Write =>
          Number_Of_Primitives_Type (Request.Count (Job.Req)),
       when
+         Read |
          Sync |
          Create_Snapshot |
          Discard_Snapshot |
@@ -1373,6 +1501,7 @@ is
       Prim                    => Primitive.Invalid_Object,
       Request_Finished        => Boolean'First,
       Nr_Of_Requests_Preponed => 0,
+      Nr_Of_Blks              => Number_Of_Blocks_Type'First,
       Nr_Of_Prims_Completed   => 0,
       SB_State                => Superblock_State_Type'First,
       Gen                     => Generation_Type'First);

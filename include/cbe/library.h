@@ -30,7 +30,7 @@ namespace Cbe {
 } /* namespace Cbe */
 
 
-class Cbe::Library : public Cbe::Spark_object<353592>
+class Cbe::Library : public Cbe::Spark_object<353944>
 {
 	private:
 
@@ -43,8 +43,10 @@ class Cbe::Library : public Cbe::Spark_object<353592>
 
 		void _has_io_request(Request &, Io_buffer::Index &) const;
 
-		void _client_data_ready(Request &);
-		void _obtain_client_data(Request const &, Crypto_plain_buffer::Index &, bool &);
+		void _client_transfer_read_data_required(Request &,
+		                                         uint64_t &,
+		                                         Crypto_plain_buffer::Index &);
+
 		void _client_data_required(Request &);
 		void _supply_client_data(Request const &, Block_data const &, bool &);
 
@@ -167,44 +169,18 @@ class Cbe::Library : public Cbe::Spark_object<353592>
 	 */
 	void io_request_in_progress(Io_buffer::Index const &data_index);
 
-	/*
-	 * Frontend block I/O
-	 */
+	void client_transfer_read_data_required(Request &,
+	                                        uint64_t &,
+	                                        Crypto_plain_buffer::Index &) const;
 
-	/**
-	 * Return a client request that provides data to the frontend block data
-	 *
-	 * \param result  valid request in case the is one pending that
-	 *                needs data, otherwise an invalid one is returned
-	 */
-	Request client_data_ready()
-	{
-		Request result { };
-		_client_data_ready(result);
-		return result;
-	}
+	void client_transfer_read_data_in_progress(Crypto_plain_buffer::Index const &);
+
+	void client_transfer_read_data_completed(Crypto_plain_buffer::Index const &, bool);
 
 	/**
 	 * Return primitive index
 	 */
 	uint64_t client_data_index(Request const &request) const;
-
-	/**
-	 * Return data for given client read request
-	 *
-	 * \param  request  reference to the Block::Request processed
-	 *                  by the CBE
-	 * \param  data     reference to the data associated with the
-	 *                  Block::Request
-	 * \return          'true' on return if the CBE could process the request
-	 */
-	bool obtain_client_data(Request              const &request,
-	                        Crypto_plain_buffer::Index &data_index)
-	{
-		bool result = false;
-		_obtain_client_data(request, data_index, result);
-		return result;
-	}
 
 	/**
 	 * Return a client request that provides data to the frontend block data

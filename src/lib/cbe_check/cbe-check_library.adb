@@ -426,30 +426,37 @@ is
    return Boolean
    is (Obj.Execute_Progress);
 
+   --
+   --  Has_IO_Request
+   --
    procedure Has_IO_Request (
       Obj      :     Object_Type;
       Req      : out Request.Object_Type;
       Data_Idx : out Block_IO.Data_Index_Type)
    is
+      Prim : constant Primitive.Object_Type :=
+         Block_IO.Peek_Generated_Blk_Dev_Primitive (Obj.Blk_IO);
    begin
-      Req      := Request.Invalid_Object;
-      Data_Idx := 0;
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Block_IO.Peek_Generated_Primitive (Obj.Blk_IO);
-      begin
-         if Primitive.Valid (Prim) then
-            Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.Blk_IO, Prim);
-            Req := Request.Valid_Object (
-               Op => Prim_Op_To_Req_Op (Primitive.Operation (Prim)),
-               Succ => False,
-               Blk_Nr => Primitive.Block_Number (Prim),
-               Off => 0,
-               Cnt => 1,
-               Key => 0,
-               Tg => 0);
-         end if;
-      end;
+
+      if Primitive.Valid (Prim) then
+
+         Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.Blk_IO, Prim);
+         Req      := Request.Valid_Object (
+            Op     => Prim_Op_To_Req_Op (Primitive.Operation (Prim)),
+            Succ   => False,
+            Blk_Nr => Primitive.Block_Number (Prim),
+            Off    => 0,
+            Cnt    => 1,
+            Key    => 0,
+            Tg     => 0);
+
+      else
+
+         Req := Request.Invalid_Object;
+         Data_Idx := Block_IO.Data_Index_Type'First;
+
+      end if;
+
    end Has_IO_Request;
 
    procedure IO_Request_In_Progress (

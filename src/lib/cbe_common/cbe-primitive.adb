@@ -247,6 +247,10 @@ is
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Sync);
 
+   function Has_Tag_Pool_SB_Ctrl_Read_VBA (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Read_VBA);
+
    function Has_Tag_Pool_SB_Ctrl_Discard_Snap (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Discard_Snap);
@@ -277,6 +281,10 @@ is
    function Has_Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA);
+
+   function Has_Tag_SB_Ctrl_VBD_Rkg_Read_VBA (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_Read_VBA);
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
    return Boolean
@@ -315,8 +323,31 @@ is
    return Boolean
    is (Obj.Tag = Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf);
 
+   function Has_Tag_Blk_IO_Blk_Dev_Read (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Blk_IO_Blk_Dev_Read);
+
+   function Has_Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data);
+
+   function Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Crypto_IO_Crypto_Dev_Decrypt);
+
+   function Has_Tag_Crypto_IO_Client_Supply_Data (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Crypto_IO_Client_Supply_Data);
+
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Blk_IO);
+
+   function Has_Tag_VBD_Rkg_Blk_IO_Read_Client_Data (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_VBD_Rkg_Blk_IO_Read_Client_Data);
 
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Crypto_Encrypt);
