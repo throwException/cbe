@@ -16,18 +16,18 @@ is
    --  Disable for now because of libsparkcrypto
    --  pragma Pure;
 
-   subtype Plain_Data_Type  is CBE.Block_Data_Type;
+   subtype Plain_Data_Type is CBE.Block_Data_Type;
    subtype Cipher_Data_Type is CBE.Block_Data_Type;
 
-   type Item_Index_Type is range 0 .. 0;
+   type Jobs_Index_Type is range 0 .. 0;
 
-   type Plain_Buffer_Index_Type is new Item_Index_Type;
+   type Plain_Buffer_Index_Type is new Jobs_Index_Type;
 
-   type Cipher_Buffer_Index_Type is new Item_Index_Type;
+   type Cipher_Buffer_Index_Type is new Jobs_Index_Type;
 
-   type Plain_Buffer_Type is array (Item_Index_Type) of Plain_Data_Type;
+   type Plain_Buffer_Type is array (Jobs_Index_Type) of Plain_Data_Type;
 
-   type Cipher_Buffer_Type is array (Item_Index_Type) of Cipher_Data_Type;
+   type Cipher_Buffer_Type is array (Jobs_Index_Type) of Cipher_Data_Type;
 
    type Object_Type is private;
 
@@ -50,9 +50,11 @@ is
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
       Key_ID   :        Key_ID_Type;
-      Data_Idx :    out Item_Index_Type)
+      Data_Idx :    out Jobs_Index_Type)
    with
-      Pre => (Primitive_Acceptable (Obj) and then Primitive.Valid (Prim));
+      Pre => (
+         Primitive_Acceptable (Obj) and then
+         Primitive.Valid (Prim));
 
    --
    --  Submit_Primitive_Key
@@ -77,38 +79,38 @@ is
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
       Key_ID   :        Key_ID_Type;
-      Data_Idx :    out Item_Index_Type);
+      Data_Idx :    out Jobs_Index_Type);
 
    --
    --  Peek_Generated_Primitive
    --
    procedure Peek_Generated_Primitive (
-      Obj      :     Object_Type;
-      Item_Idx : out Item_Index_Type;
-      Prim     : out Primitive.Object_Type);
+      Obj     :     Object_Type;
+      Job_Idx : out Jobs_Index_Type;
+      Prim    : out Primitive.Object_Type);
 
    --
    --  Peek_Generated_Key_ID
    --
    function Peek_Generated_Key_ID (
-      Obj      : Object_Type;
-      Item_Idx : Item_Index_Type)
+      Obj     : Object_Type;
+      Job_Idx : Jobs_Index_Type)
    return Key_ID_Type;
 
    --
    --  Peek_Generated_Key
    --
    function Peek_Generated_Key (
-      Obj      : Object_Type;
-      Item_Idx : Item_Index_Type)
+      Obj     : Object_Type;
+      Job_Idx : Jobs_Index_Type)
    return Key_Plaintext_Type;
 
    --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
-      Obj      : in out Object_Type;
-      Item_Idx :        Item_Index_Type);
+      Obj     : in out Object_Type;
+      Job_Idx :        Jobs_Index_Type);
 
    --
    --  Peek_Completed_Primitive
@@ -125,9 +127,9 @@ is
    --  Mark_Completed_Primitive
    --
    procedure Mark_Completed_Primitive (
-      Obj      : in out Object_Type;
-      Item_Idx :        Item_Index_Type;
-      Success  :        Boolean);
+      Obj     : in out Object_Type;
+      Job_Idx :        Jobs_Index_Type;
+      Success :        Boolean);
 
    --
    --  Data_Index
@@ -135,22 +137,22 @@ is
    function Data_Index (
       Obj  : Crypto.Object_Type;
       Prim : Primitive.Object_Type)
-   return Item_Index_Type;
+   return Jobs_Index_Type;
 
 private
 
-   type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
+   type Job_State_Type is (Invalid, Pending, In_Progress, Complete);
 
-   type Item_Type is record
-      State : Item_State_Type;
+   type Job_Type is record
+      State : Job_State_Type;
       Prim  : Primitive.Object_Type;
       Key   : Key_Plaintext_Type;
    end record;
 
-   type Items_Type is array (Item_Index_Type) of Item_Type;
+   type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
 
    type Object_Type is record
-      Items            : Items_Type;
+      Jobs             : Jobs_Type;
       Execute_Progress : Boolean;
    end record;
 

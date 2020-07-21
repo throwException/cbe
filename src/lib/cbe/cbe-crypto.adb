@@ -17,7 +17,7 @@ is
    function Initialized_Object
    return Object_Type
    is (
-      Items => (
+      Jobs => (
          others => (
             State => Invalid,
             Prim => Primitive.Invalid_Object,
@@ -31,7 +31,7 @@ is
    function Primitive_Acceptable (Obj : Object_Type)
    return Boolean
    is (
-      for some Itm of Obj.Items => Itm.State = Invalid);
+      for some Itm of Obj.Jobs => Itm.State = Invalid);
 
    --
    --  Submit_Primitive_Key
@@ -43,19 +43,19 @@ is
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Invalid then
+         if Obj.Jobs (Job_Idx).State = Invalid then
 
-            Obj.Items (Item_Idx).State := Pending;
-            Obj.Items (Item_Idx).Prim := Prim;
-            Obj.Items (Item_Idx).Key := Key;
+            Obj.Jobs (Job_Idx).State := Pending;
+            Obj.Jobs (Job_Idx).Prim := Prim;
+            Obj.Jobs (Job_Idx).Key := Key;
             return;
 
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       raise Program_Error;
 
    end Submit_Primitive_Key;
@@ -70,19 +70,19 @@ is
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Invalid then
+         if Obj.Jobs (Job_Idx).State = Invalid then
 
-            Obj.Items (Item_Idx).State := Pending;
-            Obj.Items (Item_Idx).Prim := Prim;
-            Obj.Items (Item_Idx).Key.ID := Key_ID;
+            Obj.Jobs (Job_Idx).State := Pending;
+            Obj.Jobs (Job_Idx).Prim := Prim;
+            Obj.Jobs (Job_Idx).Key.ID := Key_ID;
             return;
 
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       raise Program_Error;
 
    end Submit_Primitive_Key_ID;
@@ -94,25 +94,25 @@ is
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
       Key_ID   :        Key_ID_Type;
-      Data_Idx :    out Item_Index_Type)
+      Data_Idx :    out Jobs_Index_Type)
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Invalid then
+         if Obj.Jobs (Job_Idx).State = Invalid then
 
-            Obj.Items (Item_Idx).State := Pending;
-            Obj.Items (Item_Idx).Prim := Prim;
-            Obj.Items (Item_Idx).Key.ID := Key_ID;
+            Obj.Jobs (Job_Idx).State := Pending;
+            Obj.Jobs (Job_Idx).Prim := Prim;
+            Obj.Jobs (Job_Idx).Key.ID := Key_ID;
 
-            Data_Idx := Item_Idx;
+            Data_Idx := Job_Idx;
             return;
 
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       raise Program_Error;
 
    end Submit_Primitive;
@@ -124,25 +124,25 @@ is
       Obj      : in out Object_Type;
       Prim     :        Primitive.Object_Type;
       Key_ID   :        Key_ID_Type;
-      Data_Idx :    out Item_Index_Type)
+      Data_Idx :    out Jobs_Index_Type)
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Invalid then
+         if Obj.Jobs (Job_Idx).State = Invalid then
 
-            Obj.Items (Item_Idx).State := Complete;
-            Obj.Items (Item_Idx).Prim := Prim;
-            Obj.Items (Item_Idx).Key.ID := Key_ID;
+            Obj.Jobs (Job_Idx).State := Complete;
+            Obj.Jobs (Job_Idx).Prim := Prim;
+            Obj.Jobs (Job_Idx).Key.ID := Key_ID;
 
-            Data_Idx := Item_Idx;
+            Data_Idx := Job_Idx;
             return;
 
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       raise Program_Error;
 
    end Submit_Completed_Primitive;
@@ -151,27 +151,27 @@ is
    --  Peek_Generated_Primitive
    --
    procedure Peek_Generated_Primitive (
-      Obj      :     Object_Type;
-      Item_Idx : out Item_Index_Type;
-      Prim     : out Primitive.Object_Type)
+      Obj     :     Object_Type;
+      Job_Idx : out Jobs_Index_Type;
+      Prim    : out Primitive.Object_Type)
    is
    begin
 
-      For_Each_Item :
-      for Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Idx).State = Pending then
+         if Obj.Jobs (Idx).State = Pending then
 
-            Prim := Obj.Items (Idx).Prim;
-            Item_Idx := Idx;
+            Prim := Obj.Jobs (Idx).Prim;
+            Job_Idx := Idx;
             return;
 
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
 
       Prim := Primitive.Invalid_Object;
-      Item_Idx := Item_Index_Type'First;
+      Job_Idx := Jobs_Index_Type'First;
 
    end Peek_Generated_Primitive;
 
@@ -179,15 +179,15 @@ is
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
-      Obj      : in out Object_Type;
-      Item_Idx :        Item_Index_Type)
+      Obj     : in out Object_Type;
+      Job_Idx :        Jobs_Index_Type)
    is
    begin
 
-      if Obj.Items (Item_Idx).State /= Pending then
+      if Obj.Jobs (Job_Idx).State /= Pending then
          raise Program_Error;
       end if;
-      Obj.Items (Item_Idx).State := In_Progress;
+      Obj.Jobs (Job_Idx).State := In_Progress;
 
    end Drop_Generated_Primitive;
 
@@ -195,16 +195,16 @@ is
    --  Peek_Generated_Key_ID
    --
    function Peek_Generated_Key_ID (
-      Obj      : Object_Type;
-      Item_Idx : Item_Index_Type)
+      Obj     : Object_Type;
+      Job_Idx : Jobs_Index_Type)
    return Key_ID_Type
    is
    begin
 
-      if Obj.Items (Item_Idx).State /= Pending then
+      if Obj.Jobs (Job_Idx).State /= Pending then
          raise Program_Error;
       end if;
-      return Obj.Items (Item_Idx).Key.ID;
+      return Obj.Jobs (Job_Idx).Key.ID;
 
    end Peek_Generated_Key_ID;
 
@@ -212,16 +212,16 @@ is
    --  Peek_Generated_Key
    --
    function Peek_Generated_Key (
-      Obj      : Object_Type;
-      Item_Idx : Item_Index_Type)
+      Obj     : Object_Type;
+      Job_Idx : Jobs_Index_Type)
    return Key_Plaintext_Type
    is
    begin
 
-      if Obj.Items (Item_Idx).State /= Pending then
+      if Obj.Jobs (Job_Idx).State /= Pending then
          raise Program_Error;
       end if;
-      return Obj.Items (Item_Idx).Key;
+      return Obj.Jobs (Job_Idx).Key;
 
    end Peek_Generated_Key;
 
@@ -233,14 +233,14 @@ is
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Complete then
-            return Obj.Items (Item_Idx).Prim;
+         if Obj.Jobs (Job_Idx).State = Complete then
+            return Obj.Jobs (Job_Idx).Prim;
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       return Primitive.Invalid_Object;
 
    end Peek_Completed_Primitive;
@@ -252,15 +252,15 @@ is
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Obj.Items (Item_Idx).State = Complete then
-            Obj.Items (Item_Idx).State := Invalid;
+         if Obj.Jobs (Job_Idx).State = Complete then
+            Obj.Jobs (Job_Idx).State := Invalid;
             return;
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
 
    end Drop_Completed_Primitive;
 
@@ -268,18 +268,18 @@ is
    --  Mark_Completed_Primitive
    --
    procedure Mark_Completed_Primitive (
-      Obj      : in out Object_Type;
-      Item_Idx :        Item_Index_Type;
-      Success  :        Boolean)
+      Obj     : in out Object_Type;
+      Job_Idx :        Jobs_Index_Type;
+      Success :        Boolean)
    is
    begin
 
-      if Obj.Items (Item_Idx).State /= In_Progress then
+      if Obj.Jobs (Job_Idx).State /= In_Progress then
          raise Program_Error;
       end if;
 
-      Obj.Items (Item_Idx).State := Complete;
-      Primitive.Success (Obj.Items (Item_Idx).Prim, Success);
+      Obj.Jobs (Job_Idx).State := Complete;
+      Primitive.Success (Obj.Jobs (Job_Idx).Prim, Success);
 
    end Mark_Completed_Primitive;
 
@@ -289,18 +289,18 @@ is
    function Data_Index (
       Obj  : Crypto.Object_Type;
       Prim : Primitive.Object_Type)
-   return Item_Index_Type
+   return Jobs_Index_Type
    is
    begin
 
-      For_Each_Item :
-      for Item_Idx in Obj.Items'Range loop
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
 
-         if Primitive.Equal (Obj.Items (Item_Idx).Prim, Prim) then
-            return Item_Idx;
+         if Primitive.Equal (Obj.Jobs (Job_Idx).Prim, Prim) then
+            return Job_Idx;
          end if;
 
-      end loop For_Each_Item;
+      end loop For_Each_Job;
       raise Program_Error;
 
    end Data_Index;

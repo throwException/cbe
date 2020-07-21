@@ -424,11 +424,11 @@ is
       Req    : out Request.Object_Type;
       Key_ID : out Key_ID_Type)
    is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
+      Idx  : Crypto.Jobs_Index_Type;
+      Prim : Primitive.Object_Type;
    begin
 
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim);
       if not Primitive.Valid (Prim) or else
          not Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim)
       then
@@ -437,7 +437,7 @@ is
          return;
       end if;
 
-      Key_ID := Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index);
+      Key_ID := Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx);
       Req := Request.Valid_Object (
          Op     => Read,
          Succ   => False,
@@ -445,7 +445,7 @@ is
          Off    => 0,
          Cnt    => 1,
          Key    => 0,
-         Tg     => Request.Tag_Type (Item_Index));
+         Tg     => Request.Tag_Type (Idx));
 
    end Crypto_Remove_Key_Required;
 
@@ -458,7 +458,7 @@ is
    is
    begin
       Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Request.Tag (Req)));
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Request.Tag (Req)));
    end Crypto_Remove_Key_Requested;
 
    --
@@ -471,7 +471,7 @@ is
    begin
       Crypto.Mark_Completed_Primitive (
          Obj.Crypto_Obj,
-         Crypto.Item_Index_Type (Request.Tag (Req)),
+         Crypto.Jobs_Index_Type (Request.Tag (Req)),
          Request.Success (Req));
    end Crypto_Remove_Key_Completed;
 
@@ -483,11 +483,11 @@ is
       Req : out Request.Object_Type;
       Key : out Key_Plaintext_Type)
    is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
+      Idx  : Crypto.Jobs_Index_Type;
+      Prim : Primitive.Object_Type;
    begin
 
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim);
       if not Primitive.Valid (Prim) or else
          not Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim)
       then
@@ -496,7 +496,7 @@ is
          return;
       end if;
 
-      Key := Crypto.Peek_Generated_Key (Obj.Crypto_Obj, Item_Index);
+      Key := Crypto.Peek_Generated_Key (Obj.Crypto_Obj, Idx);
       Req := Request.Valid_Object (
          Op     => Read,
          Succ   => False,
@@ -504,7 +504,7 @@ is
          Off    => 0,
          Cnt    => 1,
          Key    => 0,
-         Tg     => Request.Tag_Type (Item_Index));
+         Tg     => Request.Tag_Type (Idx));
 
    end Crypto_Add_Key_Required;
 
@@ -517,7 +517,7 @@ is
    is
    begin
       Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Request.Tag (Req)));
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Request.Tag (Req)));
    end Crypto_Add_Key_Requested;
 
    --
@@ -530,7 +530,7 @@ is
    begin
       Crypto.Mark_Completed_Primitive (
          Obj.Crypto_Obj,
-         Crypto.Item_Index_Type (Request.Tag (Req)),
+         Crypto.Jobs_Index_Type (Request.Tag (Req)),
          Request.Success (Req));
    end Crypto_Add_Key_Completed;
 
@@ -539,11 +539,11 @@ is
       Req        : out Request.Object_Type;
       Data_Index : out Crypto.Plain_Buffer_Index_Type)
    is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
+      Idx  : Crypto.Jobs_Index_Type;
+      Prim : Primitive.Object_Type;
    begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Item_Index, Prim);
-      Data_Index := Crypto.Plain_Buffer_Index_Type (Item_Index);
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Idx, Prim);
+      Data_Index := Crypto.Plain_Buffer_Index_Type (Idx);
       if not Primitive.Valid (Prim) or else
          Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim) or else
          Primitive.Operation (Prim) /= Write
@@ -557,7 +557,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
-         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index),
+         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
          Tg     => 0);
    end Crypto_Cipher_Data_Required;
 
@@ -567,7 +567,7 @@ is
    is
    begin
       Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index));
    end Crypto_Cipher_Data_Requested;
 
    procedure Supply_Crypto_Cipher_Data (
@@ -577,7 +577,7 @@ is
    is
    begin
       Crypto.Mark_Completed_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index), Data_Valid);
    end Supply_Crypto_Cipher_Data;
 
    procedure Crypto_Plain_Data_Required (
@@ -585,12 +585,12 @@ is
       Req        : out Request.Object_Type;
       Data_Index : out Crypto.Cipher_Buffer_Index_Type)
    is
-      Item_Index : Crypto.Item_Index_Type;
-      Prim       : Primitive.Object_Type;
+      Idx  : Crypto.Jobs_Index_Type;
+      Prim : Primitive.Object_Type;
    begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Item_Index, Prim);
+      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim);
 
-      Data_Index := Crypto.Cipher_Buffer_Index_Type (Item_Index);
+      Data_Index := Crypto.Cipher_Buffer_Index_Type (Idx);
       if not Primitive.Valid (Prim) or else
          Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim) or else
          Primitive.Operation (Prim) /= Read
@@ -604,7 +604,7 @@ is
          Blk_Nr => Primitive.Block_Number (Prim),
          Off    => 0,
          Cnt    => 1,
-         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Item_Index),
+         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
          Tg     => 0);
    end Crypto_Plain_Data_Required;
 
@@ -614,7 +614,7 @@ is
    is
    begin
       Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index));
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index));
    end Crypto_Plain_Data_Requested;
 
    procedure Supply_Crypto_Plain_Data (
@@ -624,7 +624,7 @@ is
    is
    begin
       Crypto.Mark_Completed_Primitive (
-         Obj.Crypto_Obj, Crypto.Item_Index_Type (Data_Index), Data_Valid);
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index), Data_Valid);
    end Supply_Crypto_Plain_Data;
 
    --------------
@@ -716,7 +716,7 @@ is
       Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
       Progress         : in out Boolean)
    is
-      Prim : Primitive.Object_Type;
+      Prim    : Primitive.Object_Type;
       Job_Idx : Cache.Jobs_Index_Type;
    begin
       Virtual_Block_Device.Execute (Obj.VBD, Obj.Trans_Data);
@@ -770,7 +770,7 @@ is
 
                Declare_Data_Idx :
                declare
-                  Data_Idx : Crypto.Item_Index_Type;
+                  Data_Idx : Crypto.Jobs_Index_Type;
                begin
                   Primitive.Success (Prim, True);
                   Crypto.Submit_Completed_Primitive (
@@ -2138,7 +2138,7 @@ is
 
                Declare_Cipher_Buf_Idx :
                declare
-                  Idx : Crypto.Item_Index_Type;
+                  Idx : Crypto.Jobs_Index_Type;
                begin
 
                   Crypto.Submit_Primitive (
@@ -2161,7 +2161,7 @@ is
 
                Declare_Plain_Buf_Idx :
                declare
-                  Idx : Crypto.Item_Index_Type;
+                  Idx : Crypto.Jobs_Index_Type;
                begin
 
                   Crypto.Submit_Primitive (
@@ -2866,7 +2866,7 @@ is
                   Write_Back.Peek_Generated_Crypto_Data (
                      Obj.Write_Back_Obj, Prim);
 
-               Data_Idx : Crypto.Item_Index_Type;
+               Data_Idx : Crypto.Jobs_Index_Type;
             begin
                Crypto.Submit_Primitive (
                   Obj.Crypto_Obj,
@@ -3205,7 +3205,7 @@ is
                   else
                      Declare_Data :
                      declare
-                        Data_Idx : Crypto.Item_Index_Type;
+                        Data_Idx : Crypto.Jobs_Index_Type;
                         SHA_Data : SHA256_4K.Data_Type;
                         SHA_Hash : SHA256_4K.Hash_Type;
                         CBE_Hash : Hash_Type;
