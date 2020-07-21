@@ -91,24 +91,24 @@ is
    --  Peek_Generated_Key_ID
    --
    function Peek_Generated_Key_ID (
-      Obj        : Object_Type;
-      Item_Index : Item_Index_Type)
+      Obj      : Object_Type;
+      Item_Idx : Item_Index_Type)
    return Key_ID_Type;
 
    --
    --  Peek_Generated_Key
    --
    function Peek_Generated_Key (
-      Obj        : Object_Type;
-      Item_Index : Item_Index_Type)
+      Obj      : Object_Type;
+      Item_Idx : Item_Index_Type)
    return Key_Plaintext_Type;
 
    --
    --  Drop_Generated_Primitive
    --
    procedure Drop_Generated_Primitive (
-      Obj        : in out Object_Type;
-      Item_Index :        Item_Index_Type);
+      Obj      : in out Object_Type;
+      Item_Idx :        Item_Index_Type);
 
    --
    --  Peek_Completed_Primitive
@@ -125,9 +125,9 @@ is
    --  Mark_Completed_Primitive
    --
    procedure Mark_Completed_Primitive (
-      Obj        : in out Object_Type;
-      Item_Index :        Item_Index_Type;
-      Success    :        Boolean);
+      Obj      : in out Object_Type;
+      Item_Idx :        Item_Index_Type;
+      Success  :        Boolean);
 
    --
    --  Data_Index
@@ -139,90 +139,16 @@ is
 
 private
 
-   --
-   --  Item
-   --
-   package Item
-   with SPARK_Mode
-   is
-      type State_Type is (Invalid, Pending, In_Progress, Complete);
-      type Item_Type  is private;
+   type Item_State_Type is (Invalid, Pending, In_Progress, Complete);
 
-      --
-      --  Mark_Completed_Primitive
-      --
-      procedure Mark_Completed_Primitive (
-         Obj     : in out Item_Type;
-         Success :        Boolean);
+   type Item_Type is record
+      State : Item_State_Type;
+      Prim  : Primitive.Object_Type;
+      Key   : Key_Plaintext_Type;
+   end record;
 
-      --
-      --  Invalid_Object
-      --
-      function Invalid_Object
-      return Item_Type;
+   type Items_Type is array (Item_Index_Type) of Item_Type;
 
-      --
-      --  Pending_Object
-      --
-      function Pending_Object (
-         Prm    : Primitive.Object_Type;
-         Key_ID : Key_ID_Type)
-      return Item_Type;
-
-      --
-      --  Pending_Object_Key
-      --
-      function Pending_Object_Key (
-         Prm : Primitive.Object_Type;
-         Key : Key_Plaintext_Type)
-      return Item_Type;
-
-      --
-      --  Completed_Object
-      --
-      function Completed_Object (
-         Prm    : Primitive.Object_Type;
-         Key_ID : Key_ID_Type)
-      return Item_Type;
-
-      ----------------------
-      --  Read Accessors  --
-      ----------------------
-
-      function Invalid     (Obj : Item_Type) return Boolean;
-      function Pending     (Obj : Item_Type) return Boolean;
-      function In_Progress (Obj : Item_Type) return Boolean;
-      function Complete    (Obj : Item_Type) return Boolean;
-      function Prim        (Obj : Item_Type) return Primitive.Object_Type;
-      function Key_ID      (Obj : Item_Type) return Key_ID_Type;
-      function Key         (Obj : Item_Type) return Key_Plaintext_Type;
-
-      -----------------------
-      --  Write Accessors  --
-      -----------------------
-
-      procedure State (Obj : in out Item_Type; Sta : State_Type)
-      with Pre => not Invalid (Obj);
-
-   private
-
-      --
-      --  Item_Type
-      --
-      type Item_Type is record
-         State     : State_Type;
-         Prim      : Primitive.Object_Type;
-         Key_ID    : Key_ID_Type;
-         Key_Value : Key_Value_Plaintext_Type;
-      end record;
-
-   end Item;
-
-   type Items_Type is array (Item_Index_Type) of Item.Item_Type;
-
-   --
-   --  Object_Type
-   --
    type Object_Type is record
       Items            : Items_Type;
       Execute_Progress : Boolean;
