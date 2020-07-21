@@ -16,6 +16,10 @@
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
 
+/* CBE external trust anchor */
+#include <cbe/external_ta.h>
+
+
 using namespace Genode;
 
 class Main
@@ -32,6 +36,8 @@ class Main
 		Cbe::Request          _blk_req     { };
 		Cbe::Io_buffer        _blk_buf     { };
 		Cbe_init::Library     _cbe_init    { };
+
+		External::Trust_anchor _trust_anchor { };
 
 		Genode::size_t        _blk_ratio   {
 			Cbe::BLOCK_SIZE / _blk.info().block_size };
@@ -58,6 +64,97 @@ class Main
 						error("request was not successful");;
 						_env.parent().exit(-1);
 					}
+				}
+
+				progress |= _trust_anchor.execute();
+
+				using Op = Cbe::Trust_anchor_request::Operation;
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_cbe_init.peek_generated_ta_request();
+
+					if (!request.valid()) { break; }
+					if (!_trust_anchor.request_acceptable()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+						_trust_anchor.submit_create_key_request(request);
+						break;
+					case Op::SECURE_SUPERBLOCK:
+					{
+						Cbe::Hash const sb_hash = _cbe_init.peek_generated_ta_sb_hash(request);
+						_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_cbe_init.peek_generated_ta_key_value_plaintext(request);
+
+						_trust_anchor.submit_encrypt_key_request(request, pk);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_cbe_init.peek_generated_ta_key_value_ciphertext(request);
+
+						_trust_anchor.submit_decrypt_key_request(request, ck);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_cbe_init.drop_generated_ta_request(request);
+					progress |= true;
+				}
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_trust_anchor.peek_completed_request();
+
+					if (!request.valid()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe_init.mark_generated_ta_create_key_request_complete(request, pk);
+						break;
+					}
+					case Op::SECURE_SUPERBLOCK:
+					{
+						_cbe_init.mark_generated_ta_secure_sb_request_complete(request);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_trust_anchor.peek_completed_key_value_ciphertext(request);
+
+						_cbe_init.mark_generated_ta_encrypt_key_request_complete(request, ck);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_trust_anchor.drop_completed_request(request);
+					progress |= true;
 				}
 
 				struct Invalid_io_request : Exception { };
