@@ -110,4 +110,101 @@ is
          Obj, Block_IO.Data_Index_Type (Data_Index.Value));
    end IO_Request_In_Progress;
 
+   procedure Peek_Generated_TA_Request (
+      Obj :     Init_Library.Object_Type;
+      Req : out CXX_TA_Request_Type)
+   is
+      SPARK_Req : TA_Request.Object_Type;
+   begin
+      Init_Library.Peek_Generated_TA_Request (Obj, SPARK_Req);
+      Req := CXX_TA_Request_From_SPARK (SPARK_Req);
+   end Peek_Generated_TA_Request;
+
+   procedure Drop_Generated_TA_Request (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type)
+   is
+   begin
+      Init_Library.Drop_Generated_TA_Request (Obj,
+         CXX_TA_Request_To_SPARK (Req));
+   end Drop_Generated_TA_Request;
+
+   procedure Peek_Generated_TA_SB_Hash (
+      Obj :      Init_Library.Object_Type;
+      Req :      CXX_TA_Request_Type;
+      Hash : out CXX_Hash_Type)
+   is
+      SPARK_Hash : Hash_Type;
+   begin
+      Init_Library.Peek_Generated_TA_SB_Hash (Obj,
+         CXX_TA_Request_To_SPARK (Req), SPARK_Hash);
+      Hash := CXX_Hash_From_SPARK (SPARK_Hash);
+   end Peek_Generated_TA_SB_Hash;
+
+   procedure Peek_Generated_TA_Key_Cipher (
+      Obj :     Init_Library.Object_Type;
+      Req :     CXX_TA_Request_Type;
+      Key : out CXX_Key_Value_Ciphertext_Type)
+   is
+      SPARK_Key : Key_Value_Ciphertext_Type;
+   begin
+      Init_Library.Peek_Generated_TA_Key_Cipher (Obj,
+         CXX_TA_Request_To_SPARK (Req), SPARK_Key);
+      Key := CXX_Key_Value_Ciphertext_From_SPARK (SPARK_Key);
+   end Peek_Generated_TA_Key_Cipher;
+
+   procedure Peek_Generated_TA_Key_Plain (
+      Obj :     Init_Library.Object_Type;
+      Req :     CXX_TA_Request_Type;
+      Key : out CXX_Key_Value_Plaintext_Type)
+   is
+      SPARK_Key : Key_Value_Plaintext_Type;
+   begin
+      Init_Library.Peek_Generated_TA_Key_Plain (Obj,
+         CXX_TA_Request_To_SPARK (Req), SPARK_Key);
+      Key := CXX_Key_Value_Plaintext_From_SPARK (SPARK_Key);
+   end Peek_Generated_TA_Key_Plain;
+
+   procedure Mark_Generated_TA_Create_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Plaintext_Type)
+   is
+   begin
+      Init_Library.Mark_Generated_TA_Create_Key_Request_Complete (Obj,
+         CXX_TA_Request_To_SPARK (Req),
+         CXX_Key_Value_Plaintext_To_SPARK (Key));
+   end Mark_Generated_TA_Create_Key_Request_Complete;
+
+   procedure Mark_Generated_TA_Secure_SB_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type)
+   is
+   begin
+      Init_Library.Mark_Generated_TA_Secure_SB_Request_Complete (Obj,
+         CXX_TA_Request_To_SPARK (Req));
+   end Mark_Generated_TA_Secure_SB_Request_Complete;
+
+   procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Plaintext_Type)
+   is
+   begin
+      Init_Library.Mark_Generated_TA_Decrypt_Key_Request_Complete (Obj,
+         CXX_TA_Request_To_SPARK (Req),
+         CXX_Key_Value_Plaintext_To_SPARK (Key));
+   end Mark_Generated_TA_Decrypt_Key_Request_Complete;
+
+   procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Ciphertext_Type)
+   is
+   begin
+      Init_Library.Mark_Generated_TA_Encrypt_Key_Request_Complete (Obj,
+         CXX_TA_Request_To_SPARK (Req),
+         CXX_Key_Value_Ciphertext_To_SPARK (Key));
+   end Mark_Generated_TA_Encrypt_Key_Request_Complete;
+
 end CBE.CXX.CXX_Init_Library;

@@ -117,4 +117,110 @@ is
          "_ZN8Cbe_init7Library22io_request_in_progressERKN3Cbe9Io_buffer" &
          "5IndexE";
 
+   procedure Peek_Generated_TA_Request (
+      Obj :     Init_Library.Object_Type;
+      Req : out CXX_TA_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZNK8Cbe_init7Library" &
+         "26_peek_generated_ta_requestERN" &
+         "3Cbe20Trust_anchor_requestE";
+
+   procedure Drop_Generated_TA_Request (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN8Cbe_init7Library" &
+         "25drop_generated_ta_requestERKN" &
+         "3Cbe20Trust_anchor_requestE";
+
+   procedure Peek_Generated_TA_SB_Hash (
+      Obj :      Init_Library.Object_Type;
+      Req :      CXX_TA_Request_Type;
+      Hash : out CXX_Hash_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZNK8Cbe_init7Library" &
+         "26_peek_generated_ta_sb_hashERKN" &
+         "3Cbe20Trust_anchor_requestERNS1_4HashE";
+
+   procedure Peek_Generated_TA_Key_Cipher (
+      Obj :     Init_Library.Object_Type;
+      Req :     CXX_TA_Request_Type;
+      Key : out CXX_Key_Value_Ciphertext_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZNK8Cbe_init7Library39" &
+         "_peek_generated_ta_key_value_ciphertextERKN" &
+         "3Cbe20Trust_anchor_requestERNS1_20Key_ciphertext_valueE";
+
+   procedure Peek_Generated_TA_Key_Plain (
+      Obj :     Init_Library.Object_Type;
+      Req :     CXX_TA_Request_Type;
+      Key : out CXX_Key_Value_Plaintext_Type)
+   with
+      Export,
+      Convention    => C,
+
+      External_Name =>
+         "_ZNK8Cbe_init7Library" &
+         "38_peek_generated_ta_key_value_plaintextERKN" &
+         "3Cbe20Trust_anchor_requestERNS1_19Key_plaintext_valueE";
+
+   procedure Mark_Generated_TA_Create_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Plaintext_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN8Cbe_init7Library" &
+         "45mark_generated_ta_create_key_request_completeERKN" &
+         "3Cbe20Trust_anchor_requestERKNS1_19Key_plaintext_valueE";
+
+   procedure Mark_Generated_TA_Secure_SB_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN8Cbe_init7Library" &
+         "44mark_generated_ta_secure_sb_request_completeERKN" &
+         "3Cbe20Trust_anchor_requestE";
+
+   procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Plaintext_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN8Cbe_init7Library" &
+         "46mark_generated_ta_decrypt_key_request_completeERKN" &
+         "3Cbe20Trust_anchor_requestERKNS1_19Key_plaintext_valueE";
+
+   procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
+      Obj : in out Init_Library.Object_Type;
+      Req :        CXX_TA_Request_Type;
+      Key :        CXX_Key_Value_Ciphertext_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN8Cbe_init7Library" &
+         "46mark_generated_ta_encrypt_key_request_completeERKN" &
+         "3Cbe20Trust_anchor_requestERKNS1_20Key_ciphertext_valueE";
+
 end CBE.CXX.CXX_Init_Library;

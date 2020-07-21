@@ -15,6 +15,7 @@ with CBE.Block_Allocator;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Trust_Anchor;
+with CBE.TA_Request;
 
 package CBE.Init_Library
 with SPARK_Mode
@@ -58,6 +59,48 @@ is
    procedure IO_Request_In_Progress (
       Obj      : in out Object_Type;
       Data_Idx :        Block_IO.Data_Index_Type);
+
+   procedure Peek_Generated_TA_Request (
+      Obj :     Object_Type;
+      Req : out TA_Request.Object_Type);
+
+   procedure Drop_Generated_TA_Request (
+      Obj : in out Object_Type;
+      Req :        TA_Request.Object_Type);
+
+   procedure Peek_Generated_TA_SB_Hash (
+      Obj  :     Object_Type;
+      Req  :     TA_Request.Object_Type;
+      Hash : out Hash_Type);
+
+   procedure Peek_Generated_TA_Key_Cipher (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Ciphertext_Type);
+
+   procedure Peek_Generated_TA_Key_Plain (
+      Obj       :     Object_Type;
+      Req       :     TA_Request.Object_Type;
+      Key_Value : out Key_Value_Plaintext_Type);
+
+   procedure Mark_Generated_TA_Create_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   procedure Mark_Generated_TA_Secure_SB_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type);
+
+   procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Plaintext_Type);
+
+   procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
+      Obj       : in out Object_Type;
+      Req       :        TA_Request.Object_Type;
+      Key_Value :        Key_Value_Ciphertext_Type);
 
    procedure Execute (
       Obj        : in out Object_Type;
