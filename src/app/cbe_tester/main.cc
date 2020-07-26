@@ -39,6 +39,9 @@
 /* local includes */
 #include <util.h>
 
+/* CBE external trust anchor */
+#include <cbe/external_ta.h>
+
 using namespace Genode;
 
 namespace Cbe {
@@ -1127,6 +1130,7 @@ class Cbe::Main
 		Cbe_check::Library                      _cbe_check               { };
 		Cbe_dump::Library                       _cbe_dump                { };
 		Cbe_init::Library                       _cbe_init                { };
+		External::Trust_anchor                  _trust_anchor            { };
 		Cbe::Request                            _blk_req                 { };
 		Io_buffer                               _blk_buf                 { };
 		Crypto_plain_buffer                     _crypto_plain_buf        { };
@@ -1477,10 +1481,198 @@ class Cbe::Main
 					_state = INVALID;
 				}
 			}
+
+			/* handle requests to the trust anchor */
+			{
+				progress |= _trust_anchor.execute();
+
+				using Op = Cbe::Trust_anchor_request::Operation;
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_cbe_init.peek_generated_ta_request();
+
+					if (!request.valid()) { break; }
+					if (!_trust_anchor.request_acceptable()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+						_trust_anchor.submit_create_key_request(request);
+						break;
+					case Op::SECURE_SUPERBLOCK:
+					{
+						Cbe::Hash const sb_hash = _cbe_init.peek_generated_ta_sb_hash(request);
+						_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_cbe_init.peek_generated_ta_key_value_plaintext(request);
+
+						_trust_anchor.submit_encrypt_key_request(request, pk);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_cbe_init.peek_generated_ta_key_value_ciphertext(request);
+
+						_trust_anchor.submit_decrypt_key_request(request, ck);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_cbe_init.drop_generated_ta_request(request);
+					progress |= true;
+				}
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_trust_anchor.peek_completed_request();
+
+					if (!request.valid()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe_init.mark_generated_ta_create_key_request_complete(request, pk);
+						break;
+					}
+					case Op::SECURE_SUPERBLOCK:
+					{
+						_cbe_init.mark_generated_ta_secure_sb_request_complete(request);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_trust_anchor.peek_completed_key_value_ciphertext(request);
+
+						_cbe_init.mark_generated_ta_encrypt_key_request_complete(request, ck);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_trust_anchor.drop_completed_request(request);
+					progress |= true;
+				}
+			}
 		}
 
 		void _execute_cbe (bool &progress)
 		{
+			/* handle requests to the trust anchor */
+			{
+				progress |= _trust_anchor.execute();
+
+				using Op = Cbe::Trust_anchor_request::Operation;
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_cbe->peek_generated_ta_request();
+
+					if (!request.valid()) { break; }
+					if (!_trust_anchor.request_acceptable()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+						_trust_anchor.submit_create_key_request(request);
+						break;
+					case Op::SECURE_SUPERBLOCK:
+					{
+						Cbe::Hash const sb_hash = _cbe->peek_generated_ta_sb_hash(request);
+						_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_cbe->peek_generated_ta_key_value_plaintext(request);
+
+						_trust_anchor.submit_encrypt_key_request(request, pk);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_cbe->peek_generated_ta_key_value_ciphertext(request);
+
+						_trust_anchor.submit_decrypt_key_request(request, ck);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_cbe->drop_generated_ta_request(request);
+					progress |= true;
+				}
+
+				while (true) {
+
+					Cbe::Trust_anchor_request const request =
+						_trust_anchor.peek_completed_request();
+
+					if (!request.valid()) { break; }
+
+					switch (request.operation()) {
+					case Op::CREATE_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe->mark_generated_ta_create_key_request_complete(request, pk);
+						break;
+					}
+					case Op::SECURE_SUPERBLOCK:
+					{
+						_cbe->mark_generated_ta_secure_sb_request_complete(request);
+						break;
+					}
+					case Op::ENCRYPT_KEY:
+					{
+						Cbe::Key_ciphertext_value const ck =
+							_trust_anchor.peek_completed_key_value_ciphertext(request);
+
+						_cbe->mark_generated_ta_encrypt_key_request_complete(request, ck);
+						break;
+					}
+					case Op::DECRYPT_KEY:
+					{
+						Cbe::Key_plaintext_value const pk =
+							_trust_anchor.peek_completed_key_value_plaintext(request);
+
+						_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
+						break;
+					}
+					case Op::INVALID:
+						/* never reached */
+						break;
+					}
+					_trust_anchor.drop_completed_request(request);
+					progress |= true;
+				}
+			}
+
 			_block_session->with_requests([&] (Block::Request request) {
 				using namespace Genode;
 
