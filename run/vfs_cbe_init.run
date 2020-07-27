@@ -33,6 +33,8 @@ append build_components {
 	server/report_rom
 	server/lx_block
 	app/block_tester
+	lib/vfs/cbe_crypto/aes_cbc
+	lib/vfs/cbe_crypto/memcopy
 }
 
 build $build_components
