@@ -298,107 +298,69 @@ is
    end Client_Transfer_Read_Data_Completed;
 
    --
-   --  For now there can be only one Request pending.
+   --  Client_Transfer_Write_Data_Required
    --
-   function Client_Data_Index (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Primitive.Index_Type
+   procedure Client_Transfer_Write_Data_Required (
+      Obj           :     Object_Type;
+      Req           : out Request.Object_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out Crypto.Plain_Buffer_Index_Type)
    is
    begin
-      if Front_End_Busy_With_Other_Request (Obj, Req) then
-         return Primitive.Invalid_Index;
-      end if;
 
-      return Primitive.Index (Obj.Wait_For_Front_End.Prim);
-   end Client_Data_Index;
-
-   --
-   --  Client_Data_Required
-   --
-   procedure Client_Data_Required (
-      Obj : in out Object_Type;
-      Req :    out Request.Object_Type)
-   is
-   begin
-      Req := Request.Invalid_Object;
-
-      if Primitive.Valid (Obj.Wait_For_Front_End.Prim) then
-         return;
-      end if;
-
-      --
-      --  A write Request, we need the location from where to read the new
-      --  leaf data.
-      --
+      Declare_Prim :
       declare
          Prim : constant Primitive.Object_Type :=
-            Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
+            Crypto.Peek_Generated_Client_Primitive (Obj.Crypto_Obj);
       begin
-         if Primitive.Valid (Prim) and then Primitive.Operation (Prim) = Write
+
+         if Primitive.Valid (Prim) and then
+            Primitive.Has_Tag_Crypto_IO_Client_Obtain_Data (Prim)
          then
-            Start_Waiting_For_Front_End (
-               Obj, Prim, Event_Supply_Client_Data_After_VBD);
-            Req := Obj.Wait_For_Front_End.Req;
-            return;
+
+            Req := Crypto.Peek_Generated_Req (Obj.Crypto_Obj, Prim);
+            VBA := Crypto.Peek_Generated_VBA (Obj.Crypto_Obj, Prim);
+            Plain_Buf_Idx :=
+               Crypto.Peek_Generated_Plain_Buf_Idx (Obj.Crypto_Obj, Prim);
+
+         else
+
+            Req := Request.Invalid_Object;
+            VBA := Virtual_Block_Address_Type'First;
+            Plain_Buf_Idx := Crypto.Plain_Buffer_Index_Type'First;
+
          end if;
-      end;
 
-      --
-      --  The free-tree needs the data to give to the Write_Back module.
-      --
-      declare
-         Prim : constant Primitive.Object_Type :=
-            New_Free_Tree.Peek_Completed_Primitive (Obj.New_Free_Tree_Obj);
-      begin
+      end Declare_Prim;
 
-         case Primitive.Tag (Prim) is
-         when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks |
-              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks |
-              Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
-         =>
-
-            null;
-
-         when others =>
-
-            if Primitive.Valid (Prim) and then Primitive.Success (Prim) then
-               Start_Waiting_For_Front_End (
-                  Obj, Prim, Event_Supply_Client_Data_After_FT);
-               Req := Obj.Wait_For_Front_End.Req;
-               return;
-            end if;
-
-         end case;
-
-      end;
-
-   end Client_Data_Required;
+   end Client_Transfer_Write_Data_Required;
 
    --
-   --  Supply_Client_Data
+   --  Client_Transfer_Write_Data_In_Progress
    --
-   procedure Supply_Client_Data (
-      Obj      : in out Object_Type;
-      Req      :        Request.Object_Type;
-      Data     :        Block_Data_Type;
-      Progress :    out Boolean)
+   procedure Client_Transfer_Write_Data_In_Progress (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type)
    is
    begin
-      case Obj.SCD_State is
-      when Inactive =>
-         Obj.SCD_State := Active;
-         Obj.SCD_Data := Data;
-         Obj.SCD_Req := Req;
-         Obj.SCD_Curr_Lvl := 1;
-         Obj.SCD_New_PBAs := (others => 0);
-         Obj.SCD_New_Blocks := 0;
-         Obj.SCD_Free_Blocks := 0;
-         Progress := True;
-      when others =>
-         raise Program_Error;
-      end case;
-   end Supply_Client_Data;
+      Crypto.Drop_Generated_Primitive_New (
+         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Plain_Buf_Idx));
+
+   end Client_Transfer_Write_Data_In_Progress;
+
+   --
+   --  Client_Transfer_Write_Data_Completed
+   --
+   procedure Client_Transfer_Write_Data_Completed (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type;
+      Success       :        Boolean)
+   is
+   begin
+      Crypto.Mark_Generated_Primitive_Complete (
+         Obj.Crypto_Obj, Plain_Buf_Idx, Success);
+
+   end Client_Transfer_Write_Data_Completed;
 
    --
    --  Crypto_Remove_Key_Required
@@ -518,42 +480,96 @@ is
          Request.Success (Req));
    end Crypto_Add_Key_Completed;
 
+   --
+   --  Crypto_Cipher_Data_Required
+   --
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Object_Type;
       Req        : out Request.Object_Type;
       Data_Index : out Crypto.Plain_Buffer_Index_Type)
    is
-      Idx  : Crypto.Jobs_Index_Type;
-      Prim : Primitive.Object_Type;
+      Prim : constant Primitive.Object_Type :=
+         Crypto.Peek_Generated_Crypto_Dev_Primitive (Obj.Crypto_Obj);
    begin
-      Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Idx, Prim);
-      Data_Index := Crypto.Plain_Buffer_Index_Type (Idx);
-      if not Primitive.Valid (Prim) or else
-         Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim) or else
-         Primitive.Operation (Prim) /= Write
-      then
+
+      if Primitive.Valid (Prim) then
+
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_Crypto_IO_Crypto_Dev_Encrypt =>
+
+            Data_Index :=
+               Crypto.Peek_Generated_Plain_Buf_Idx (Obj.Crypto_Obj, Prim);
+
+            Req := Request.Valid_Object (
+               Op     => Write,
+               Succ   => False,
+               Blk_Nr => Primitive.Block_Number (Prim),
+               Off    => 0,
+               Cnt    => 1,
+               Key    =>
+                  Crypto.Peek_Generated_Key_ID_New (Obj.Crypto_Obj, Prim),
+               Tg     => 0);
+
+         when others =>
+
+            Declare_Idx :
+            declare
+               Idx    : Crypto.Jobs_Index_Type;
+               Prim_1 : Primitive.Object_Type;
+            begin
+
+               Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Idx, Prim_1);
+               Data_Index := Crypto.Plain_Buffer_Index_Type (Idx);
+               if not Primitive.Valid (Prim_1) or else
+                  Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim_1) or else
+                  Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim_1) or else
+                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (Prim_1)
+                  or else
+                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (Prim_1)
+                  or else
+                  Primitive.Operation (Prim_1) /= Write
+               then
+                  Req := Request.Invalid_Object;
+                  return;
+               end if;
+               Req := Request.Valid_Object (
+                  Op     => CBE.Write,
+                  Succ   => False,
+                  Blk_Nr => Primitive.Block_Number (Prim_1),
+                  Off    => 0,
+                  Cnt    => 1,
+                  Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
+                  Tg     => 0);
+
+            end Declare_Idx;
+
+         end case;
+
+      else
+
+         Data_Index := Crypto.Plain_Buffer_Index_Type'First;
          Req := Request.Invalid_Object;
-         return;
+
       end if;
-      Req := Request.Valid_Object (
-         Op     => CBE.Write,
-         Succ   => False,
-         Blk_Nr => Primitive.Block_Number (Prim),
-         Off    => 0,
-         Cnt    => 1,
-         Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
-         Tg     => 0);
+
    end Crypto_Cipher_Data_Required;
 
+   --
+   --  Crypto_Cipher_Data_Requested
+   --
    procedure Crypto_Cipher_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        Crypto.Plain_Buffer_Index_Type)
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type)
    is
    begin
-      Crypto.Drop_Generated_Primitive (
-         Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index));
+      Crypto.Drop_Generated_Primitive_New (Obj.Crypto_Obj,
+         Crypto.Jobs_Index_Type (Plain_Buf_Idx));
+
    end Crypto_Cipher_Data_Requested;
 
+   --
+   --  Supply_Crypto_Cipher_Data
+   --
    procedure Supply_Crypto_Cipher_Data (
       Obj        : in out Object_Type;
       Data_Index :        Crypto.Cipher_Buffer_Index_Type;
@@ -562,6 +578,7 @@ is
    begin
       Crypto.Mark_Completed_Primitive (
          Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index), Data_Valid);
+
    end Supply_Crypto_Cipher_Data;
 
    --
@@ -585,7 +602,7 @@ is
                Crypto.Peek_Generated_Cipher_Buf_Idx (Obj.Crypto_Obj, Prim);
 
             Req := Request.Valid_Object (
-               Op     => CBE.Read,
+               Op     => Read,
                Succ   => False,
                Blk_Nr => Primitive.Block_Number (Prim),
                Off    => 0,
@@ -607,13 +624,18 @@ is
                Data_Index := Crypto.Cipher_Buffer_Index_Type (Idx);
                if not Primitive.Valid (Prim_1) or else
                   Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim_1) or else
+                  Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim_1) or else
+                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (Prim_1)
+                  or else
+                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (Prim_1)
+                  or else
                   Primitive.Operation (Prim_1) /= Read
                then
                   Req := Request.Invalid_Object;
                   return;
                end if;
                Req := Request.Valid_Object (
-                  Op     => CBE.Read,
+                  Op     => Read,
                   Succ   => False,
                   Blk_Nr => Primitive.Block_Number (Prim_1),
                   Off    => 0,
@@ -658,6 +680,7 @@ is
    begin
       Crypto.Mark_Completed_Primitive (
          Obj.Crypto_Obj, Crypto.Jobs_Index_Type (Data_Index), Data_Valid);
+
    end Supply_Crypto_Plain_Data;
 
    procedure Peek_Generated_TA_Request (
@@ -1876,7 +1899,10 @@ is
                   Obj.Request_Pool_Obj,
                   Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
 
-            when Primitive.Tag_Pool_SB_Ctrl_Read_VBA =>
+            when
+               Primitive.Tag_Pool_SB_Ctrl_Read_VBA |
+               Primitive.Tag_Pool_SB_Ctrl_Write_VBA
+            =>
 
                Superblock_Control.Submit_Primitive_Req (
                   Obj.SB_Ctrl, Prim,
@@ -2370,21 +2396,44 @@ is
             case Primitive.Operation (Prim) is
             when Write =>
 
-               Declare_Blk_IO_Buf_Idx :
-               declare
-                  Idx : Block_IO.Data_Index_Type;
-               begin
+               case Primitive.Tag (Prim) is
+               when Primitive.Tag_VBD_Rkg_Blk_IO =>
 
-                  Block_IO.Submit_Primitive (
-                     Obj.IO_Obj, Primitive.Tag_VBD_Rkg_Blk_IO, Prim, Idx);
+                  Declare_Blk_IO_Buf_Idx :
+                  declare
+                     Idx : Block_IO.Data_Index_Type;
+                  begin
 
-                  Blk_IO_Buf (Idx) :=
-                     VBD_Rekeying.Peek_Generated_Blk_Data (Obj.VBD_Rkg, Prim);
+                     Block_IO.Submit_Primitive (
+                        Obj.IO_Obj, Primitive.Tag_VBD_Rkg_Blk_IO, Prim, Idx);
 
-               end Declare_Blk_IO_Buf_Idx;
+                     Blk_IO_Buf (Idx) :=
+                        VBD_Rekeying.Peek_Generated_Blk_Data (
+                           Obj.VBD_Rkg, Prim);
 
-               VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
-               Progress := True;
+                  end Declare_Blk_IO_Buf_Idx;
+
+                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+                  Progress := True;
+
+               when Primitive.Tag_VBD_Rkg_Blk_IO_Write_Client_Data =>
+
+                  Block_IO.Submit_Primitive_Client_Data (
+                     Obj.IO_Obj,
+                     Prim,
+                     VBD_Rekeying.Peek_Generated_Req (Obj.VBD_Rkg, Prim),
+                     VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
+                     VBD_Rekeying.Peek_Generated_Crypto_Key_ID (
+                        Obj.VBD_Rkg, Prim));
+
+                  VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
+                  Progress := True;
+
+               when others =>
+
+                  raise Program_Error;
+
+               end case;
 
             when Sync =>
 
@@ -2457,6 +2506,16 @@ is
                VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
                Progress := True;
 
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Write_VBA =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_Snap (
+                  Obj.SB_Ctrl,
+                  Prim,
+                  VBD_Rekeying.Peek_Completed_Snap (Obj.VBD_Rkg, Prim));
+
+               VBD_Rekeying.Drop_Completed_Primitive (Obj.VBD_Rkg, Prim);
+               Progress := True;
+
             when Primitive.Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step =>
 
                Superblock_Control.Mark_Generated_Prim_Complete_VBD_Ext (
@@ -2511,6 +2570,21 @@ is
 
                VBD_Rekeying.Submit_Primitive_Read_VBA (
                   Obj.VBD_Rkg, Prim,
+                  Superblock_Control.Peek_Generated_Req (Obj.SB_Ctrl, Prim),
+                  Superblock_Control.Peek_Generated_Snapshot (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Snapshots_Degree (
+                     Obj.SB_Ctrl, Prim, Obj.Superblock),
+                  Superblock_Control.Peek_Generated_Key_ID (
+                     Obj.SB_Ctrl, Prim));
+
+               Superblock_Control.Drop_Generated_Primitive (Obj.SB_Ctrl, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Write_VBA =>
+
+               VBD_Rekeying.Submit_Primitive_Write_VBA (
+                  Obj.VBD_Rkg, Prim, Obj.Cur_Gen,
                   Superblock_Control.Peek_Generated_Req (Obj.SB_Ctrl, Prim),
                   Superblock_Control.Peek_Generated_Snapshot (
                      Obj.SB_Ctrl, Prim, Obj.Superblock),
@@ -2791,6 +2865,7 @@ is
             case Primitive.Tag (Prim) is
             when
                Primitive.Tag_Pool_SB_Ctrl_Read_VBA |
+               Primitive.Tag_Pool_SB_Ctrl_Write_VBA |
                Primitive.Tag_Pool_SB_Ctrl_Sync |
                Primitive.Tag_Pool_SB_Ctrl_Init_Rekey |
                Primitive.Tag_Pool_SB_Ctrl_Discard_Snap |
@@ -3240,8 +3315,12 @@ is
 
    end Execute_Writeback;
 
+   --
+   --  Execute_Crypto
+   --
    procedure Execute_Crypto (
       Obj               : in out Object_Type;
+      Blk_IO_Buf        : in out Block_IO.Data_Type;
       Crypto_Plain_Buf  :        Crypto.Plain_Buffer_Type;
       Crypto_Cipher_Buf :        Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean)
@@ -3272,8 +3351,9 @@ is
             --  filter those out through their tags.
             --
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
-                 Primitive.Tag_SB_Ctrl_Crypto_Remove_Key
+            when
+               Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
+               Primitive.Tag_SB_Ctrl_Crypto_Remove_Key
             =>
 
                Superblock_Control.Mark_Generated_Prim_Complete (
@@ -3286,6 +3366,22 @@ is
 
                Block_IO.Mark_Generated_Primitive_Complete_New (
                   Obj.IO_Obj, Prim);
+               Crypto.Drop_Completed_Primitive_New (Obj.Crypto_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data =>
+
+               Blk_IO_Buf (
+                  Crypto.Peek_Completed_Blk_IO_Data_Idx (
+                     Obj.Crypto_Obj, Prim))
+               :=
+                  Crypto_Cipher_Buf (
+                     Crypto.Peek_Completed_Cipher_Buf_Idx (
+                        Obj.Crypto_Obj, Prim));
+
+               Block_IO.Mark_Generated_Primitive_Complete_New (
+                  Obj.IO_Obj, Prim);
+
                Crypto.Drop_Completed_Primitive_New (Obj.Crypto_Obj, Prim);
                Progress := True;
 
@@ -3351,17 +3447,12 @@ is
 
    procedure Execute_IO (
       Obj               : in out Object_Type;
-      IO_Buf            : in     Block_IO.Data_Type;
+      IO_Buf            :        Block_IO.Data_Type;
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean)
    is
    begin
-      --
-      --  This module handles all the block backend I/O and has to
-      --  work with all most all modules. IT uses the 'Tag' field
-      --  to differentiate the modules.
-      --
-      Block_IO.Execute (Obj.IO_Obj, Progress);
+      Block_IO.Execute (Obj.IO_Obj, IO_Buf, Progress);
 
       Loop_Generated_Crypto_Prims :
       loop
@@ -3382,7 +3473,7 @@ is
                   Idx : Crypto.Cipher_Buffer_Index_Type;
                begin
 
-                  Crypto.Submit_Primitive_Client_Data (
+                  Crypto.Submit_Primitive_Decrypt_Client_Data (
                      Obj.Crypto_Obj,
                      Prim,
                      Block_IO.Peek_Generated_Req (Obj.IO_Obj, Prim),
@@ -3395,6 +3486,19 @@ is
                         Block_IO.Peek_Generated_Data_Index (Obj.IO_Obj, Prim));
 
                end Declare_Cipher_Buf_Idx;
+
+               Block_IO.Drop_Generated_Primitive_New (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data =>
+
+               Crypto.Submit_Primitive_Encrypt_Client_Data (
+                  Obj.Crypto_Obj,
+                  Prim,
+                  Block_IO.Peek_Generated_Req (Obj.IO_Obj, Prim),
+                  Block_IO.Peek_Generated_VBA (Obj.IO_Obj, Prim),
+                  Block_IO.Peek_Generated_Key_ID (Obj.IO_Obj, Prim),
+                  Block_IO.Peek_Generated_Data_Index (Obj.IO_Obj, Prim));
 
                Block_IO.Drop_Generated_Primitive_New (Obj.IO_Obj, Prim);
                Progress := True;
@@ -3422,6 +3526,16 @@ is
 
                VBD_Rekeying.Mark_Generated_Prim_Completed (
                   Obj.VBD_Rkg, Prim);
+
+               Block_IO.Drop_Completed_Primitive_New (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_VBD_Rkg_Blk_IO_Write_Client_Data =>
+
+               VBD_Rekeying.Mark_Generated_Prim_Completed_Hash (
+                  Obj.VBD_Rkg,
+                  Prim,
+                  Block_IO.Peek_Completed_Hash_New (Obj.IO_Obj, Prim));
 
                Block_IO.Drop_Completed_Primitive_New (Obj.IO_Obj, Prim);
                Progress := True;
@@ -3576,7 +3690,8 @@ is
       Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
       Execute_Cache  (Obj, IO_Buf, Progress);
       Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
-      Execute_Crypto (Obj, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
+      Execute_Crypto (
+         Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);
       Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
       Execute_Free_Tree (Obj, Progress);

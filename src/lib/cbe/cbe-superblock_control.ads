@@ -412,6 +412,14 @@ is
       Snapshots :        Snapshots_Type);
 
    --
+   --  Mark_Generated_Prim_Complete_Snap
+   --
+   procedure Mark_Generated_Prim_Complete_Snap (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Snap :        Snapshot_Type);
+
+   --
    --  Mark_Generated_Prim_Complete
    --
    procedure Mark_Generated_Prim_Complete (
@@ -424,6 +432,7 @@ private
       Invalid,
       Sync,
       Read_VBA,
+      Write_VBA,
       Initialize,
       Deinitialize,
       VBD_Extension_Step,
@@ -438,6 +447,9 @@ private
       Read_VBA_At_VBD_Pending,
       Read_VBA_At_VBD_In_Progress,
       Read_VBA_At_VBD_Completed,
+      Write_VBA_At_VBD_Pending,
+      Write_VBA_At_VBD_In_Progress,
+      Write_VBA_At_VBD_Completed,
       Read_SB_Pending,
       Read_SB_In_Progress,
       Read_SB_Completed,
@@ -632,6 +644,16 @@ private
       SB            : in out Superblock_Type;
       SB_Idx        : in out Superblocks_Index_Type;
       Curr_Gen      : in out Generation_Type;
+      Progress      : in out Boolean);
+
+   --
+   --  Execute_Write_VBA
+   --
+   procedure Execute_Write_VBA (
+      Job           : in out Job_Type;
+      Job_Idx       :        Jobs_Index_Type;
+      SB            : in out Superblock_Type;
+      Curr_Gen      :        Generation_Type;
       Progress      : in out Boolean);
 
    --

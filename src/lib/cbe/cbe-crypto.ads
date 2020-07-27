@@ -10,6 +10,7 @@ pragma Ada_2012;
 
 with CBE.Primitive;
 with CBE.Request;
+with CBE.Block_IO;
 
 package CBE.Crypto
 with SPARK_Mode
@@ -74,9 +75,20 @@ is
       Key_ID :        Key_ID_Type);
 
    --
-   --  Submit_Primitive_Client_Data
+   --  Submit_Primitive_Encrypt_Client_Data
    --
-   procedure Submit_Primitive_Client_Data (
+   procedure Submit_Primitive_Encrypt_Client_Data (
+      Obj             : in out Object_Type;
+      Prim            :        Primitive.Object_Type;
+      Req             :        Request.Object_Type;
+      VBA             :        Virtual_Block_Address_Type;
+      Key_ID          :        Key_ID_Type;
+      Blk_IO_Data_Idx :        Block_IO.Data_Index_Type);
+
+   --
+   --  Submit_Primitive_Decrypt_Client_Data
+   --
+   procedure Submit_Primitive_Decrypt_Client_Data (
       Obj            : in out Object_Type;
       Prim           :        Primitive.Object_Type;
       Req            :        Request.Object_Type;
@@ -197,6 +209,22 @@ is
    return Primitive.Object_Type;
 
    --
+   --  Peek_Completed_Cipher_Buf_Idx
+   --
+   function Peek_Completed_Cipher_Buf_Idx (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Jobs_Index_Type;
+
+   --
+   --  Peek_Completed_Blk_IO_Data_Idx
+   --
+   function Peek_Completed_Blk_IO_Data_Idx (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Block_IO.Data_Index_Type;
+
+   --
    --  Drop_Completed_Primitive
    --
    procedure Drop_Completed_Primitive (Obj : in out Object_Type);
@@ -235,7 +263,7 @@ is
 private
 
    type Job_State_Type is (
-      Invalid,
+
       DSCD_Submitted,
       DSCD_Completed,
 
@@ -247,18 +275,31 @@ private
       DSCD_Supply_Data_In_Progress,
       DSCD_Supply_Data_Completed,
 
+      OECD_Submitted,
+      OECD_Completed,
+
+      OECD_Encrypt_Data_Pending,
+      OECD_Encrypt_Data_In_Progress,
+      OECD_Encrypt_Data_Completed,
+
+      OECD_Obtain_Data_Pending,
+      OECD_Obtain_Data_In_Progress,
+      OECD_Obtain_Data_Completed,
+
+      Invalid,
       Pending,
       In_Progress,
       Complete);
 
    type Job_Type is record
-      State          : Job_State_Type;
-      Prim           : Primitive.Object_Type;
-      Submitted_Prim : Primitive.Object_Type;
-      Generated_Prim : Primitive.Object_Type;
-      Req            : Request.Object_Type;
-      VBA            : Virtual_Block_Address_Type;
-      Key            : Key_Plaintext_Type;
+      State           : Job_State_Type;
+      Prim            : Primitive.Object_Type;
+      Submitted_Prim  : Primitive.Object_Type;
+      Generated_Prim  : Primitive.Object_Type;
+      Req             : Request.Object_Type;
+      VBA             : Virtual_Block_Address_Type;
+      Key             : Key_Plaintext_Type;
+      Blk_IO_Data_Idx : Block_IO.Data_Index_Type;
    end record;
 
    type Jobs_Type is array (Jobs_Index_Type) of Job_Type;
@@ -271,6 +312,14 @@ private
    --  Execute_Decrypt_And_Supply_Client_Data
    --
    procedure Execute_Decrypt_And_Supply_Client_Data (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Obtain_And_Encrypt_Client_Data
+   --
+   procedure Execute_Obtain_And_Encrypt_Client_Data (
       Job      : in out Job_Type;
       Job_Idx  :        Jobs_Index_Type;
       Progress : in out Boolean);

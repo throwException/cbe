@@ -541,6 +541,15 @@ is
    function Newest_Snapshot_Idx (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
 
+   --
+   --  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap
+   --
+   function Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
+      Snapshots        : Snapshots_Type;
+      Curr_Gen         : Generation_Type;
+      Last_Secured_Gen : Generation_Type)
+   return Snapshots_Index_Type;
+
 private
 
    procedure Snapshot_From_Block_Data (

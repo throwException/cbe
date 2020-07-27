@@ -1289,4 +1289,54 @@ is
 
    end Newest_Snapshot_Idx;
 
+   --
+   --  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap
+   --
+   function Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
+      Snapshots        : Snapshots_Type;
+      Curr_Gen         : Generation_Type;
+      Last_Secured_Gen : Generation_Type)
+   return Snapshots_Index_Type
+   is
+      Evictable_Snap_Found : Boolean := False;
+      Evictable_Snap_Idx : Snapshots_Index_Type := 0;
+   begin
+
+      For_Each_Snap :
+      for Idx in Snapshots'Range loop
+
+         if not Snapshots (Idx).Valid then
+
+            return Idx;
+
+         elsif
+            not Snapshots (Idx).Keep and then
+            Snapshots (Idx).Gen /= Curr_Gen and then
+            Snapshots (Idx).Gen /= Last_Secured_Gen
+         then
+
+            if not Evictable_Snap_Found then
+
+               Evictable_Snap_Found := True;
+               Evictable_Snap_Idx := Idx;
+
+            elsif Snapshots (Idx).Gen < Snapshots (Evictable_Snap_Idx).Gen then
+
+               Evictable_Snap_Idx := Idx;
+
+            end if;
+
+         end if;
+
+      end loop For_Each_Snap;
+
+      if Evictable_Snap_Found then
+
+         return Evictable_Snap_Idx;
+
+      end if;
+      raise Program_Error;
+
+   end Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap;
+
 end CBE;

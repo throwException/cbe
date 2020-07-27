@@ -53,6 +53,7 @@ is
       Tag_Pool_SB_Ctrl_FT_Ext_Step,
       Tag_Pool_SB_Ctrl_Create_Snap,
       Tag_Pool_SB_Ctrl_Read_VBA,
+      Tag_Pool_SB_Ctrl_Write_VBA,
       Tag_Pool_SB_Ctrl_Sync,
       Tag_Pool_SB_Ctrl_Discard_Snap,
       Tag_Pool_SB_Ctrl_Initialize,
@@ -63,6 +64,7 @@ is
       Tag_SB_Ctrl_TA_Decrypt_Key,
       Tag_SB_Ctrl_Cache,
       Tag_SB_Ctrl_VBD_Rkg_Read_VBA,
+      Tag_SB_Ctrl_VBD_Rkg_Write_VBA,
       Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA,
       Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step,
       Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step,
@@ -76,11 +78,16 @@ is
       Tag_FT_Rszg_MT_Alloc,
       Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf,
       Tag_Blk_IO_Blk_Dev_Read,
+      Tag_Blk_IO_Blk_Dev_Write,
       Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data,
+      Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data,
       Tag_Crypto_IO_Crypto_Dev_Decrypt,
       Tag_Crypto_IO_Client_Supply_Data,
+      Tag_Crypto_IO_Crypto_Dev_Encrypt,
+      Tag_Crypto_IO_Client_Obtain_Data,
       Tag_VBD_Rkg_Blk_IO,
       Tag_VBD_Rkg_Blk_IO_Read_Client_Data,
+      Tag_VBD_Rkg_Blk_IO_Write_Client_Data,
       Tag_VBD_Rkg_Crypto_Encrypt,
       Tag_VBD_Rkg_Crypto_Decrypt,
       Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg,
@@ -149,6 +156,7 @@ is
       when Tag_Pool_SB_Ctrl_Create_Snap => "Pool_SB_Ctrl_Create_Snap",
       when Tag_Pool_SB_Ctrl_Sync => "Pool_SB_Ctrl_Sync",
       when Tag_Pool_SB_Ctrl_Read_VBA => "Pool_SB_Ctrl_Read_VBA",
+      when Tag_Pool_SB_Ctrl_Write_VBA => "Pool_SB_Ctrl_Write_VBA",
       when Tag_Pool_SB_Ctrl_Discard_Snap => "Pool_SB_Ctrl_Discard_Snap",
       when Tag_Pool_SB_Ctrl_Initialize => "Pool_SB_Ctrl_Initialize",
       when Tag_Pool_SB_Ctrl_Deinitialize => "Pool_SB_Ctrl_Deinitialize",
@@ -159,6 +167,7 @@ is
       when Tag_SB_Ctrl_Cache => "SB_Ctrl_Cache",
       when Tag_SB_Ctrl_VBD_Rkg_Rekey_VBA => "SB_Ctrl_VBD_Rkg_Rekey_VBA",
       when Tag_SB_Ctrl_VBD_Rkg_Read_VBA => "SB_Ctrl_VBD_Rkg_Read_VBA",
+      when Tag_SB_Ctrl_VBD_Rkg_Write_VBA => "SB_Ctrl_VBD_Rkg_Write_VBA",
       when Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step => "SB_Ctrl_VBD_Rkg_VBD_Ext_Step",
       when Tag_SB_Ctrl_FT_Rszg_FT_Ext_Step => "SB_Ctrl_FT_Rszg_FT_Ext_Step",
       when Tag_SB_Ctrl_Crypto_Add_Key => "SB_Ctrl_Crypto_Add_Key",
@@ -170,15 +179,24 @@ is
       when Tag_FT_Rszg_MT_Rszg_Extend_By_One_Leaf =>
          "FT_Rszg_MT_Rszg_Extend_By_One_Leaf",
       when Tag_Blk_IO_Blk_Dev_Read => "Blk_IO_Blk_Dev_Read",
+      when Tag_Blk_IO_Blk_Dev_Write => "Blk_IO_Blk_Dev_Write",
       when Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data =>
          "Blk_IO_Crypto_Decrypt_And_Supply_Client_Data",
+      when Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data =>
+         "Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data",
       when Tag_Crypto_IO_Crypto_Dev_Decrypt =>
          "Crypto_IO_Crypto_Dev_Decrypt",
       when Tag_Crypto_IO_Client_Supply_Data =>
          "Crypto_IO_Client_Supply_Data",
+      when Tag_Crypto_IO_Crypto_Dev_Encrypt =>
+         "Crypto_IO_Crypto_Dev_Encrypt",
+      when Tag_Crypto_IO_Client_Obtain_Data =>
+         "Crypto_IO_Client_Obtain_Data",
       when Tag_VBD_Rkg_Blk_IO => "VBD_Rkg_Blk_IO",
       when Tag_VBD_Rkg_Blk_IO_Read_Client_Data =>
          "VBD_Rkg_Blk_IO_Read_Client_Data",
+      when Tag_VBD_Rkg_Blk_IO_Write_Client_Data =>
+         "VBD_Rkg_Blk_IO_Write_Client_Data",
       when Tag_VBD_Rkg_Crypto_Encrypt => "VBD_Rkg_Crypto_Encrypt",
       when Tag_VBD_Rkg_Crypto_Decrypt => "VBD_Rkg_Crypto_Decrypt",
       when Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg => "VBD_Rkg_FT_Alloc_For_Non_Rkg",
@@ -382,6 +400,9 @@ is
    function Has_Tag_Pool_SB_Ctrl_Read_VBA (Obj : Object_Type)
    return Boolean;
 
+   function Has_Tag_Pool_SB_Ctrl_Write_VBA (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_Pool_SB_Ctrl_Discard_Snap (Obj : Object_Type)
    return Boolean;
 
@@ -401,6 +422,9 @@ is
    return Boolean;
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_Read_VBA (Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_SB_Ctrl_VBD_Rkg_Write_VBA (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
@@ -426,7 +450,14 @@ is
    function Has_Tag_Blk_IO_Blk_Dev_Read (Obj : Object_Type)
    return Boolean;
 
+   function Has_Tag_Blk_IO_Blk_Dev_Write (Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data (
+      Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data (
       Obj : Object_Type)
    return Boolean;
 
@@ -438,9 +469,20 @@ is
       Obj : Object_Type)
    return Boolean;
 
+   function Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (
+      Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_Crypto_IO_Client_Obtain_Data (
+      Obj : Object_Type)
+   return Boolean;
+
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean;
 
    function Has_Tag_VBD_Rkg_Blk_IO_Read_Client_Data (Obj : Object_Type)
+   return Boolean;
+
+   function Has_Tag_VBD_Rkg_Blk_IO_Write_Client_Data (Obj : Object_Type)
    return Boolean;
 
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean;

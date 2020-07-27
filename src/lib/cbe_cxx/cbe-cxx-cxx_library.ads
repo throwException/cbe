@@ -181,37 +181,47 @@ is
          "_ZN3Cbe7Library35client_transfer_read_data_completedERKNS_" &
          "19Crypto_plain_buffer5IndexEb";
 
-   function Client_Data_Index (
-      Obj : Library.Object_Type;
-      Req : CXX_Request_Type)
-   return CXX_Primitive_Index_Type
-   with
-      Export,
-      Convention    => C,
-      External_Name => "_ZNK3Cbe7Library17client_data_indexERKNS_7RequestE";
-
-   procedure Client_Data_Required (
-      Obj : in out Library.Object_Type;
-      Req :    out CXX_Request_Type)
-   with
-      Export,
-      Convention    => C,
-      External_Name => "_ZN3Cbe7Library21_client_data_requiredERNS_7RequestE";
-
    --
-   --  Supply_Client_Data
+   --  Client_Transfer_Write_Data_Required
    --
-   procedure Supply_Client_Data (
-      Obj      : in out Library.Object_Type;
-      Req      :        CXX_Request_Type;
-      Data     :        Block_Data_Type;
-      Progress :    out CXX_Bool_Type)
+   procedure Client_Transfer_Write_Data_Required (
+      Obj           :     Library.Object_Type;
+      Req           : out CXX_Request_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out CXX_Crypto_Plain_Buffer_Index_Type)
    with
       Export,
       Convention    => C,
       External_Name =>
-         "_ZN3Cbe7Library19_supply_client_dataERKNS_7RequestERKNS_" &
-         "10Block_dataERb";
+         "_ZNK3Cbe7Library35client_transfer_write_data_requiredERNS_" &
+         "7RequestERyRNS_19Crypto_plain_buffer5IndexE";
+
+   --
+   --  Client_Transfer_Write_Data_In_Progress
+   --
+   procedure Client_Transfer_Write_Data_In_Progress (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library38client_transfer_write_data_in_progressERKNS_" &
+         "19Crypto_plain_buffer5IndexE";
+
+   --
+   --  Client_Transfer_Write_Data_Completed
+   --
+   procedure Client_Transfer_Write_Data_Completed (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type;
+      Success       :        CXX_Bool_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library36client_transfer_write_data_completedERKNS_" &
+         "19Crypto_plain_buffer5IndexEb";
 
    function Execute_Progress (Obj : Library.Object_Type)
    return CXX_Bool_Type
@@ -289,8 +299,8 @@ is
          "19Crypto_plain_buffer5IndexE";
 
    procedure Crypto_Cipher_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        CXX_Crypto_Plain_Buffer_Index_Type)
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
    with
       Export,
       Convention    => C,

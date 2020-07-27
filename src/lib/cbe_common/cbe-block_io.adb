@@ -8,9 +8,81 @@
 
 pragma Ada_2012;
 
+with SHA256_4K;
+
 package body CBE.Block_IO
 with SPARK_Mode
 is
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type);
+
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type);
+
+   --
+   --  Hash_Of_Data_Blk
+   --
+   function Hash_Of_Data_Blk (CBE_Data : Block_Data_Type)
+   return Hash_Type;
+
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type)
+   is
+      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
+   begin
+      for CBE_Idx in CBE_Hash'Range loop
+         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
+         if CBE_Idx < CBE_Hash'Last then
+            SHA_Idx := SHA_Idx + 1;
+         end if;
+      end loop;
+   end CBE_Hash_From_SHA256_4K_Hash;
+
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type)
+   is
+      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
+   begin
+      for SHA_Idx in SHA_Data'Range loop
+         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
+         if SHA_Idx < SHA_Data'Last then
+            CBE_Idx := CBE_Idx + 1;
+         end if;
+      end loop;
+   end SHA256_4K_Data_From_CBE_Data;
+
+   --
+   --  Hash_Of_Data_Blk
+   --
+   function Hash_Of_Data_Blk (CBE_Data : Block_Data_Type)
+   return Hash_Type
+   is
+      SHA_Hash : SHA256_4K.Hash_Type;
+      SHA_Data : SHA256_4K.Data_Type;
+      CBE_Hash : Hash_Type;
+   begin
+      SHA256_4K_Data_From_CBE_Data (SHA_Data, CBE_Data);
+      SHA256_4K.Hash (SHA_Data, SHA_Hash);
+      CBE_Hash_From_SHA256_4K_Hash (CBE_Hash, SHA_Hash);
+      return CBE_Hash;
+   end Hash_Of_Data_Blk;
+
    function Invalid_Entry return Entry_Type
    is (
      Orig_Tag       => Primitive.Tag_Invalid,
@@ -89,6 +161,16 @@ is
                Obj.Entries (Idx).Req := Req;
                Obj.Entries (Idx).VBA := VBA;
                Obj.Entries (Idx).State := Read_Client_Data_Submitted;
+               Obj.Used_Entries := Obj.Used_Entries + 1;
+               Obj.Entries (Idx).Key_ID := Key_ID;
+               return;
+
+            when Primitive.Tag_VBD_Rkg_Blk_IO_Write_Client_Data =>
+
+               Obj.Entries (Idx).Submitted_Prim := Prim;
+               Obj.Entries (Idx).Req := Req;
+               Obj.Entries (Idx).VBA := VBA;
+               Obj.Entries (Idx).State := Write_Client_Data_Submitted;
                Obj.Used_Entries := Obj.Used_Entries + 1;
                Obj.Entries (Idx).Key_ID := Key_ID;
                return;
@@ -172,6 +254,8 @@ is
             return Obj.Entries (I).Prim;
          when Read_Client_Data_Completed =>
             return Obj.Entries (I).Submitted_Prim;
+         when Write_Client_Data_Completed =>
+            return Obj.Entries (I).Submitted_Prim;
          when others =>
             null;
          end case;
@@ -247,9 +331,39 @@ is
          end if;
       end loop;
 
-      --  XXX precondition
       raise Program_Error;
    end Peek_Completed_Hash;
+
+   --
+   --  Peek_Completed_Hash_New
+   --
+   function Peek_Completed_Hash_New (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Hash_Type
+   is
+   begin
+
+      Find_Corresponding_Entry :
+      for Idx in Obj.Entries'Range loop
+
+         case Obj.Entries (Idx).State is
+         when Write_Client_Data_Completed =>
+
+            if Primitive.Equal (Prim, Obj.Entries (Idx).Submitted_Prim) then
+               return Obj.Entries (Idx).Hash;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Entry;
+      raise Program_Error;
+
+   end Peek_Completed_Hash_New;
 
    procedure Drop_Completed_Primitive (
       Obj  : in out Object_Type;
@@ -278,7 +392,8 @@ is
    begin
       Find_Corresponding_Job :
       for Idx in Obj.Entries'Range loop
-         if Obj.Entries (Idx).State = Read_Client_Data_Completed and then
+         if (Obj.Entries (Idx).State = Read_Client_Data_Completed or else
+             Obj.Entries (Idx).State = Write_Client_Data_Completed) and then
             Primitive.Equal (Prim, Obj.Entries (Idx).Submitted_Prim)
          then
             Obj.Entries (Idx).State := Unused;
@@ -294,6 +409,7 @@ is
    --
    procedure Execute (
       Obj      : in out Object_Type;
+      Data_Buf :        Data_Type;
       Progress : in out Boolean)
    is
    begin
@@ -313,6 +429,19 @@ is
          =>
 
             Execute_Read_Client_Data (Obj.Entries (Idx), Idx, Progress);
+
+         when
+            Write_Client_Data_Submitted |
+            Write_Client_Data_Write_Data_Pending |
+            Write_Client_Data_Write_Data_In_Progress |
+            Write_Client_Data_Write_Data_Completed |
+            Write_Client_Data_Obtain_And_Encrypt_Data_Pending |
+            Write_Client_Data_Obtain_And_Encrypt_Data_In_Progress |
+            Write_Client_Data_Obtain_And_Encrypt_Data_Completed
+         =>
+
+            Execute_Write_Client_Data (
+               Obj.Entries (Idx), Idx, Data_Buf, Progress);
 
          when others =>
 
@@ -343,6 +472,10 @@ is
 
             return Obj.Entries (Idx).Generated_Prim;
 
+         when Write_Client_Data_Write_Data_Pending =>
+
+            return Obj.Entries (Idx).Generated_Prim;
+
          when others =>
 
             null;
@@ -367,6 +500,10 @@ is
 
          case Obj.Entries (Idx).State is
          when Read_Client_Data_Decrypt_And_Supply_Data_Pending =>
+
+            return Obj.Entries (Idx).Generated_Prim;
+
+         when Write_Client_Data_Obtain_And_Encrypt_Data_Pending =>
 
             return Obj.Entries (Idx).Generated_Prim;
 
@@ -409,7 +546,9 @@ is
 
          when
             Read_Client_Data_Read_Data_Pending |
-            Read_Client_Data_Decrypt_And_Supply_Data_Pending
+            Read_Client_Data_Decrypt_And_Supply_Data_Pending |
+            Write_Client_Data_Write_Data_Pending |
+            Write_Client_Data_Obtain_And_Encrypt_Data_Pending
          =>
 
             if Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
@@ -440,7 +579,10 @@ is
    begin
 
       case Obj.Entries (Idx).State is
-      when Read_Client_Data_Decrypt_And_Supply_Data_Pending =>
+      when
+         Read_Client_Data_Decrypt_And_Supply_Data_Pending |
+         Write_Client_Data_Obtain_And_Encrypt_Data_Pending
+      =>
 
          if not Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
             raise Program_Error;
@@ -469,7 +611,10 @@ is
    begin
 
       case Obj.Entries (Idx).State is
-      when Read_Client_Data_Decrypt_And_Supply_Data_Pending =>
+      when
+         Read_Client_Data_Decrypt_And_Supply_Data_Pending |
+         Write_Client_Data_Obtain_And_Encrypt_Data_Pending
+      =>
 
          if not Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
             raise Program_Error;
@@ -498,7 +643,10 @@ is
    begin
 
       case Obj.Entries (Idx).State is
-      when Read_Client_Data_Decrypt_And_Supply_Data_Pending =>
+      when
+         Read_Client_Data_Decrypt_And_Supply_Data_Pending |
+         Write_Client_Data_Obtain_And_Encrypt_Data_Pending
+      =>
 
          if not Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
             raise Program_Error;
@@ -532,6 +680,16 @@ is
             if Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
                Obj.Entries (Idx).State :=
                   Read_Client_Data_Decrypt_And_Supply_Data_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Write_Client_Data_Obtain_And_Encrypt_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
+
+               Obj.Entries (Idx).State :=
+                  Write_Client_Data_Obtain_And_Encrypt_Data_In_Progress;
                return;
             end if;
             raise Program_Error;
@@ -585,6 +743,11 @@ is
          Obj.Entries (Data_Idx).State :=
             Read_Client_Data_Read_Data_In_Progress;
 
+      when Write_Client_Data_Write_Data_Pending =>
+
+         Obj.Entries (Data_Idx).State :=
+            Write_Client_Data_Write_Data_In_Progress;
+
       when others =>
 
          raise Program_Error;
@@ -614,6 +777,13 @@ is
          Primitive.Success (Obj.Entries (Data_Idx).Generated_Prim, Success);
          Obj.Entries (Data_Idx).State := Read_Client_Data_Read_Data_Completed;
 
+      when Write_Client_Data_Write_Data_In_Progress =>
+
+         Primitive.Success (Obj.Entries (Data_Idx).Generated_Prim, Success);
+
+         Obj.Entries (Data_Idx).State :=
+            Write_Client_Data_Write_Data_Completed;
+
       when others =>
 
          raise Program_Error;
@@ -641,6 +811,16 @@ is
                Obj.Entries (Idx).Generated_Prim := Prim;
                Obj.Entries (Idx).State :=
                   Read_Client_Data_Decrypt_And_Supply_Data_Completed;
+               return;
+            end if;
+            raise Program_Error;
+
+         when Write_Client_Data_Obtain_And_Encrypt_Data_In_Progress =>
+
+            if Primitive.Equal (Prim, Obj.Entries (Idx).Generated_Prim) then
+               Obj.Entries (Idx).Generated_Prim := Prim;
+               Obj.Entries (Idx).State :=
+                  Write_Client_Data_Obtain_And_Encrypt_Data_Completed;
                return;
             end if;
             raise Program_Error;
@@ -713,5 +893,65 @@ is
       end case;
 
    end Execute_Read_Client_Data;
+
+   --
+   --  Execute_Write_Client_Data
+   --
+   procedure Execute_Write_Client_Data (
+      Entr      : in out Entry_Type;
+      Entry_Idx :        Entries_Index_Type;
+      Data_Buf  :        Data_Type;
+      Progress  : in out Boolean)
+   is
+   begin
+
+      case Entr.State is
+      when Write_Client_Data_Submitted =>
+
+         Entr.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     =>
+               Primitive.Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data,
+            Blk_Nr => Primitive.Block_Number (Entr.Submitted_Prim),
+            Idx    => Primitive.Index_Type (Entry_Idx));
+
+         Entr.State := Write_Client_Data_Obtain_And_Encrypt_Data_Pending;
+         Progress := True;
+
+      when Write_Client_Data_Obtain_And_Encrypt_Data_Completed =>
+
+         if not Primitive.Success (Entr.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Entr.Hash := Hash_Of_Data_Blk (Data_Buf (Entry_Idx));
+         Entr.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Write,
+            Succ   => False,
+            Tg     => Primitive.Tag_Blk_IO_Blk_Dev_Write,
+            Blk_Nr => Primitive.Block_Number (Entr.Submitted_Prim),
+            Idx    => Primitive.Index_Type (Entry_Idx));
+
+         Entr.State := Write_Client_Data_Write_Data_Pending;
+         Progress := True;
+
+      when Write_Client_Data_Write_Data_Completed =>
+
+         if not Primitive.Success (Entr.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Primitive.Success (Entr.Submitted_Prim, True);
+         Entr.State := Write_Client_Data_Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Write_Client_Data;
 
 end CBE.Block_IO;

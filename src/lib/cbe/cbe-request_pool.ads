@@ -47,20 +47,6 @@ is
       Progress : in out Boolean);
 
    --
-   --  Peek_Generated_VBD_Primitive
-   --
-   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
-   return Primitive.Object_Type;
-
-   --
-   --  Peek_Generated_VBD_Primitive_ID
-   --
-   function Peek_Generated_VBD_Primitive_ID (
-      Obj : Object_Type;
-      Idx : Pool_Index_Type)
-   return Snapshot_ID_Type;
-
-   --
    --  Peek_Generated_SB_Ctrl_Primitive
    --
    function Peek_Generated_SB_Ctrl_Primitive (Obj : Object_Type)
@@ -146,6 +132,24 @@ is
       Req :        Request.Object_Type);
 
    --
+   --  Remove these functions
+   --
+
+   --
+   --  Peek_Generated_VBD_Primitive
+   --
+   function Peek_Generated_VBD_Primitive (Obj : Object_Type)
+   return Primitive.Object_Type;
+
+   --
+   --  Peek_Generated_VBD_Primitive_ID
+   --
+   function Peek_Generated_VBD_Primitive_ID (
+      Obj : Object_Type;
+      Idx : Pool_Index_Type)
+   return Snapshot_ID_Type;
+
+   --
    --  Request_For_Index
    --
    function Request_For_Index (
@@ -159,8 +163,6 @@ private
 
    type Job_State_Type is (
       Invalid,
-      Pending,
-      In_Progress,
       Submitted,
       Submitted_Resume_Rekeying,
       Rekey_Init_Pending,
@@ -183,6 +185,9 @@ private
       Read_VBA_At_SB_Ctrl_Pending,
       Read_VBA_At_SB_Ctrl_In_Progress,
       Read_VBA_At_SB_Ctrl_Complete,
+      Write_VBA_At_SB_Ctrl_Pending,
+      Write_VBA_At_SB_Ctrl_In_Progress,
+      Write_VBA_At_SB_Ctrl_Complete,
       Discard_Snap_At_SB_Ctrl_Pending,
       Discard_Snap_At_SB_Ctrl_In_Progress,
       Discard_Snap_At_SB_Ctrl_Complete,
@@ -205,7 +210,6 @@ private
       Request_Finished        : Boolean;
       Nr_Of_Requests_Preponed : Number_Of_Requests_Type;
       Nr_Of_Blks              : Number_Of_Blocks_Type;
-      Nr_Of_Prims_Completed   : Number_Of_Primitives_Type;
       SB_State                : Superblock_State_Type;
       Gen                     : Generation_Type;
    end record;
@@ -227,12 +231,6 @@ private
    --
    function Job_Invalid
    return Job_Type;
-
-   --
-   --  Job_Nr_Of_Prims
-   --
-   function Job_Nr_Of_Prims (Job : Job_Type)
-   return Number_Of_Primitives_Type;
 
    --
    --  Execute_Rekey
@@ -310,6 +308,15 @@ private
    --  Execute_Read
    --
    procedure Execute_Read (
+      Jobs     : in out Jobs_Type;
+      Indices  : in out Index_Queue.Queue_Type;
+      Idx      :        Pool_Index_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Execute_Write
+   --
+   procedure Execute_Write (
       Jobs     : in out Jobs_Type;
       Indices  : in out Index_Queue.Queue_Type;
       Idx      :        Pool_Index_Type;

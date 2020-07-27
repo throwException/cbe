@@ -25,7 +25,8 @@ is
             Generated_Prim => Primitive.Invalid_Object,
             Req => Request.Invalid_Object,
             VBA => Virtual_Block_Address_Type'First,
-            Key => Key_Plaintext_Invalid)));
+            Key => Key_Plaintext_Invalid,
+            Blk_IO_Data_Idx => Block_IO.Data_Index_Type'First)));
 
    --
    --  Primitive_Acceptable
@@ -90,9 +91,9 @@ is
    end Submit_Primitive_Key_ID;
 
    --
-   --  Submit_Primitive_Client_Data
+   --  Submit_Primitive_Decrypt_Client_Data
    --
-   procedure Submit_Primitive_Client_Data (
+   procedure Submit_Primitive_Decrypt_Client_Data (
       Obj            : in out Object_Type;
       Prim           :        Primitive.Object_Type;
       Req            :        Request.Object_Type;
@@ -130,7 +131,48 @@ is
       end loop For_Each_Job;
       raise Program_Error;
 
-   end Submit_Primitive_Client_Data;
+   end Submit_Primitive_Decrypt_Client_Data;
+
+   --
+   --  Submit_Primitive_Encrypt_Client_Data
+   --
+   procedure Submit_Primitive_Encrypt_Client_Data (
+      Obj             : in out Object_Type;
+      Prim            :        Primitive.Object_Type;
+      Req             :        Request.Object_Type;
+      VBA             :        Virtual_Block_Address_Type;
+      Key_ID          :        Key_ID_Type;
+      Blk_IO_Data_Idx :        Block_IO.Data_Index_Type)
+   is
+   begin
+
+      For_Each_Job :
+      for Job_Idx in Obj.Jobs'Range loop
+
+         if Obj.Jobs (Job_Idx).State = Invalid then
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data =>
+               Obj.Jobs (Job_Idx).State := OECD_Submitted;
+               Obj.Jobs (Job_Idx).Submitted_Prim := Prim;
+               Obj.Jobs (Job_Idx).Req := Req;
+               Obj.Jobs (Job_Idx).VBA := VBA;
+               Obj.Jobs (Job_Idx).Key.ID := Key_ID;
+               Obj.Jobs (Job_Idx).Blk_IO_Data_Idx := Blk_IO_Data_Idx;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end if;
+
+      end loop For_Each_Job;
+      raise Program_Error;
+
+   end Submit_Primitive_Encrypt_Client_Data;
 
    --
    --  Submit_Primitive
@@ -240,6 +282,10 @@ is
 
             return Obj.Jobs (Idx).Generated_Prim;
 
+         when OECD_Encrypt_Data_Pending =>
+
+            return Obj.Jobs (Idx).Generated_Prim;
+
          when others =>
 
             null;
@@ -264,6 +310,10 @@ is
 
          case Obj.Jobs (Idx).State is
          when DSCD_Supply_Data_Pending =>
+
+            return Obj.Jobs (Idx).Generated_Prim;
+
+         when OECD_Obtain_Data_Pending =>
 
             return Obj.Jobs (Idx).Generated_Prim;
 
@@ -333,6 +383,20 @@ is
             end if;
             raise Program_Error;
 
+         when OECD_Obtain_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
+               return Plain_Buffer_Index_Type (Idx);
+            end if;
+            raise Program_Error;
+
+         when OECD_Encrypt_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
+               return Plain_Buffer_Index_Type (Idx);
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -360,6 +424,13 @@ is
 
          case Obj.Jobs (Idx).State is
          when DSCD_Decrypt_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
+               return Obj.Jobs (Idx).Key.ID;
+            end if;
+            raise Program_Error;
+
+         when OECD_Encrypt_Data_Pending =>
 
             if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
                return Obj.Jobs (Idx).Key.ID;
@@ -399,6 +470,13 @@ is
             end if;
             raise Program_Error;
 
+         when OECD_Obtain_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
+               return Obj.Jobs (Idx).Req;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -426,6 +504,13 @@ is
 
          case Obj.Jobs (Idx).State is
          when DSCD_Supply_Data_Pending =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
+               return Obj.Jobs (Idx).VBA;
+            end if;
+            raise Program_Error;
+
+         when OECD_Obtain_Data_Pending =>
 
             if Primitive.Equal (Prim, Obj.Jobs (Idx).Generated_Prim) then
                return Obj.Jobs (Idx).VBA;
@@ -470,6 +555,20 @@ is
             Execute_Decrypt_And_Supply_Client_Data (
                Obj.Jobs (Idx), Idx, Progress);
 
+         when
+            OECD_Submitted |
+            OECD_Completed |
+            OECD_Encrypt_Data_Pending |
+            OECD_Encrypt_Data_In_Progress |
+            OECD_Encrypt_Data_Completed |
+            OECD_Obtain_Data_Pending |
+            OECD_Obtain_Data_In_Progress |
+            OECD_Obtain_Data_Completed
+         =>
+
+            Execute_Obtain_And_Encrypt_Client_Data (
+               Obj.Jobs (Idx), Idx, Progress);
+
          when others =>
 
             null;
@@ -479,6 +578,63 @@ is
       end loop Execute_Each_Valid_Job;
 
    end Execute;
+
+   --
+   --  Execute_Obtain_And_Encrypt_Client_Data
+   --
+   procedure Execute_Obtain_And_Encrypt_Client_Data (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when OECD_Submitted =>
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_Crypto_IO_Client_Obtain_Data,
+            Blk_Nr => Primitive.Block_Number (Job.Submitted_Prim),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := OECD_Obtain_Data_Pending;
+         Progress := True;
+
+      when OECD_Obtain_Data_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_Crypto_IO_Crypto_Dev_Encrypt,
+            Blk_Nr => Primitive.Block_Number (Job.Submitted_Prim),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := OECD_Encrypt_Data_Pending;
+         Progress := True;
+
+      when OECD_Encrypt_Data_Completed =>
+
+         if not Primitive.Success (Job.Generated_Prim) then
+            raise Program_Error;
+         end if;
+
+         Primitive.Success (Job.Submitted_Prim, True);
+         Job.State := OECD_Completed;
+         Progress := True;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Obtain_And_Encrypt_Client_Data;
 
    --
    --  Execute_Decrypt_And_Supply_Client_Data
@@ -581,6 +737,14 @@ is
 
          Obj.Jobs (Job_Idx).State := DSCD_Supply_Data_In_Progress;
 
+      when OECD_Encrypt_Data_Pending =>
+
+         Obj.Jobs (Job_Idx).State := OECD_Encrypt_Data_In_Progress;
+
+      when OECD_Obtain_Data_Pending =>
+
+         Obj.Jobs (Job_Idx).State := OECD_Obtain_Data_In_Progress;
+
       when others =>
 
          raise Program_Error;
@@ -643,6 +807,10 @@ is
 
             return Obj.Jobs (Job_Idx).Submitted_Prim;
 
+         when OECD_Completed =>
+
+            return Obj.Jobs (Job_Idx).Submitted_Prim;
+
          when others =>
 
             null;
@@ -653,6 +821,68 @@ is
       return Primitive.Invalid_Object;
 
    end Peek_Completed_Primitive;
+
+   --
+   --  Peek_Completed_Blk_IO_Data_Idx
+   --
+   function Peek_Completed_Blk_IO_Data_Idx (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Block_IO.Data_Index_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Obj.Jobs'Range loop
+
+         case Obj.Jobs (Idx).State is
+         when OECD_Completed =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Submitted_Prim) then
+               return Obj.Jobs (Idx).Blk_IO_Data_Idx;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Blk_IO_Data_Idx;
+
+   --
+   --  Peek_Completed_Cipher_Buf_Idx
+   --
+   function Peek_Completed_Cipher_Buf_Idx (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Jobs_Index_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Obj.Jobs'Range loop
+
+         case Obj.Jobs (Idx).State is
+         when OECD_Completed =>
+
+            if Primitive.Equal (Prim, Obj.Jobs (Idx).Submitted_Prim) then
+               return Idx;
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Cipher_Buf_Idx;
 
    --
    --  Drop_Completed_Primitive
@@ -683,7 +913,8 @@ is
    begin
       Find_Corresponding_Job :
       for Idx in Obj.Jobs'Range loop
-         if Obj.Jobs (Idx).State = DSCD_Completed and then
+         if (Obj.Jobs (Idx).State = DSCD_Completed or else
+             Obj.Jobs (Idx).State = OECD_Completed) and then
             Primitive.Equal (Prim, Obj.Jobs (Idx).Submitted_Prim)
          then
             Obj.Jobs (Idx).State := Invalid;
@@ -714,6 +945,11 @@ is
          Obj.Jobs (Job_Idx).State := DSCD_Decrypt_Data_Completed;
          Primitive.Success (Obj.Jobs (Job_Idx).Generated_Prim, Success);
 
+      when OECD_Encrypt_Data_In_Progress =>
+
+         Obj.Jobs (Job_Idx).State := OECD_Encrypt_Data_Completed;
+         Primitive.Success (Obj.Jobs (Job_Idx).Generated_Prim, Success);
+
       when others =>
 
          raise Program_Error;
@@ -737,6 +973,11 @@ is
       when DSCD_Supply_Data_In_Progress =>
 
          Obj.Jobs (Job_Idx).State := DSCD_Supply_Data_Completed;
+         Primitive.Success (Obj.Jobs (Job_Idx).Generated_Prim, Success);
+
+      when OECD_Obtain_Data_In_Progress =>
+
+         Obj.Jobs (Job_Idx).State := OECD_Obtain_Data_Completed;
          Primitive.Success (Obj.Jobs (Job_Idx).Generated_Prim, Success);
 
       when others =>

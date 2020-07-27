@@ -251,6 +251,10 @@ is
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Read_VBA);
 
+   function Has_Tag_Pool_SB_Ctrl_Write_VBA (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Pool_SB_Ctrl_Write_VBA);
+
    function Has_Tag_Pool_SB_Ctrl_Discard_Snap (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_Pool_SB_Ctrl_Discard_Snap);
@@ -285,6 +289,10 @@ is
    function Has_Tag_SB_Ctrl_VBD_Rkg_Read_VBA (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_Read_VBA);
+
+   function Has_Tag_SB_Ctrl_VBD_Rkg_Write_VBA (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_SB_Ctrl_VBD_Rkg_Write_VBA);
 
    function Has_Tag_SB_Ctrl_VBD_Rkg_VBD_Ext_Step (Obj : Object_Type)
    return Boolean
@@ -327,10 +335,19 @@ is
    return Boolean
    is (Obj.Tag = Tag_Blk_IO_Blk_Dev_Read);
 
+   function Has_Tag_Blk_IO_Blk_Dev_Write (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Blk_IO_Blk_Dev_Write);
+
    function Has_Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data (
       Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_Blk_IO_Crypto_Decrypt_And_Supply_Client_Data);
+
+   function Has_Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Blk_IO_Crypto_Obtain_And_Encrypt_Client_Data);
 
    function Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (
       Obj : Object_Type)
@@ -342,12 +359,26 @@ is
    return Boolean
    is (Obj.Tag = Tag_Crypto_IO_Client_Supply_Data);
 
+   function Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Crypto_IO_Crypto_Dev_Encrypt);
+
+   function Has_Tag_Crypto_IO_Client_Obtain_Data (
+      Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_Crypto_IO_Client_Obtain_Data);
+
    function Has_Tag_VBD_Rkg_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Blk_IO);
 
    function Has_Tag_VBD_Rkg_Blk_IO_Read_Client_Data (Obj : Object_Type)
    return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Blk_IO_Read_Client_Data);
+
+   function Has_Tag_VBD_Rkg_Blk_IO_Write_Client_Data (Obj : Object_Type)
+   return Boolean
+   is (Obj.Tag = Tag_VBD_Rkg_Blk_IO_Write_Client_Data);
 
    function Has_Tag_VBD_Rkg_Crypto_Encrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_VBD_Rkg_Crypto_Encrypt);

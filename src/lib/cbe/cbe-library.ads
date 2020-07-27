@@ -155,28 +155,28 @@ is
       Success       :        Boolean);
 
    --
-   --  Get primitive index
+   --  Client_Transfer_Write_Data_Required
    --
-   function Client_Data_Index (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Primitive.Index_Type;
+   procedure Client_Transfer_Write_Data_Required (
+      Obj           :     Object_Type;
+      Req           : out Request.Object_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out Crypto.Plain_Buffer_Index_Type);
 
    --
-   --  Client_Data_Required
+   --  Client_Transfer_Write_Data_In_Progress
    --
-   procedure Client_Data_Required (
-      Obj : in out Object_Type;
-      Req :    out Request.Object_Type);
+   procedure Client_Transfer_Write_Data_In_Progress (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type);
 
    --
-   --  Supply_Client_Data
+   --  Client_Transfer_Write_Data_Completed
    --
-   procedure Supply_Client_Data (
-      Obj      : in out Object_Type;
-      Req      :        Request.Object_Type;
-      Data     :        Block_Data_Type;
-      Progress :    out Boolean);
+   procedure Client_Transfer_Write_Data_Completed (
+      Obj           : in out Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type;
+      Success       :        Boolean);
 
    --
    --  Crypto_Add_Key_Required
@@ -223,12 +223,7 @@ is
       Req :        Request.Object_Type);
 
    --
-   --  Determine whether the encryption of plain data is required
-   --
-   --  \param Req         returns valid request if encryption of plain data is
-   --                     is required
-   --  \param Data_Index  returns index of plain data in crypto buffer if
-   --                     returned request is valid
+   --  Crypto_Cipher_Data_Required
    --
    procedure Crypto_Cipher_Data_Required (
       Obj        :     Object_Type;
@@ -236,19 +231,14 @@ is
       Data_Index : out Crypto.Plain_Buffer_Index_Type);
 
    --
-   --  Acknowledge that the encryption of plain data was requested
-   --
-   --  \param Data_Index  index of plain data in crypto buffer
+   --  Crypto_Cipher_Data_Requested
    --
    procedure Crypto_Cipher_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        Crypto.Plain_Buffer_Index_Type);
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        Crypto.Plain_Buffer_Index_Type);
 
    --
-   --  Acknowledge that the encryption of plain data was completed
-   --
-   --  \param Data_Index  index of the resulting cipher data in crypto buffer
-   --  \param Data_Valid  whether the encryption was successful
+   --  Supply_Crypto_Cipher_Data
    --
    procedure Supply_Crypto_Cipher_Data (
       Obj        : in out Object_Type;
@@ -256,12 +246,7 @@ is
       Data_Valid :        Boolean);
 
    --
-   --  Request decryption of data
-   --
-   --  \param Req         returns valid request in case there is one pending
-   --                     that needs data, otherwise an invalid one is returned
-   --  \param Data_Index  returns index of request data-slot in crypto
-   --                     plain-data buffer if returned request is valid
+   --  Crypto_Plain_Data_Required
    --
    procedure Crypto_Plain_Data_Required (
       Obj        :     Object_Type;
@@ -276,12 +261,7 @@ is
       Cipher_Buf_Idx :        Crypto.Cipher_Buffer_Index_Type);
 
    --
-   --  Collect plain data for given completed decryption request
-   --
-   --  \param Data_Index  index of data in crypto plain-data buffer
-   --  \param Data_Valid  whether the data is valid or not (whether the
-   --                     data could be processed successfully by the outer
-   --                     world)
+   --  Supply_Crypto_Plain_Data
    --
    procedure Supply_Crypto_Plain_Data (
       Obj        : in out Object_Type;
@@ -618,15 +598,19 @@ private
       Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
       Progress         : in out Boolean);
 
+   --
+   --  Execute_Crypto
+   --
    procedure Execute_Crypto (
       Obj               : in out Object_Type;
+      Blk_IO_Buf        : in out Block_IO.Data_Type;
       Crypto_Plain_Buf  :        Crypto.Plain_Buffer_Type;
       Crypto_Cipher_Buf :        Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean);
 
    procedure Execute_IO (
       Obj               : in out Object_Type;
-      IO_Buf            : in     Block_IO.Data_Type;
+      IO_Buf            :        Block_IO.Data_Type;
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean);
 

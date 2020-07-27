@@ -180,41 +180,55 @@ is
 
    end Client_Transfer_Read_Data_Completed;
 
-   function Client_Data_Index (
-      Obj : Library.Object_Type;
-      Req : CXX_Request_Type)
-   return CXX_Primitive_Index_Type
-   is
-   begin
-      return CXX_Primitive_Index_Type (
-         Library.Client_Data_Index (Obj, CXX_Request_To_SPARK (Req)));
-   end Client_Data_Index;
-
-   procedure Client_Data_Required (
-      Obj : in out Library.Object_Type;
-      Req :    out CXX_Request_Type)
+   --
+   --  Client_Transfer_Write_Data_Required
+   --
+   procedure Client_Transfer_Write_Data_Required (
+      Obj           :     Library.Object_Type;
+      Req           : out CXX_Request_Type;
+      VBA           : out Virtual_Block_Address_Type;
+      Plain_Buf_Idx : out CXX_Crypto_Plain_Buffer_Index_Type)
    is
       SPARK_Req : Request.Object_Type;
+      SPARK_Plain_Buf_Idx : Crypto.Plain_Buffer_Index_Type;
    begin
-      Library.Client_Data_Required (Obj, SPARK_Req);
+
+      Library.Client_Transfer_Write_Data_Required (
+         Obj, SPARK_Req, VBA, SPARK_Plain_Buf_Idx);
+
       Req := CXX_Request_From_SPARK (SPARK_Req);
-   end Client_Data_Required;
+      Plain_Buf_Idx := (Value => CXX_UInt32_Type (SPARK_Plain_Buf_Idx));
+
+   end Client_Transfer_Write_Data_Required;
 
    --
-   --  Supply_Client_Data
+   --  Client_Transfer_Write_Data_In_Progress
    --
-   procedure Supply_Client_Data (
-      Obj      : in out Library.Object_Type;
-      Req      :        CXX_Request_Type;
-      Data     :        Block_Data_Type;
-      Progress :    out CXX_Bool_Type)
+   procedure Client_Transfer_Write_Data_In_Progress (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
    is
-      SPARK_Progress : Boolean;
    begin
-      Library.Supply_Client_Data (
-         Obj, CXX_Request_To_SPARK (Req), Data, SPARK_Progress);
-      Progress := CXX_Bool_From_SPARK (SPARK_Progress);
-   end Supply_Client_Data;
+      Library.Client_Transfer_Write_Data_In_Progress (
+         Obj, Crypto.Plain_Buffer_Index_Type (Plain_Buf_Idx.Value));
+
+   end Client_Transfer_Write_Data_In_Progress;
+
+   --
+   --  Client_Transfer_Write_Data_Completed
+   --
+   procedure Client_Transfer_Write_Data_Completed (
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type;
+      Success       :        CXX_Bool_Type)
+   is
+   begin
+      Library.Client_Transfer_Write_Data_Completed (
+         Obj,
+         Crypto.Plain_Buffer_Index_Type (Plain_Buf_Idx.Value),
+         CXX_Bool_To_SPARK (Success));
+
+   end Client_Transfer_Write_Data_Completed;
 
    function Execute_Progress (Obj : Library.Object_Type)
    return CXX_Bool_Type
@@ -292,12 +306,12 @@ is
    end Crypto_Cipher_Data_Required;
 
    procedure Crypto_Cipher_Data_Requested (
-      Obj        : in out Library.Object_Type;
-      Data_Index :        CXX_Crypto_Plain_Buffer_Index_Type)
+      Obj           : in out Library.Object_Type;
+      Plain_Buf_Idx :        CXX_Crypto_Plain_Buffer_Index_Type)
    is
    begin
       Library.Crypto_Cipher_Data_Requested (
-         Obj, Crypto.Plain_Buffer_Index_Type (Data_Index.Value));
+         Obj, Crypto.Plain_Buffer_Index_Type (Plain_Buf_Idx.Value));
    end Crypto_Cipher_Data_Requested;
 
    procedure Supply_Crypto_Cipher_Data (

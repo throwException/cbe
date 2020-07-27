@@ -174,6 +174,7 @@ is
             Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             Curr_Gen => Generation_Type'First,
             Last_Secured_Gen => Generation_Type'First,
+            Hash => (others => Byte_Type'First),
             Free_Gen => Generation_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Rekeying;
@@ -325,6 +326,51 @@ is
    end Submit_Primitive_Read_VBA;
 
    --
+   --  Submit_Primitive_Write_VBA
+   --
+   procedure Submit_Primitive_Write_VBA (
+      Rkg              : in out Rekeying_Type;
+      Prim             :        Primitive.Object_Type;
+      Curr_Gen         :        Generation_Type;
+      Req              :        Request.Object_Type;
+      Snapshot         :        Snapshot_Type;
+      Snapshots_Degree :        Tree_Degree_Type;
+      Key_ID           :        Key_ID_Type)
+   is
+   begin
+
+      Find_Invalid_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         if Rkg.Jobs (Idx).Operation = Invalid then
+
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Ctrl_VBD_Rkg_Write_VBA =>
+
+               Rkg.Jobs (Idx).Operation        := Write_VBA;
+               Rkg.Jobs (Idx).Submitted_Prim   := Prim;
+               Rkg.Jobs (Idx).Curr_Gen         := Curr_Gen;
+               Rkg.Jobs (Idx).Snapshots (0)    := Snapshot;
+               Rkg.Jobs (Idx).Snapshots_Degree := Snapshots_Degree;
+               Rkg.Jobs (Idx).Req              := Req;
+               Rkg.Jobs (Idx).State            := Submitted;
+               Rkg.Jobs (Idx).New_Key_ID       := Key_ID;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end if;
+
+      end loop Find_Invalid_Job;
+      raise Program_Error;
+
+   end Submit_Primitive_Write_VBA;
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Rkg : Rekeying_Type)
@@ -374,6 +420,39 @@ is
       raise Program_Error;
 
    end Peek_Completed_Snapshots;
+
+   --
+   --  Peek_Completed_Snap
+   --
+   function Peek_Completed_Snap (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Snapshot_Type
+   is
+   begin
+
+      Find_Corresponding_Job :
+      for Idx in Rkg.Jobs'Range loop
+
+         case Rkg.Jobs (Idx).Operation is
+         when Write_VBA =>
+
+            if Rkg.Jobs (Idx).State = Completed and then
+               Primitive.Equal (Prim, Rkg.Jobs (Idx).Submitted_Prim)
+            then
+               return Rkg.Jobs (Idx).Snapshots (0);
+            end if;
+
+         when others =>
+
+            null;
+
+         end case;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_Snap;
 
    --
    --  Peek_Completed_Nr_Of_Leaves
@@ -931,6 +1010,96 @@ is
    end Execute_VBD_Ext_Step_Read_Inner_Node_Completed;
 
    --
+   --  Check_Hash_Of_Read_Type_1_Node
+   --
+   procedure Check_Hash_Of_Read_Type_1_Node (
+      Snapshot         : Snapshot_Type;
+      Snapshots_Degree : Tree_Degree_Type;
+      T1_Blk_Idx       : Type_1_Node_Blocks_Index_Type;
+      T1_Blks          : Type_1_Node_Blocks_Type;
+      VBA              : Virtual_Block_Address_Type)
+   is
+   begin
+
+      if T1_Blk_Idx = Snapshot.Max_Level then
+
+         if Hash_Of_T1_Node_Blk (T1_Blks (T1_Blk_Idx)) /= Snapshot.Hash then
+            raise Program_Error;
+         end if;
+
+      else
+
+         Declare_Child_Idx :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (VBA, T1_Blk_Idx + 1, Snapshots_Degree);
+         begin
+
+            if Hash_Of_T1_Node_Blk (T1_Blks (T1_Blk_Idx)) /=
+                  T1_Blks (T1_Blk_Idx + 1) (Child_Idx).Hash
+            then
+               raise Program_Error;
+            end if;
+
+         end Declare_Child_Idx;
+
+      end if;
+
+   end Check_Hash_Of_Read_Type_1_Node;
+
+   --
+   --  Set_Args_In_Order_To_Read_Type_1_Node
+   --
+   procedure Set_Args_In_Order_To_Read_Type_1_Node (
+      Snapshot         :     Snapshot_Type;
+      Snapshots_Degree :     Tree_Degree_Type;
+      T1_Blks          :     Type_1_Node_Blocks_Type;
+      T1_Blk_Idx       :     Type_1_Node_Blocks_Index_Type;
+      VBA              :     Virtual_Block_Address_Type;
+      Job_Idx          :     Jobs_Index_Type;
+      State            : out Job_State_Type;
+      Generated_Prim   : out Primitive.Object_Type;
+      Progress         : out Boolean)
+   is
+   begin
+
+      if T1_Blk_Idx = Snapshot.Max_Level then
+
+         Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_VBD_Rkg_Cache,
+            Blk_Nr => Block_Number_Type (Snapshot.PBA),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+      else
+
+         Declare_Child :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               Child_Idx_For_VBA (VBA, T1_Blk_Idx + 1, Snapshots_Degree);
+
+            Child : constant Type_1_Node_Type :=
+               T1_Blks (T1_Blk_Idx + 1) (Child_Idx);
+         begin
+
+            Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_VBD_Rkg_Cache,
+               Blk_Nr => Block_Number_Type (Child.PBA),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+         end Declare_Child;
+
+      end if;
+
+      State := Read_Inner_Node_Pending;
+      Progress := True;
+
+   end Set_Args_In_Order_To_Read_Type_1_Node;
+
+   --
    --  Execute_Read_VBA_Read_Inner_Node_Completed
    --
    procedure Execute_Read_VBA_Read_Inner_Node_Completed (
@@ -1024,7 +1193,7 @@ is
                Blk_Nr => Block_Number_Type (Child.PBA),
                Idx    => Primitive.Index_Type (Job_Idx));
 
-            Job.State := Read_Leaf_Node_For_Client_Pending;
+            Job.State := Read_Client_Data_From_Leaf_Node_Pending;
             Progress := True;
 
          end Declare_Child_2;
@@ -1214,9 +1383,9 @@ is
    end Execute_Rekey_VBA_Read_Inner_Node_Completed;
 
    --
-   --  Set_New_PBAs_For_Write_Back_Of_New_Root_Branch
+   --  Set_New_PBAs_Identical_To_Current_PBAs
    --
-   procedure Set_New_PBAs_For_Write_Back_Of_New_Root_Branch (
+   procedure Set_New_PBAs_Identical_To_Current_PBAs (
       Snapshot          :     Snapshot_Type;
       Snapshot_Degree   :     Tree_Degree_Type;
       VBA               :     Virtual_Block_Address_Type;
@@ -1252,9 +1421,7 @@ is
 
       end loop For_Each_Lvl;
 
-      pragma Debug (Debug.Print_String ("   PBAS"));
-
-   end Set_New_PBAs_For_Write_Back_Of_New_Root_Branch;
+   end Set_New_PBAs_Identical_To_Current_PBAs;
 
    --
    --  Set_Args_For_Alloc_Of_New_PBAs_For_Resizing
@@ -1467,6 +1634,148 @@ is
    end Set_Args_For_Alloc_Of_New_PBAs_For_Rekeying;
 
    --
+   --  Initialize_New_PBAs_And_Determine_Nr_Of_PBAs_To_Allocate
+   --
+   procedure Initialize_New_PBAs_And_Determine_Nr_Of_PBAs_To_Allocate (
+      Curr_Gen         :     Generation_Type;
+      Snapshot         :     Snapshot_Type;
+      Snapshot_Degree  :     Tree_Degree_Type;
+      VBA              :     Virtual_Block_Address_Type;
+      T1_Blks          :     Type_1_Node_Blocks_Type;
+      New_PBAs         : out Write_Back.New_PBAs_Type;
+      Nr_Of_Blks       : out Number_Of_Blocks_Type)
+   is
+   begin
+      Nr_Of_Blks := 0;
+
+      For_Each_Tree_Lvl :
+      for Lvl_Idx in New_PBAs'Range loop
+
+         if Lvl_Idx > Snapshot.Max_Level then
+
+            New_PBAs (Lvl_Idx) := Physical_Block_Address_Type'First;
+
+         elsif Lvl_Idx = Snapshot.Max_Level then
+
+            if Snapshot.Gen < Curr_Gen then
+
+               Nr_Of_Blks := Nr_Of_Blks + 1;
+               New_PBAs (Lvl_Idx) := 0;
+
+            elsif Snapshot.Gen = Curr_Gen then
+
+               New_PBAs (Lvl_Idx) := Snapshot.PBA;
+
+            else
+
+               New_PBAs (Lvl_Idx) := Physical_Block_Address_Type'First;
+               raise Program_Error;
+
+            end if;
+
+         else
+
+            Declare_Child_Idx :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+
+               Child : constant Type_1_Node_Type :=
+                  T1_Blks (Lvl_Idx + 1) (Child_Idx);
+            begin
+
+               if Child.Gen < Curr_Gen then
+
+                  if Lvl_Idx = 0 and then
+                     Child.Gen = Initial_Generation
+                  then
+                     New_PBAs (Lvl_Idx) := Child.PBA;
+                  else
+                     Nr_Of_Blks := Nr_Of_Blks + 1;
+                     New_PBAs (Lvl_Idx) := 0;
+                  end if;
+
+               elsif Child.Gen = Curr_Gen then
+
+                  New_PBAs (Lvl_Idx) := Child.PBA;
+
+               else
+
+                  New_PBAs (Lvl_Idx) := Physical_Block_Address_Type'First;
+                  raise Program_Error;
+
+               end if;
+
+            end Declare_Child_Idx;
+
+         end if;
+
+      end loop For_Each_Tree_Lvl;
+
+   end Initialize_New_PBAs_And_Determine_Nr_Of_PBAs_To_Allocate;
+
+   --
+   --  Set_Args_For_Alloc_Of_New_PBAs_For_Branch_Of_Written_VBA
+   --
+   procedure Set_Args_For_Alloc_Of_New_PBAs_For_Branch_Of_Written_VBA (
+      Curr_Gen         :     Generation_Type;
+      Snapshot         :     Snapshot_Type;
+      Snapshot_Degree  :     Tree_Degree_Type;
+      VBA              :     Virtual_Block_Address_Type;
+      T1_Blks          :     Type_1_Node_Blocks_Type;
+      Prim_Idx         :     Primitive.Index_Type;
+      Free_Gen         : out Generation_Type;
+      T1_Walk          : out Type_1_Node_Walk_Type;
+      State            : out Job_State_Type;
+      Generated_Prim   : out Primitive.Object_Type;
+      Progress         : out Boolean)
+   is
+   begin
+
+      For_Each_Tree_Lvl :
+      for Lvl_Idx in Tree_Level_Index_Type loop
+
+         if Lvl_Idx > Snapshot.Max_Level then
+
+            T1_Walk (Lvl_Idx) := Type_1_Node_Invalid;
+
+         elsif Lvl_Idx = Snapshot.Max_Level then
+
+            T1_Walk (Lvl_Idx) := (
+               PBA => Snapshot.PBA,
+               Gen => Snapshot.Gen,
+               Hash => Snapshot.Hash);
+
+         else
+
+            Declare_Child_Idx :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+            begin
+
+               T1_Walk (Lvl_Idx) := T1_Blks (Lvl_Idx + 1) (Child_Idx);
+
+            end Declare_Child_Idx;
+
+         end if;
+
+      end loop For_Each_Tree_Lvl;
+
+      Free_Gen := Curr_Gen;
+      Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+         Op     => Primitive_Operation_Type'First,
+         Succ   => False,
+         Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg,
+         Blk_Nr => Block_Number_Type'First,
+         Idx    => Prim_Idx);
+
+      State := Alloc_PBAs_At_Leaf_Lvl_Pending;
+      Progress := True;
+
+   end Set_Args_For_Alloc_Of_New_PBAs_For_Branch_Of_Written_VBA;
+
+   --
    --  Discard_Disposable_Snapshots
    --
    procedure Discard_Disposable_Snapshots (
@@ -1490,56 +1799,6 @@ is
       end loop For_Each_Snap;
 
    end Discard_Disposable_Snapshots;
-
-   --
-   --  Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap
-   --
-   function Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap (
-      Snapshots        : Snapshots_Type;
-      Curr_Gen         : Generation_Type;
-      Last_Secured_Gen : Generation_Type)
-   return Snapshots_Index_Type
-   is
-      Evictable_Snap_Found : Boolean := False;
-      Evictable_Snap_Idx : Snapshots_Index_Type := 0;
-   begin
-
-      For_Each_Snap :
-      for Idx in Snapshots'Range loop
-
-         if not Snapshots (Idx).Valid then
-
-            return Idx;
-
-         elsif
-            not Snapshots (Idx).Keep and then
-            Snapshots (Idx).Gen /= Curr_Gen and then
-            Snapshots (Idx).Gen /= Last_Secured_Gen
-         then
-
-            if not Evictable_Snap_Found then
-
-               Evictable_Snap_Found := True;
-               Evictable_Snap_Idx := Idx;
-
-            elsif Snapshots (Idx).Gen < Snapshots (Evictable_Snap_Idx).Gen then
-
-               Evictable_Snap_Idx := Idx;
-
-            end if;
-
-         end if;
-
-      end loop For_Each_Snap;
-
-      if Evictable_Snap_Found then
-
-         return Evictable_Snap_Idx;
-
-      end if;
-      raise Program_Error;
-
-   end Idx_Of_Invalid_Or_Lowest_Gen_Evictable_Snap;
 
    --
    --  Tree_Max_Max_VBA
@@ -1681,7 +1940,7 @@ is
                Stopped_At_Lvl_Idx    => Job.T1_Blk_Idx,
                Nr_Of_Leaves          => Job.Nr_Of_Leaves);
 
-            Set_New_PBAs_For_Write_Back_Of_New_Root_Branch (
+            Set_New_PBAs_Identical_To_Current_PBAs (
                Snapshot        => Job.Snapshots (Job.Snapshot_Idx),
                Snapshot_Degree => Job.Snapshots_Degree,
                VBA             => Job.VBA,
@@ -1951,7 +2210,7 @@ is
          Execute_Read_VBA_Read_Inner_Node_Completed (
             Job, Job_Idx, Progress);
 
-      when Read_Leaf_Node_For_Client_Completed =>
+      when Read_Client_Data_From_Leaf_Node_Completed =>
 
          Primitive.Success (
             Job.Submitted_Prim,
@@ -1967,6 +2226,297 @@ is
       end case;
 
    end Execute_Read_VBA;
+
+   --
+   --  Update_Nodes_Of_Branch_Of_Written_VBA
+   --
+   procedure Update_Nodes_Of_Branch_Of_Written_VBA (
+      Snapshot        : in out Snapshot_Type;
+      Snapshot_Degree :        Tree_Degree_Type;
+      VBA             :        Virtual_Block_Address_Type;
+      New_PBAs        :        Write_Back.New_PBAs_Type;
+      Leaf_Hash       :        Hash_Type;
+      Curr_Gen        :        Generation_Type;
+      T1_Blks         : in out Type_1_Node_Blocks_Type)
+   is
+   begin
+
+      For_Each_Branch_Level :
+      for Lvl_Idx in 0 .. Snapshot.Max_Level loop
+
+         if Lvl_Idx = 0 then
+
+            Declare_Leaf_Child :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+            begin
+
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).PBA := New_PBAs (Lvl_Idx);
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).Gen := Curr_Gen;
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).Hash := Leaf_Hash;
+
+            end Declare_Leaf_Child;
+
+         elsif Lvl_Idx < Snapshot.Max_Level then
+
+            Declare_Inner_Child :
+            declare
+               Child_Idx : constant Type_1_Node_Block_Index_Type :=
+                  Child_Idx_For_VBA (VBA, Lvl_Idx + 1, Snapshot_Degree);
+            begin
+
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).PBA := New_PBAs (Lvl_Idx);
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).Gen := Curr_Gen;
+               T1_Blks (Lvl_Idx + 1) (Child_Idx).Hash :=
+                  Hash_Of_T1_Node_Blk (T1_Blks (Lvl_Idx));
+
+            end Declare_Inner_Child;
+
+         else
+
+            Snapshot.PBA := New_PBAs (Lvl_Idx);
+            Snapshot.Gen := Curr_Gen;
+            Snapshot.Hash := Hash_Of_T1_Node_Blk (T1_Blks (Lvl_Idx));
+
+         end if;
+
+      end loop For_Each_Branch_Level;
+
+   end Update_Nodes_Of_Branch_Of_Written_VBA;
+
+   --
+   --  Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node
+   --
+   procedure Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node (
+      New_PBAs         :     Write_Back.New_PBAs_Type;
+      Job_Idx          :     Jobs_Index_Type;
+      State            : out Job_State_Type;
+      Generated_Prim   : out Primitive.Object_Type;
+      Progress         : out Boolean)
+   is
+   begin
+
+      Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+         Op     => Write,
+         Succ   => False,
+         Tg     => Primitive.Tag_VBD_Rkg_Blk_IO_Write_Client_Data,
+         Blk_Nr => Block_Number_Type (New_PBAs (0)),
+         Idx    => Primitive.Index_Type (Job_Idx));
+
+      State := Write_Client_Data_To_Leaf_Node_Pending;
+      Progress := True;
+
+   end Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node;
+
+   --
+   --  Initialize_Args_Of_Operation_Write_VBA
+   --
+   procedure Initialize_Args_Of_Operation_Write_VBA (
+      Submitted_Prim :     Primitive.Object_Type;
+      Snapshots      :     Snapshots_Type;
+      Snapshot_Idx   : out Snapshots_Index_Type;
+      VBA            : out Virtual_Block_Address_Type;
+      T1_Blk_Idx     : out Type_1_Node_Blocks_Index_Type)
+   is
+   begin
+      Snapshot_Idx := 0;
+      VBA :=
+         Virtual_Block_Address_Type (Primitive.Block_Number (Submitted_Prim));
+
+      T1_Blk_Idx :=
+         Type_1_Node_Blocks_Index_Type (Snapshots (Snapshot_Idx).Max_Level);
+
+   end Initialize_Args_Of_Operation_Write_VBA;
+
+   --
+   --  Check_That_Primitive_Was_Successful
+   --
+   procedure Check_That_Primitive_Was_Successful (
+      Prim : Primitive.Object_Type)
+   is
+   begin
+
+      if not Primitive.Success (Prim) then
+         raise Program_Error;
+      end if;
+
+   end Check_That_Primitive_Was_Successful;
+
+   --
+   --  Mark_Job_Successfully_Completed
+   --
+   procedure Mark_Job_Successfully_Completed (
+      State            :    out Job_State_Type;
+      Submitted_Prim   : in out Primitive.Object_Type;
+      Progress         :    out Boolean)
+   is
+   begin
+
+      Primitive.Success (Submitted_Prim, True);
+      State := Completed;
+      Progress := True;
+
+   end Mark_Job_Successfully_Completed;
+
+   --
+   --  Execute_Write_VBA
+   --
+   procedure Execute_Write_VBA (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         Initialize_Args_Of_Operation_Write_VBA (
+            Submitted_Prim => Job.Submitted_Prim,
+            Snapshots      => Job.Snapshots,
+            Snapshot_Idx   => Job.Snapshot_Idx,
+            VBA            => Job.VBA,
+            T1_Blk_Idx     => Job.T1_Blk_Idx);
+
+         Set_Args_In_Order_To_Read_Type_1_Node (
+            Snapshot         => Job.Snapshots (Job.Snapshot_Idx),
+            Snapshots_Degree => Job.Snapshots_Degree,
+            T1_Blk_Idx       => Job.T1_Blk_Idx,
+            T1_Blks          => Job.T1_Blks,
+            VBA              => Job.VBA,
+            Job_Idx          => Job_Idx,
+            State            => Job.State,
+            Generated_Prim   => Job.Generated_Prim,
+            Progress         => Progress);
+
+      when Read_Inner_Node_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+
+         Check_Hash_Of_Read_Type_1_Node (
+            Snapshot         => Job.Snapshots (Job.Snapshot_Idx),
+            Snapshots_Degree => Job.Snapshots_Degree,
+            T1_Blks          => Job.T1_Blks,
+            T1_Blk_Idx       => Job.T1_Blk_Idx,
+            VBA              => Job.VBA);
+
+         if Job.T1_Blk_Idx > 1 then
+
+            Job.T1_Blk_Idx := Job.T1_Blk_Idx - 1;
+            Set_Args_In_Order_To_Read_Type_1_Node (
+               Snapshot         => Job.Snapshots (Job.Snapshot_Idx),
+               Snapshots_Degree => Job.Snapshots_Degree,
+               T1_Blk_Idx       => Job.T1_Blk_Idx,
+               T1_Blks          => Job.T1_Blks,
+               VBA              => Job.VBA,
+               Job_Idx          => Job_Idx,
+               State            => Job.State,
+               Generated_Prim   => Job.Generated_Prim,
+               Progress         => Progress);
+
+         else
+
+            Initialize_New_PBAs_And_Determine_Nr_Of_PBAs_To_Allocate (
+               Curr_Gen        => Job.Curr_Gen,
+               Snapshot        => Job.Snapshots (Job.Snapshot_Idx),
+               Snapshot_Degree => Job.Snapshots_Degree,
+               VBA             => Job.VBA,
+               T1_Blks         => Job.T1_Blks,
+               New_PBAs        => Job.New_PBAs,
+               Nr_Of_Blks      => Job.Nr_Of_Blks);
+
+            if Job.Nr_Of_Blks > 0 then
+
+               Set_Args_For_Alloc_Of_New_PBAs_For_Branch_Of_Written_VBA (
+                  Curr_Gen        => Job.Curr_Gen,
+                  Snapshot        => Job.Snapshots (Job.Snapshot_Idx),
+                  Snapshot_Degree => Job.Snapshots_Degree,
+                  VBA             => Job.VBA,
+                  T1_Blks         => Job.T1_Blks,
+                  Prim_Idx        => Primitive.Index_Type (Job_Idx),
+                  Free_Gen        => Job.Free_Gen,
+                  T1_Walk         => Job.T1_Node_Walk,
+                  State           => Job.State,
+                  Generated_Prim  => Job.Generated_Prim,
+                  Progress        => Progress);
+
+            else
+
+               Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node (
+                  New_PBAs         => Job.New_PBAs,
+                  Job_Idx          => Job_Idx,
+                  State            => Job.State,
+                  Generated_Prim   => Job.Generated_Prim,
+                  Progress         => Progress);
+
+            end if;
+
+         end if;
+
+      when Alloc_PBAs_At_Leaf_Lvl_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+
+         Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node (
+            New_PBAs         => Job.New_PBAs,
+            Job_Idx          => Job_Idx,
+            State            => Job.State,
+            Generated_Prim   => Job.Generated_Prim,
+            Progress         => Progress);
+
+      when Write_Client_Data_To_Leaf_Node_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+
+         Update_Nodes_Of_Branch_Of_Written_VBA (
+            Snapshot        => Job.Snapshots (Job.Snapshot_Idx),
+            Snapshot_Degree => Job.Snapshots_Degree,
+            VBA             => Job.VBA,
+            Leaf_Hash       => Job.Hash,
+            New_PBAs        => Job.New_PBAs,
+            Curr_Gen        => Job.Curr_Gen,
+            T1_Blks         => Job.T1_Blks);
+
+         Set_Args_For_Write_Back_Of_T1_Lvl (
+            Max_Lvl_Idx => Job.Snapshots (Job.Snapshot_Idx).Max_Level,
+            T1_Lvl_Idx  => Job.T1_Blk_Idx,
+            PBA         => Job.New_PBAs (Job.T1_Blk_Idx),
+            Prim_Idx    => Primitive.Index_Type (Job_Idx),
+            Job_State   => Job.State,
+            Progress    => Progress,
+            Prim        => Job.Generated_Prim);
+
+      when Write_Inner_Node_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+
+         Job.T1_Blk_Idx := Job.T1_Blk_Idx + 1;
+         Set_Args_For_Write_Back_Of_T1_Lvl (
+            Max_Lvl_Idx => Job.Snapshots (Job.Snapshot_Idx).Max_Level,
+            T1_Lvl_Idx  => Job.T1_Blk_Idx,
+            PBA         => Job.New_PBAs (Job.T1_Blk_Idx),
+            Prim_Idx    => Primitive.Index_Type (Job_Idx),
+            Job_State   => Job.State,
+            Progress    => Progress,
+            Prim        => Job.Generated_Prim);
+
+      when Write_Root_Node_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+
+         Mark_Job_Successfully_Completed (
+            State          => Job.State,
+            Submitted_Prim => Job.Submitted_Prim,
+            Progress       => Progress);
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Write_VBA;
 
    --
    --  Execute_Rekey_VBA
@@ -2392,6 +2942,10 @@ is
 
             Execute_Read_VBA (Rkg.Jobs (Idx), Idx, Progress);
 
+         when Write_VBA =>
+
+            Execute_Write_VBA (Rkg.Jobs (Idx), Idx, Progress);
+
          when Rekey_VBA =>
 
             Execute_Rekey_VBA (Rkg.Jobs (Idx), Idx, Progress);
@@ -2425,8 +2979,9 @@ is
 
             case Rkg.Jobs (Idx).State is
             when
+               Read_Client_Data_From_Leaf_Node_Pending |
+               Write_Client_Data_To_Leaf_Node_Pending |
                Read_Leaf_Node_Pending |
-               Read_Leaf_Node_For_Client_Pending |
                Write_Leaf_Node_Pending
             =>
 
@@ -2562,7 +3117,16 @@ is
       if Rkg.Jobs (Idx).Operation /= Invalid then
 
          case Rkg.Jobs (Idx).State is
-         when Read_Leaf_Node_For_Client_Pending =>
+         when Read_Client_Data_From_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).Req;
+
+         when Write_Client_Data_To_Leaf_Node_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -2754,7 +3318,8 @@ is
 
          case Rkg.Jobs (Idx).State is
          when
-            Read_Leaf_Node_For_Client_Pending |
+            Read_Client_Data_From_Leaf_Node_Pending |
+            Write_Client_Data_To_Leaf_Node_Pending |
             Alloc_PBAs_At_Leaf_Lvl_Pending |
             Alloc_PBAs_At_Higher_Inner_Lvl_Pending |
             Alloc_PBAs_At_Lowest_Inner_Lvl_Pending
@@ -3051,7 +3616,16 @@ is
 
             return Rkg.Jobs (Idx).Old_Key_ID;
 
-         when Read_Leaf_Node_For_Client_Pending =>
+         when Read_Client_Data_From_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
+            then
+               raise Program_Error;
+            end if;
+
+            return Rkg.Jobs (Idx).New_Key_ID;
+
+         when Write_Client_Data_To_Leaf_Node_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim)
             then
@@ -3102,6 +3676,25 @@ is
             Rkg.Jobs (Idx).State := Read_Inner_Node_In_Progress;
             return;
 
+         when Read_Client_Data_From_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State :=
+               Read_Client_Data_From_Leaf_Node_In_Progress;
+            return;
+
+         when Write_Client_Data_To_Leaf_Node_Pending =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Write_Client_Data_To_Leaf_Node_In_Progress;
+            return;
+
          when Read_Leaf_Node_Pending =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
@@ -3109,15 +3702,6 @@ is
             end if;
 
             Rkg.Jobs (Idx).State := Read_Leaf_Node_In_Progress;
-            return;
-
-         when Read_Leaf_Node_For_Client_Pending =>
-
-            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
-               raise Program_Error;
-            end if;
-
-            Rkg.Jobs (Idx).State := Read_Leaf_Node_For_Client_In_Progress;
             return;
 
          when Write_Leaf_Node_Pending =>
@@ -3241,6 +3825,43 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Completed_Plain_Data;
+
+   --
+   --  Mark_Generated_Prim_Completed_Hash
+   --
+   procedure Mark_Generated_Prim_Completed_Hash (
+      Rkg  : in out Rekeying_Type;
+      Prim :        Primitive.Object_Type;
+      Hash :        Hash_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+
+      if Rkg.Jobs (Idx).Operation /= Invalid then
+
+         case Rkg.Jobs (Idx).State is
+         when Write_Client_Data_To_Leaf_Node_In_Progress =>
+
+            if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
+               raise Program_Error;
+            end if;
+
+            Rkg.Jobs (Idx).State := Write_Client_Data_To_Leaf_Node_Completed;
+            Rkg.Jobs (Idx).Generated_Prim := Prim;
+            Rkg.Jobs (Idx).Hash := Hash;
+            return;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Completed_Hash;
 
    --
    --  Mark_Generated_Prim_Completed_Cipher_Data
@@ -3385,13 +4006,13 @@ is
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             return;
 
-         when Read_Leaf_Node_For_Client_In_Progress =>
+         when Read_Client_Data_From_Leaf_Node_In_Progress =>
 
             if not Primitive.Equal (Prim, Rkg.Jobs (Idx).Generated_Prim) then
                raise Program_Error;
             end if;
 
-            Rkg.Jobs (Idx).State := Read_Leaf_Node_For_Client_Completed;
+            Rkg.Jobs (Idx).State := Read_Client_Data_From_Leaf_Node_Completed;
             Rkg.Jobs (Idx).Generated_Prim := Prim;
             return;
 

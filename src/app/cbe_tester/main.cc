@@ -2028,13 +2028,9 @@ class Cbe::Main
 			using Payload = Block_session_component::Payload;
 
 			/*
-			 * Poll the CBE for pending data requests. This always happens
-			 * whenever we need to read from the Block::Request_stream in case
-			 * it is a write requests or write to it when it is read request.
+			 * Transfer read data from the CBE to the block buffer
 			 */
 			_block_session->with_payload([&] (Payload const &payload) {
-
-				/* read */
 				{
 					Cbe::Request cbe_req { };
 					uint64_t vba { 0 };
@@ -2070,27 +2066,41 @@ class Cbe::Main
 				}
 			});
 
+			/*
+			 * Transfer write data from the block buffer to the CBE
+			 */
 			_block_session->with_payload([&] (Payload const &payload) {
-				/* write */
 				{
-					Cbe::Request const cbe_req = _cbe->client_data_required();
-					if (!cbe_req.valid()) { return false; }
+					Cbe::Request cbe_req { };
+					uint64_t vba { 0 };
+					Crypto_plain_buffer::Index plain_buf_idx { 0 };
 
-					uint64_t const prim_index = _cbe->client_data_index(cbe_req);
-					if (prim_index == ~0ull) {
-						Genode::error("prim_index invalid: ", cbe_req);
+					_cbe->client_transfer_write_data_required(
+						cbe_req, vba, plain_buf_idx);
+
+					if (!cbe_req.valid()) {
 						return false;
 					}
-
 					Block::Request blk_req { };
-					blk_req.offset = cbe_req.offset() + (prim_index * BLOCK_SIZE);
+					uint64_t buf_base { cbe_req.offset() };
+					uint64_t blk_off { vba - cbe_req.block_number() };
+					blk_req.offset = buf_base + (blk_off * BLOCK_SIZE);
 					blk_req.operation.count = 1;
 
 					payload.with_content(blk_req, [&] (void *addr, Genode::size_t) {
 
-						Cbe::Block_data &data = *reinterpret_cast<Cbe::Block_data*>(addr);
-						progress |= _cbe->supply_client_data(cbe_req, data);
+						Cbe::Block_data &data {
+							*reinterpret_cast<Cbe::Block_data*>(addr) };
+
+						_crypto_plain_buf.item(plain_buf_idx) = data;
 					});
+					_cbe->client_transfer_write_data_in_progress(
+						plain_buf_idx);
+
+					_cbe->client_transfer_write_data_completed(
+						plain_buf_idx, true);
+
+					progress |= true;
 					return true;
 				}
 			});
