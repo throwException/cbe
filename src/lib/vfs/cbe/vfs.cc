@@ -13,12 +13,8 @@
 #include <util/xml_generator.h>
 #include <trace/timestamp.h>
 
-/* repo includes */
-#include <util/sha256_4k.h>
-
 /* cbe includes */
 #include <cbe/library.h>
-#include <cbe/external_crypto.h>
 #include <cbe/external_ta.h>
 
 /* local includes */
@@ -115,10 +111,47 @@ class Vfs_cbe::Wrapper
 
 		Backend_io_response_handler _backend_io_response_handler { *this, _io_handler };
 
+		Vfs_handle *_add_key_handle         { nullptr };
+		Vfs_handle *_remove_key_handle      { nullptr };
+
+		struct Crypto_file
+		{
+			Vfs_handle *encrypt_handle;
+			Vfs_handle *decrypt_handle;
+			uint32_t key_id;
+		};
+
+		enum { NUM_CRYPTO_FILES = 2, };
+
+		Crypto_file _crypto_file[NUM_CRYPTO_FILES] {
+			{ .encrypt_handle = nullptr, .decrypt_handle = nullptr, .key_id = 0 },
+			{ .encrypt_handle = nullptr, .decrypt_handle = nullptr, .key_id = 0 } };
+
+		Crypto_file *_get_unused_crypto_file()
+		{
+			for (Crypto_file &file : _crypto_file) {
+				if (file.key_id == 0) {
+					return &file;
+				}
+			}
+			struct No_unused_crypt_file_left { };
+			throw No_unused_crypt_file_left();
+		}
+
+		Crypto_file *_lookup_crypto_file(uint32_t key_id)
+		{
+			for (Crypto_file &file : _crypto_file) {
+				if (file.key_id == key_id) {
+					return &file;
+				}
+			}
+			struct Crypt_file_not_found { };
+			throw Crypt_file_not_found();
+		}
+
 		Cbe::Io_buffer            _io_data { };
 		Cbe::Crypto_cipher_buffer _cipher_data { };
 		Cbe::Crypto_plain_buffer  _plain_data { };
-		External::Crypto _crypto { };
 
 		External::Trust_anchor _trust_anchor { };
 
@@ -200,11 +233,16 @@ class Vfs_cbe::Wrapper
 		using Backend_device_path = Genode::String<32>;
 		Backend_device_path _block_device { "/dev/block" };
 
+		using Crypto_device_path = Genode::String<32>;
+		Crypto_device_path _crypto_device { "/dev/cbe_crypto" };
+
 		void _read_config(Xml_node config)
 		{
 			_verbose      = config.attribute_value("verbose", _verbose);
 			_debug        = config.attribute_value("debug",   _debug);
 			_block_device = config.attribute_value("block",   _block_device);
+
+			_crypto_device = config.attribute_value("crypto", _crypto_device);
 		}
 
 		struct Could_not_open_block_backend : Genode::Exception { };
@@ -224,6 +262,35 @@ class Vfs_cbe::Wrapper
 			}
 
 			_backend_handle->handler(&_backend_io_response_handler);
+
+			{
+				Genode::String<128> crypto_add_key_file {
+				_crypto_device.string(), "/add_key" };
+
+				res = _env.root_dir().open(crypto_add_key_file.string(),
+				                           Vfs::Directory_service::OPEN_MODE_WRONLY,
+				                           (Vfs::Vfs_handle **)&_add_key_handle,
+				                           _env.alloc());
+				if (res != Result::OPEN_OK) {
+					error("cbe_fs: Could not open '", crypto_add_key_file, "' file");
+					throw Could_not_open_block_backend();
+				}
+			}
+
+			{
+				Genode::String<128> crypto_remove_key_file {
+				_crypto_device.string(), "/remove_key" };
+
+				res = _env.root_dir().open(crypto_remove_key_file.string(),
+				                           Vfs::Directory_service::OPEN_MODE_WRONLY,
+				                           (Vfs::Vfs_handle **)&_remove_key_handle,
+				                           _env.alloc());
+				if (res != Result::OPEN_OK) {
+					error("cbe_fs: Could not open '", crypto_remove_key_file, "' file");
+					throw Could_not_open_block_backend();
+				}
+			}
+
 			_cbe.construct();
 		}
 
@@ -234,11 +301,6 @@ class Vfs_cbe::Wrapper
 		{
 			_read_config(config);
 			_initialize_cbe();
-		}
-
-		External::Crypto &crypto()
-		{
-			return _crypto;
 		}
 
 		Cbe::Library &cbe()
@@ -878,106 +940,412 @@ class Vfs_cbe::Wrapper
 			return progress;
 		}
 
-
-		bool _handle_crypto(Cbe::Library              &cbe,
-		                    External::Crypto          &cry,
-		                    Cbe::Crypto_cipher_buffer &cipher,
-		                    Cbe::Crypto_plain_buffer  &plain)
+		bool _handle_crypto_add_key()
 		{
-			bool progress = cry.execute();
+			bool progress = false;
 
-			/* add keys */
-			while (true) {
+			do {
 				Cbe::Key key { };
 				Cbe::Request request = _cbe->crypto_add_key_required(key);
 				if (!request.valid()) {
 					break;
 				}
-				_cbe->crypto_add_key_requested(request);
-				External::Crypto::Key_data data { };
-				memcpy(data.value, key.value, sizeof (data.value));
 
-				_crypto.add_key(key.id, data);
-				request.success(true);
+				char buffer[sizeof (key.value) + sizeof (key.id.value)] { };
 
-				if (_verbose) {
-					log("Add key: id " , (unsigned)key.id.value);
+				memcpy(buffer, &key.id.value, sizeof (key.id.value));
+				memcpy(buffer + sizeof (key.id.value), key.value, sizeof (key.value));
+
+				file_size written = 0;
+				_add_key_handle->seek(0);
+				try {
+					_add_key_handle->fs().write(_add_key_handle,
+					                            buffer, sizeof (buffer), written);
+					(void)written;
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+					/* try again later */
+					break;
 				}
+
+				/*
+				 * Instead of acknowledge the CBE's request before we write
+				 * the key above do it afterwards. That allows us to perform the
+				 * request multiple times in case the above exception is thrown.
+				 */
+				_cbe->crypto_add_key_requested(request);
+
+				uint32_t const key_id_value = key.id.value;
+
+				Crypto_file *cf = nullptr;
+				try {
+					cf = _get_unused_crypto_file();
+				} catch (...) {
+					error("cannot manage key id: ", key_id_value);
+					request.success(false);
+					_cbe->crypto_add_key_completed(request);
+					continue;
+				}
+
+				using Encrypt_file = Genode::String<128>;
+				Encrypt_file encrypt_file {
+					_crypto_device.string(), "/keys/", key_id_value, "/encrypt" };
+
+				using Result = Vfs::Directory_service::Open_result;
+				Result res = _env.root_dir().open(encrypt_file.string(),
+				                                  Vfs::Directory_service::OPEN_MODE_RDWR,
+				                                  (Vfs::Vfs_handle **)&cf->encrypt_handle,
+				                                  _env.alloc());
+
+				request.success(res == Result::OPEN_OK);
+				if (!request.success()) {
+					error("could not open encrypt '", encrypt_file, "' file for key id: ", key_id_value);
+
+					request.success(false);
+					_cbe->crypto_add_key_completed(request);
+					continue;
+				}
+
+				using Decrypt_file = Genode::String<128>;
+				Decrypt_file decrypt_file {
+					_crypto_device.string(), "/keys/", key_id_value, "/decrypt" };
+
+				res = _env.root_dir().open(decrypt_file.string(),
+				                                  Vfs::Directory_service::OPEN_MODE_RDWR,
+				                                  (Vfs::Vfs_handle **)&cf->decrypt_handle,
+				                                  _env.alloc());
+
+				request.success(res == Result::OPEN_OK);
+				if (!request.success()) {
+					_env.root_dir().close(cf->encrypt_handle);
+
+					error("could not open decrypt '", decrypt_file, "' file for key id: ", key_id_value);
+
+					request.success(false);
+					_cbe->crypto_add_key_completed(request);
+					continue;
+				}
+
+				/* set key id to make file valid */
+				cf->key_id = key_id_value;
+				cf->encrypt_handle->handler(&_backend_io_response_handler);
+				cf->decrypt_handle->handler(&_backend_io_response_handler);
+
+				request.success(true);
 				_cbe->crypto_add_key_completed(request);
 				progress |= true;
-			}
+			} while (false);
 
-			/* remove keys */
-			while (true) {
-				Cbe::Key::Id key_id;
-				Cbe::Request request =
-					_cbe->crypto_remove_key_required(key_id);
+			return progress;
+		}
 
+		bool _handle_crypto_remove_key()
+		{
+			bool progress = false;
+
+			do {
+				Cbe::Key::Id key_id { };
+				Cbe::Request request = _cbe->crypto_remove_key_required(key_id);
 				if (!request.valid()) {
 					break;
 				}
-				_cbe->crypto_remove_key_requested(request);
 
-				_crypto.remove_key(key_id);
-				request.success(true);
-
-				if (_verbose) {
-					log("Remove key: id " , (unsigned)key_id.value);
+				file_size written = 0;
+				_remove_key_handle->seek(0);
+				try {
+					_remove_key_handle->fs().write(_remove_key_handle,
+					                               (char const*)&key_id.value,
+					                               sizeof (key_id.value),
+					                               written);
+					(void)written;
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+					/* try again later */
+					break;
 				}
+
+				Crypto_file *cf = nullptr;
+				try {
+					cf = _lookup_crypto_file(key_id.value);
+
+					_env.root_dir().close(cf->encrypt_handle);
+					cf->encrypt_handle = nullptr;
+					_env.root_dir().close(cf->decrypt_handle);
+					cf->decrypt_handle = nullptr;
+					cf->key_id = 0;
+				} catch (...) {
+					uint32_t const key_id_value = key_id.value;
+					Genode::warning("could not look up handles for key id: ",
+					                key_id_value);
+				}
+
+				/*
+				 * Instead of acknowledge the CBE's request before we write
+				 * the key do it afterwards. That allows us to perform the
+				 * request multiple times in case the above exception is thrown.
+				 */
+				_cbe->crypto_remove_key_requested(request);
+				request.success(true);
 				_cbe->crypto_remove_key_completed(request);
 				progress |= true;
+			} while (false);
+
+			return progress;
+		}
+
+		struct Crypto_job
+		{
+			struct Invalid_operation : Genode::Exception { };
+
+			enum State { IDLE, SUBMITTED, PENDING, IN_PROGRESS, COMPLETE };
+			enum Operation { INVALID, DECRYPT, ENCRYPT };
+
+			Crypto_file *file;
+			Vfs_handle *_handle;
+
+			State       state;
+			Operation   op;
+			uint32_t    data_index;
+			file_offset offset;
+
+			Cbe::Crypto_cipher_buffer::Index cipher_index;
+			Cbe::Crypto_plain_buffer::Index  plain_index;
+
+			static bool _read_queued(Vfs::File_io_service::Read_result r)
+			{
+				using Result = Vfs::File_io_service::Read_result;
+				switch (r) {
+					case Result::READ_QUEUED:          [[fallthrough]];
+					case Result::READ_ERR_INTERRUPT:   [[fallthrough]];
+					case Result::READ_ERR_AGAIN:       [[fallthrough]];
+					case Result::READ_ERR_WOULD_BLOCK: return true;
+					default: break;
+				}
+				return false;
 			}
+
+			struct Result
+			{
+				bool progress;
+				bool complete;
+				bool success;
+			};
+
+			bool request_acceptable() const
+			{
+				return state == State::IDLE;
+			}
+
+			template <Crypto_job::Operation OP>
+			void submit_request(Crypto_file *cf, uint32_t data_index, file_offset offset)
+			{
+				file       = cf;
+				state      = Crypto_job::State::SUBMITTED;
+				op         = OP;
+				data_index = data_index;
+				offset     = offset;
+
+				/* store both in regardless of operation */
+				cipher_index.value = data_index;
+				plain_index.value  = data_index;
+
+				switch (op) {
+				case Crypto_job::Operation::ENCRYPT:
+					_handle = cf->encrypt_handle; break;
+				case Crypto_job::Operation::DECRYPT:
+					_handle = cf->decrypt_handle; break;
+				case Crypto_job::Operation::INVALID:
+					throw Invalid_operation();
+					break;
+				}
+			}
+
+			Result execute(Cbe::Library              &cbe,
+			               Cbe::Crypto_cipher_buffer &cipher,
+			               Cbe::Crypto_plain_buffer  &plain)
+			{
+				Result result { false, false, false };
+
+				switch (state) {
+				case Crypto_job::State::IDLE:
+					break;
+				case Crypto_job::State::SUBMITTED:
+					try {
+						char const *data = nullptr;
+
+						if (op == Crypto_job::Operation::ENCRYPT) {
+							data = reinterpret_cast<char const*>(&plain.item(plain_index));
+						} else
+
+						if (op == Crypto_job::Operation::DECRYPT) {
+							data = reinterpret_cast<char const*>(&cipher.item(cipher_index));
+						}
+
+						file_size out = 0;
+						_handle->seek(offset);
+						_handle->fs().write(_handle, data,
+						                    file_size(sizeof (Cbe::Block_data)), out);
+
+						if (op == Crypto_job::Operation::ENCRYPT) {
+							cbe.crypto_cipher_data_requested(plain_index);
+						} else
+
+						if (op == Crypto_job::Operation::DECRYPT) {
+							cbe.crypto_plain_data_requested(cipher_index);
+						}
+
+						state = Crypto_job::State::PENDING;
+						result.progress |= true;
+					} catch (Vfs::File_io_service::Insufficient_buffer) { }
+
+					[[fallthrough]];
+
+				case Crypto_job::State::PENDING:
+
+					_handle->seek(offset);
+					if (!_handle->fs().queue_read(_handle, sizeof (Cbe::Block_data))) {
+						break;
+					}
+
+					state = Crypto_job::State::IN_PROGRESS;
+					result.progress |= true;
+					[[fallthrough]];
+
+				case Crypto_job::State::IN_PROGRESS:
+				{
+					using Result = Vfs::File_io_service::Read_result;
+
+					file_size out = 0;
+					char *data = nullptr;
+
+					if (op == Crypto_job::Operation::ENCRYPT) {
+						data = reinterpret_cast<char *>(&cipher.item(cipher_index));
+					} else
+
+					if (op == Crypto_job::Operation::DECRYPT) {
+						data = reinterpret_cast<char *>(&plain.item(plain_index));
+					}
+
+					Result const res =
+						_handle->fs().complete_read(_handle, data,
+						                            sizeof (Cbe::Block_data), out);
+					if (_read_queued(res)) {
+						break;
+					}
+
+					result.success = res == Result::READ_OK;
+
+					state = Crypto_job::State::COMPLETE;
+					result.progress |= true;
+					[[fallthrough]];
+				}
+				case Crypto_job::State::COMPLETE:
+
+					if (op == Crypto_job::Operation::ENCRYPT) {
+						if (!result.success) {
+							error("encryption request failed"); // XXX be more informative
+						}
+
+						cbe.supply_crypto_cipher_data(cipher_index, result.success);
+					} else
+
+					if (op == Crypto_job::Operation::DECRYPT) {
+						if (!result.success) {
+							error("decryption request failed"); // XXX be more informative
+						}
+
+						cbe.supply_crypto_plain_data(plain_index, result.success);
+					}
+
+					state = Crypto_job::State::IDLE;
+					result.complete |= true;
+					result.progress |= true;
+					break;
+				}
+
+				return result;
+			}
+		};
+
+		Crypto_job _crypto_job { nullptr, nullptr, Crypto_job::State::IDLE,
+		                         Crypto_job::Operation::INVALID,
+		                         0 , 0,
+		                         Cbe::Crypto_cipher_buffer::Index { 0 },
+		                         Cbe::Crypto_plain_buffer::Index  { 0 } }; // XXX make that more than 1 job
+
+		bool _handle_crypto_request(Cbe::Library              &cbe,
+		                            Cbe::Crypto_cipher_buffer &cipher,
+		                            Cbe::Crypto_plain_buffer  &plain)
+		{
+			bool progress = false;
 
 			/* encrypt */
 			while (true) {
+
 				Cbe::Crypto_plain_buffer::Index data_index { 0 };
 				Cbe::Request request = cbe.crypto_cipher_data_required(data_index);
-				if (!request.valid() || !cry.encryption_request_acceptable()) { break; }
-
-				request.tag(data_index.value);
-				cry.submit_encryption_request(request, plain.item(data_index), 0);
-				cbe.crypto_cipher_data_requested(data_index);
-				progress |= true;
-			}
-
-			while (true) {
-				Cbe::Request const request = cry.peek_completed_encryption_request();
-				if (!request.valid()) {
+				if (!request.valid() || !_crypto_job.request_acceptable()) {
 					break;
 				}
-				Cbe::Crypto_cipher_buffer::Index const data_index(request.tag());
-				if (!cry.supply_cipher_data(request, cipher.item(data_index))) {
-					break;
+
+				Crypto_file *cf = nullptr;
+				try {
+					cf = _lookup_crypto_file(request.key_id());
+				} catch (...) {
+					cbe.crypto_cipher_data_requested(data_index);
+
+					Cbe::Crypto_cipher_buffer::Index const index { data_index.value };
+					cbe.supply_crypto_cipher_data(index, false);
+					continue;
 				}
-				bool const success = request.success();
-				cbe.supply_crypto_cipher_data(data_index, success);
+
+				using Op = Crypto_job::Operation;
+				file_offset const offset = request.block_number() * Cbe::BLOCK_SIZE;
+				_crypto_job.submit_request<Op::ENCRYPT>(cf, data_index.value, offset);
 				progress |= true;
 			}
 
 			/* decrypt */
 			while (true) {
+
 				Cbe::Crypto_cipher_buffer::Index data_index { 0 };
 				Cbe::Request request = cbe.crypto_plain_data_required(data_index);
-				if (!request.valid() || !cry.decryption_request_acceptable()) { break; }
-
-				request.tag(data_index.value);
-				cry.submit_decryption_request(request, cipher.item(data_index), 0);
-				cbe.crypto_plain_data_requested(data_index);
-				progress |= true;
-			}
-
-			while (true) {
-				Cbe::Request const request = cry.peek_completed_decryption_request();
-				if (!request.valid()) { break; }
-
-				Cbe::Crypto_plain_buffer::Index const data_index(request.tag());
-				if (!cry.supply_plain_data(request, plain.item(data_index))) {
+				if (!request.valid() || !_crypto_job.request_acceptable()) {
 					break;
 				}
-				bool const success = request.success();
-				cbe.supply_crypto_plain_data(data_index, success);
+
+				Crypto_file *cf = nullptr;
+				try {
+					cf = _lookup_crypto_file(request.key_id());
+				} catch (...) {
+					cbe.crypto_plain_data_requested(data_index);
+					Cbe::Crypto_plain_buffer::Index const index { data_index.value };
+					cbe.supply_crypto_plain_data(index, false);
+					continue;
+				}
+
+				using Op = Crypto_job::Operation;
+				file_offset const offset = request.block_number() * Cbe::BLOCK_SIZE;
+				_crypto_job.submit_request<Op::DECRYPT>(cf, data_index.value, offset);
 				progress |= true;
 			}
+
+			Crypto_job::Result const result = _crypto_job.execute(cbe, cipher, plain);
+			progress |= result.progress;
+
+			return progress;
+		}
+
+		bool _handle_crypto()
+		{
+			bool progress = false;
+
+			bool const add_key_progress = _handle_crypto_add_key();
+			progress |= add_key_progress;
+
+			bool const remove_key_progress = _handle_crypto_remove_key();
+			progress |= remove_key_progress;
+
+			bool const request_progress = _handle_crypto_request(*_cbe, _cipher_data, _plain_data);
+			progress |= request_progress;
 
 			return progress;
 		}
@@ -1005,8 +1373,7 @@ class Vfs_cbe::Wrapper
 				bool const backend_progress = _handle_cbe_backend(*_cbe, _io_data);
 				progress |= backend_progress;
 
-				bool const crypto_progress =
-					_handle_crypto(*_cbe, _crypto, _cipher_data, _plain_data);
+				bool const crypto_progress = _handle_crypto();
 				progress |= crypto_progress;
 
 				bool const ta_progress = _handle_ta(*_cbe);
