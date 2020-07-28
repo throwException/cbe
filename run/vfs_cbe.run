@@ -13,6 +13,8 @@ exec rm -rf var/libcache/cbe_dump
 exec rm -rf var/libcache/cbe_dump_cxx
 exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
+exec rm -rf var/libcache/external_trust_anchor
+exec rm -rf var/libcache/external_trust_anchor_cxx
 }
 
 create_boot_directory
@@ -38,6 +40,8 @@ build {
 	init
 	server/lx_fs
 	lib/vfs/cbe
+	lib/vfs/cbe_crypto/aes_cbc
+	lib/vfs/cbe_crypto/memcopy
 	lib/vfs/pipe
 	test/vfs_stress
 	test/libc
@@ -148,9 +152,11 @@ append config {
 		<config>
 			<vfs>
 				<fs buffer_size="1M" label="fs_backend"/>
+				<cbe_crypto_aes_cbc name="cbe_crypto"/>
 				<dir name="dev">
 					<cbe name="cbe" debug="no" verbose="yes"
-                         block="/} [cbe_image_file] {"/>
+					     block="/} [cbe_image_file] {"
+					     crypto="/cbe_crypto"/>
 				</dir>
 			</vfs>
 
@@ -244,6 +250,8 @@ append boot_modules {
 	external_crypto_cxx.lib.so
 	cbe_cxx.lib.so
 	vfs_cbe.lib.so
+	vfs_cbe_crypto_aes_cbc.lib.so
+	vfs_cbe_crypto_memcopy.lib.so
 	vfs_cbe.sh
 	vfs.lib.so
 	vfs_pipe.lib.so
