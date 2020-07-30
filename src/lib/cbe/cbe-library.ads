@@ -25,8 +25,7 @@ with CBE.TA_Request;
 package CBE.Library
 with SPARK_Mode
 is
-   --  FIXME cannot be pure yet because of CBE.Crypto
-   --  pragma Pure;
+   pragma Pure;
 
    type Object_Type is private;
 

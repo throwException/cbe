@@ -15,8 +15,7 @@ with CBE.Block_IO;
 package CBE.Crypto
 with SPARK_Mode
 is
-   --  Disable for now because of libsparkcrypto
-   --  pragma Pure;
+   pragma Pure;
 
    subtype Plain_Data_Type is CBE.Block_Data_Type;
    subtype Cipher_Data_Type is CBE.Block_Data_Type;

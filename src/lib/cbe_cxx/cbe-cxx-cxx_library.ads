@@ -15,8 +15,7 @@ with CBE.Block_IO;
 package CBE.CXX.CXX_Library
 with SPARK_Mode
 is
-   --  FIXME cannot be pure yet because of CBE.Library
-   --  pragma Pure;
+   pragma Pure;
 
    function Object_Size (Obj : Library.Object_Type)
    return CXX_Object_Size_Type
