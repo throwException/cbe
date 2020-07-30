@@ -359,13 +359,6 @@ is
 
 private
 
-   function Advance_Superblocks_Index is new
-      Advance_Index (Superblocks_Index_Type);
-
-   Free_Tree_Retry_Limit : constant := 3;
-
-   type Free_Tree_Retry_Count_Type is range 0 .. Free_Tree_Retry_Limit;
-
    --
    --  Defining the structure here is just an interims solution
    --  and should be properly managed, especially handling more
@@ -432,7 +425,6 @@ private
       Write_Back_Obj          : Write_Back.Object_Type;
       Write_Back_Data         : Write_Back.Data_Type;
       New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
-      Free_Tree_Retry_Count   : Free_Tree_Retry_Count_Type;
       New_Free_Tree_Prim      : Primitive.Object_Type;
       Meta_Tree_Obj           : Meta_Tree.Object_Type;
       Cur_SB                  : Superblocks_Index_Type;

@@ -41,8 +41,6 @@ is
       Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
 
-      Obj.Free_Tree_Retry_Count   := 0;
-
       Obj.Secure_Superblock := False;
       Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
 
