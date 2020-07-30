@@ -355,51 +355,11 @@ is
    function Execute_Progress (Obj : Object_Type)
    return Boolean;
 
-   function To_String (Obj : Object_Type) return String;
-
 private
-
-   --
-   --  Defining the structure here is just an interims solution
-   --  and should be properly managed, especially handling more
-   --  than one request is "missing".
-   --
-   type Event_Type is (
-      Event_Invalid,
-      Event_Supply_Client_Data_After_VBD,
-      Event_Supply_Client_Data_After_FT,
-      Event_IO_Request_Completed,
-      Event_Obtain_Client_Data);
-
-   type Wait_For_Event_Type is record
-      Req         : Request.Object_Type;
-      Prim        : Primitive.Object_Type;
-      Event       : Event_Type;
-      In_Progress : Boolean;
-   end record;
 
    type Cache_Prim_State_Type is (Invalid, Submitted, Complete);
 
-   function Wait_For_Event_Invalid
-   return Wait_For_Event_Type
-   is (
-      Req         => Request.Invalid_Object,
-      Prim        => Primitive.Invalid_Object,
-      Event       => Event_Invalid,
-      In_Progress => False);
-
    type Cache_Sync_State_Type is (Inactive, Active);
-
-   type Arbiter_State_Type is
-      (Invalid, Read_Request, Write_Request, Sync_Request);
-
-   function To_String (S : Arbiter_State_Type) return String
-   is (
-      case S is
-      when Invalid => "Invalid",
-      when Read_Request => "Read_Request",
-      when Write_Request => "Write_Request",
-      when Sync_Request => "Sync_Request");
 
    type Read_Request_State_Type is
       (Invalid, Translate, Decrypt, Complete);
@@ -431,7 +391,6 @@ private
       Cur_Gen                 : Generation_Type;
       Last_Secured_Generation : Generation_Type;
       Secure_Superblock       : Boolean;
-      Wait_For_Front_End      : Wait_For_Event_Type;
       Superblock              : Superblock_Type;
 
       WB_Update_PBA : Physical_Block_Address_Type;
@@ -457,8 +416,6 @@ private
 
    end record;
 
-   function To_String (WFE : Wait_For_Event_Type) return String;
-
    function Curr_Snap (Obj : Object_Type)
    return Snapshots_Index_Type;
 
@@ -472,28 +429,6 @@ private
    --
    function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
-
-   function Front_End_Busy_With_Other_Request (
-      Obj : Object_Type;
-      Req : Request.Object_Type)
-   return Boolean
-   is (not Request.Equal (Obj.Wait_For_Front_End.Req, Req));
-
-   procedure Start_Waiting_For_Front_End (
-      Obj   : in out Object_Type;
-      Prim  :        Primitive.Object_Type;
-      Event :        Event_Type);
-
-   function To_String (Event : Event_Type)
-   return String
-   is (
-      case Event is
-      when Event_Invalid                      => "Invalid",
-      when Event_Supply_Client_Data_After_VBD =>
-         "Supply_Client_Data_After_VBD",
-      when Event_Supply_Client_Data_After_FT  => "Supply_Client_Data_After_FT",
-      when Event_IO_Request_Completed         => "IO_Request_Completed",
-      when Event_Obtain_Client_Data           => "Obtain_Client_Data");
 
    procedure Execute_VBD (
       Obj              : in out Object_Type;

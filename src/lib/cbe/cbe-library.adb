@@ -8,7 +8,6 @@
 
 pragma Ada_2012;
 
-with CBE.Debug;
 with SHA256_4K;
 
 package body CBE.Library
@@ -42,7 +41,6 @@ is
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
 
       Obj.Secure_Superblock := False;
-      Obj.Wait_For_Front_End := Wait_For_Event_Invalid;
 
       Obj.Superblock := Superblock_Invalid;
       Obj.Cur_Gen := Generation_Type'First;
@@ -3334,41 +3332,8 @@ is
       Obj.Execute_Progress := Progress;
    end Execute;
 
-   procedure Start_Waiting_For_Front_End (
-      Obj   : in out Object_Type;
-      Prim  :        Primitive.Object_Type;
-      Event :        Event_Type)
-   is
-   begin
-      Obj.Wait_For_Front_End := (
-         Req         =>
-            Request_Pool.Request_For_Index (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim))),
-         Prim        => Prim,
-         Event       => Event,
-         In_Progress => False);
-   end Start_Waiting_For_Front_End;
-
    function Execute_Progress (Obj : Object_Type)
    return Boolean
    is (Obj.Execute_Progress);
-
-   function To_String (WFE : Wait_For_Event_Type)
-   return String
-   is (
-      "WFE (Req=" & Request.To_String (WFE.Req) &
-      ", Prim="        & Primitive.To_String (WFE.Prim) &
-      ", Event="       & To_String (WFE.Event) &
-      ", In_Progress=" & Debug.To_String (WFE.In_Progress) & ")");
-
-   function To_String (Obj : Object_Type)
-   return String
-   is (
-      "CBE=(" &
-      ", Wait_For_Front_End=" & To_String (Obj.Wait_For_Front_End) &
-      ", VBD="                & Virtual_Block_Device.To_String (Obj.VBD) &
-      ", Secure_Superblock="  & Debug.To_String (Obj.Secure_Superblock) &
-      ")");
 
 end CBE.Library;
