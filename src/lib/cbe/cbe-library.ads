@@ -13,7 +13,6 @@ with CBE.Crypto;
 with CBE.Virtual_Block_Device;
 with CBE.Block_IO;
 with CBE.Request;
-with CBE.Primitive;
 with CBE.Cache;
 with CBE.New_Free_Tree;
 with CBE.Meta_Tree;
@@ -371,7 +370,6 @@ private
       Meta_Tree_Obj           : Meta_Tree.Object_Type;
       Cur_SB                  : Superblocks_Index_Type;
       Cur_Gen                 : Generation_Type;
-      Last_Secured_Generation : Generation_Type;
       Secure_Superblock       : Boolean;
       Superblock              : Superblock_Type;
 

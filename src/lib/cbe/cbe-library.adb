@@ -8,6 +8,7 @@
 
 pragma Ada_2012;
 
+with CBE.Primitive;
 with SHA256_4K;
 
 package body CBE.Library
@@ -41,7 +42,6 @@ is
       Obj.Superblock := Superblock_Invalid;
       Obj.Cur_Gen := Generation_Type'First;
       Obj.Cur_SB := Superblocks_Index_Type'First;
-      Obj.Last_Secured_Generation := Generation_Type'First;
 
       FT_Resizing.Initialize_Resizing (Obj.FT_Rszg);
       MT_Resizing.Initialize_Resizing (Obj.MT_Rszg);
