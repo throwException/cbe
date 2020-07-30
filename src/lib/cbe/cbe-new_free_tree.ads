@@ -10,7 +10,6 @@ pragma Ada_2012;
 
 with CBE.Request;
 with CBE.Primitive;
-with CBE.Write_Back;
 with Interfaces;
 
 use  Interfaces;
@@ -31,7 +30,7 @@ is
       Gen            : Generation_Type;
       VBA            : Virtual_Block_Address_Type;
       Tree_Max_Level : Tree_Level_Index_Type;
-      New_PBAs       : Write_Back.New_PBAs_Type;
+      New_PBAs       : Tree_Walk_PBAs_Type;
       Old_PBAs       : Type_1_Node_Walk_Type;
    end record;
 
@@ -54,7 +53,7 @@ is
       Current_Gen      :        Generation_Type;
       Free_Gen         :        Generation_Type;
       Requested_Blocks :        Number_Of_Blocks_Type;
-      New_Blocks       :        Write_Back.New_PBAs_Type;
+      New_Blocks       :        Tree_Walk_PBAs_Type;
       Old_Blocks       :        Type_1_Node_Walk_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Req_Prim         :        Primitive.Object_Type;
@@ -517,7 +516,7 @@ private
       Free_Gen         :        Generation_Type;
       Max_Level        :        Tree_Level_Index_Type;
       Old_Blocks       : in     Type_1_Node_Walk_Type;
-      New_Blocks       : in out Write_Back.New_PBAs_Type;
+      New_Blocks       : in out Tree_Walk_PBAs_Type;
       VBA              :        Virtual_Block_Address_Type;
       VBD_Degree_Log_2 :        Tree_Degree_Log_2_Type;
       Tag              :        Primitive.Tag_Type;

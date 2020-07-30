@@ -11,7 +11,6 @@ pragma Ada_2012;
 with CBE.Request_Pool;
 with CBE.Crypto;
 with CBE.Virtual_Block_Device;
-with CBE.Write_Back;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Primitive;
@@ -368,8 +367,6 @@ private
       IO_Obj                  : Block_IO.Object_Type;
       Trans_Data              : Translation_Data_Type;
       VBD                     : Virtual_Block_Device.Object_Type;
-      Write_Back_Obj          : Write_Back.Object_Type;
-      Write_Back_Data         : Write_Back.Data_Type;
       New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
       New_Free_Tree_Prim      : Primitive.Object_Type;
       Meta_Tree_Obj           : Meta_Tree.Object_Type;

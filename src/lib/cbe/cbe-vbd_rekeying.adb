@@ -1390,7 +1390,7 @@ is
       Snapshot_Degree   :     Tree_Degree_Type;
       VBA               :     Virtual_Block_Address_Type;
       T1_Blks           :     Type_1_Node_Blocks_Type;
-      New_PBAs          : out Write_Back.New_PBAs_Type)
+      New_PBAs          : out Tree_Walk_PBAs_Type)
    is
    begin
 
@@ -1435,7 +1435,7 @@ is
       Prim_Idx          :     Primitive.Index_Type;
       T1_Blks           :     Type_1_Node_Blocks_Type;
       T1_Walk           : out Type_1_Node_Walk_Type;
-      New_PBAs          : out Write_Back.New_PBAs_Type;
+      New_PBAs          : out Tree_Walk_PBAs_Type;
       Nr_Of_Blks        : out Number_Of_Blocks_Type;
       Free_Gen          : out Generation_Type;
       Prim              : out Primitive.Object_Type)
@@ -1541,7 +1541,7 @@ is
       Prim_Idx          :        Primitive.Index_Type;
       T1_Blks           :        Type_1_Node_Blocks_Type;
       T1_Walk           :    out Type_1_Node_Walk_Type;
-      New_PBAs          : in out Write_Back.New_PBAs_Type;
+      New_PBAs          : in out Tree_Walk_PBAs_Type;
       Nr_Of_Blks        :    out Number_Of_Blocks_Type;
       Free_Gen          :    out Generation_Type;
       Prim              :    out Primitive.Object_Type)
@@ -1642,7 +1642,7 @@ is
       Snapshot_Degree  :     Tree_Degree_Type;
       VBA              :     Virtual_Block_Address_Type;
       T1_Blks          :     Type_1_Node_Blocks_Type;
-      New_PBAs         : out Write_Back.New_PBAs_Type;
+      New_PBAs         : out Tree_Walk_PBAs_Type;
       Nr_Of_Blks       : out Number_Of_Blocks_Type)
    is
    begin
@@ -2234,7 +2234,7 @@ is
       Snapshot        : in out Snapshot_Type;
       Snapshot_Degree :        Tree_Degree_Type;
       VBA             :        Virtual_Block_Address_Type;
-      New_PBAs        :        Write_Back.New_PBAs_Type;
+      New_PBAs        :        Tree_Walk_PBAs_Type;
       Leaf_Hash       :        Hash_Type;
       Curr_Gen        :        Generation_Type;
       T1_Blks         : in out Type_1_Node_Blocks_Type)
@@ -2289,7 +2289,7 @@ is
    --  Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node
    --
    procedure Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node (
-      New_PBAs         :     Write_Back.New_PBAs_Type;
+      New_PBAs         :     Tree_Walk_PBAs_Type;
       Job_Idx          :     Jobs_Index_Type;
       State            : out Job_State_Type;
       Generated_Prim   : out Primitive.Object_Type;
@@ -3152,7 +3152,7 @@ is
    function Peek_Generated_New_PBAs (
       Rkg  : Rekeying_Type;
       Prim : Primitive.Object_Type)
-   return Write_Back.New_PBAs_Type
+   return Tree_Walk_PBAs_Type
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
@@ -4033,7 +4033,7 @@ is
    procedure Mark_Generated_Prim_Completed_New_PBAs (
       Rkg      : in out Rekeying_Type;
       Prim     :        Primitive.Object_Type;
-      New_PBAs :        Write_Back.New_PBAs_Type)
+      New_PBAs :        Tree_Walk_PBAs_Type)
    is
       Idx : constant Jobs_Index_Type :=
          Jobs_Index_Type (Primitive.Index (Prim));
