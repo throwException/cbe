@@ -266,6 +266,7 @@ struct Cbe::Block_session_component
 	Constructible<Test>     _test_in_progress { };
 	unsigned long           _nr_of_failed_tests { 0 };
 	Block_data              _blk_data { };
+	unsigned long           _with_payload_cnt { 0 };
 	Created_snapshots_tree  _created_snapshots { };
 
 	void _read_request_node (Xml_node const &node)
@@ -512,7 +513,7 @@ struct Cbe::Block_session_component
 		     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
 		     idx++)
 		{
-			_blk_data.values[idx] = (char)idx + 1;
+			_blk_data.values[idx] = _with_payload_cnt + idx + 1;
 		}
 		_config_rom.xml().with_sub_node("tests", [&] (Xml_node const &node) {
 			_read_tests_node(node);
@@ -572,11 +573,12 @@ struct Cbe::Block_session_component
 		Payload payload { (addr_t)&_blk_data };
 		if  (fn(payload)) {
 
+			_with_payload_cnt++;
 			for (unsigned idx = 0;
 			     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
 			     idx++)
 			{
-				_blk_data.values[idx] = _blk_data.values[idx] + 1;
+				_blk_data.values[idx] = _with_payload_cnt + idx + 1;
 			}
 		}
 	}
