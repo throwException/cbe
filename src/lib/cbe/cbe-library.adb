@@ -36,8 +36,6 @@ is
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
 
-      Obj.Secure_Superblock := False;
-
       Obj.Superblock := Superblock_Invalid;
       Obj.Cur_Gen := Generation_Type'First;
       Obj.Cur_SB := Superblocks_Index_Type'First;
@@ -72,6 +70,9 @@ is
       Superblock_Control.Active_Snapshot_IDs (Obj.Superblock, List);
    end Active_Snapshot_IDs;
 
+   --
+   --  Client_Request_Acceptable
+   --
    function Client_Request_Acceptable (Obj : Object_Type)
    return Boolean
    is (Request_Pool.Request_Acceptable (Obj.Request_Pool_Obj));
@@ -106,6 +107,9 @@ is
 
    end Submit_Client_Request;
 
+   --
+   --  Peek_Completed_Client_Request
+   --
    function Peek_Completed_Client_Request (Obj : Object_Type)
    return Request.Object_Type
    is
@@ -136,6 +140,9 @@ is
 
    end Peek_Completed_Client_Request;
 
+   --
+   --  Drop_Completed_Client_Request
+   --
    procedure Drop_Completed_Client_Request (
       Obj : in out Object_Type;
       Req :        Request.Object_Type)
@@ -177,6 +184,9 @@ is
 
    end Has_IO_Request;
 
+   --
+   --  IO_Request_In_Progress
+   --
    procedure IO_Request_In_Progress (
       Obj      : in out Object_Type;
       Data_Idx :        Block_IO.Data_Index_Type)
@@ -185,6 +195,9 @@ is
       Block_IO.Drop_Generated_Primitive_2 (Obj.IO_Obj, Data_Idx);
    end IO_Request_In_Progress;
 
+   --
+   --  IO_Request_Completed
+   --
    procedure IO_Request_Completed (
       Obj        : in out Object_Type;
       Data_Index :        Block_IO.Data_Index_Type;
@@ -646,6 +659,9 @@ is
 
    end Supply_Crypto_Plain_Data;
 
+   --
+   --  Peek_Generated_TA_Request
+   --
    procedure Peek_Generated_TA_Request (
       Obj :     Object_Type;
       Req : out TA_Request.Object_Type)
@@ -654,6 +670,9 @@ is
       Trust_Anchor.Peek_Generated_Request (Obj.TA, Req);
    end Peek_Generated_TA_Request;
 
+   --
+   --  Drop_Generated_TA_Request
+   --
    procedure Drop_Generated_TA_Request (
       Obj : in out Object_Type;
       Req :        TA_Request.Object_Type)
@@ -662,6 +681,9 @@ is
       Trust_Anchor.Drop_Generated_Request (Obj.TA, Req);
    end Drop_Generated_TA_Request;
 
+   --
+   --  Peek_Generated_TA_SB_Hash
+   --
    procedure Peek_Generated_TA_SB_Hash (
       Obj  :     Object_Type;
       Req  :     TA_Request.Object_Type;
@@ -671,6 +693,9 @@ is
       Trust_Anchor.Peek_Generated_SB_Hash (Obj.TA, Req, Hash);
    end Peek_Generated_TA_SB_Hash;
 
+   --
+   --  Peek_Generated_TA_Key_Cipher
+   --
    procedure Peek_Generated_TA_Key_Cipher (
       Obj       :     Object_Type;
       Req       :     TA_Request.Object_Type;
@@ -681,6 +706,9 @@ is
          Obj.TA, Req, Key_Value);
    end Peek_Generated_TA_Key_Cipher;
 
+   --
+   --  Peek_Generated_TA_Key_Plain
+   --
    procedure Peek_Generated_TA_Key_Plain (
       Obj       :     Object_Type;
       Req       :     TA_Request.Object_Type;
@@ -691,6 +719,9 @@ is
          Obj.TA, Req, Key_Value);
    end Peek_Generated_TA_Key_Plain;
 
+   --
+   --  Mark_Generated_TA_Create_Key_Request_Complete
+   --
    procedure Mark_Generated_TA_Create_Key_Request_Complete (
       Obj       : in out Object_Type;
       Req       :        TA_Request.Object_Type;
@@ -701,6 +732,9 @@ is
          Obj.TA, Req, Key_Value);
    end Mark_Generated_TA_Create_Key_Request_Complete;
 
+   --
+   --  Mark_Generated_TA_Secure_SB_Request_Complete
+   --
    procedure Mark_Generated_TA_Secure_SB_Request_Complete (
       Obj       : in out Object_Type;
       Req       :        TA_Request.Object_Type)
@@ -710,6 +744,9 @@ is
          Obj.TA, Req);
    end Mark_Generated_TA_Secure_SB_Request_Complete;
 
+   --
+   --  Mark_Generated_TA_Decrypt_Key_Request_Complete
+   --
    procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
       Obj       : in out Object_Type;
       Req       :        TA_Request.Object_Type;
@@ -730,18 +767,23 @@ is
          Obj.TA, Req, Key_Value);
    end Mark_Generated_TA_Encrypt_Key_Request_Complete;
 
-   --------------
-   --  private --
-   --------------
-
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
    procedure CBE_Hash_From_SHA256_4K_Hash (
       CBE_Hash : out Hash_Type;
       SHA_Hash :     SHA256_4K.Hash_Type);
 
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
    procedure SHA256_4K_Data_From_CBE_Data (
       SHA_Data : out SHA256_4K.Data_Type;
       CBE_Data :     Block_Data_Type);
 
+   --
+   --  CBE_Hash_From_SHA256_4K_Hash
+   --
    procedure CBE_Hash_From_SHA256_4K_Hash (
       CBE_Hash : out Hash_Type;
       SHA_Hash :     SHA256_4K.Hash_Type)
@@ -756,6 +798,9 @@ is
       end loop;
    end CBE_Hash_From_SHA256_4K_Hash;
 
+   --
+   --  SHA256_4K_Data_From_CBE_Data
+   --
    procedure SHA256_4K_Data_From_CBE_Data (
       SHA_Data : out SHA256_4K.Data_Type;
       CBE_Data :     Block_Data_Type)
@@ -794,6 +839,9 @@ is
    is (
       Superblock_Control.Max_VBA (Obj.Superblock));
 
+   --
+   --  Execute_Free_Tree
+   --
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
       Progress : in out Boolean)
@@ -801,10 +849,6 @@ is
       Prim : Primitive.Object_Type;
       Job_Idx : Cache.Jobs_Index_Type;
    begin
-
-      --------------------------
-      --  Free-tree handling  --
-      --------------------------
 
       New_Free_Tree.Execute (
          Obj.New_Free_Tree_Obj,
@@ -889,20 +933,6 @@ is
                      Obj.New_Free_Tree_Obj,
                      Prim).New_PBAs);
 
-               --
-               --  FIXME
-               --
-               --  The manual update of the Free Tree root is done because
-               --  the Free Tree module was designed this way before the
-               --  VBD Rekeying was implemented. Normally, the Free
-               --  Tree root should either be handed out by the Superblock
-               --  Control to the VBD Rekeying and then by the VBD Rekeying to
-               --  the Free Tree module and the resulting root would be
-               --  propagated backwards as result of the Primitives. Or the
-               --  Free Tree root is updated by the Free Tree module itself
-               --  while processing the Rekey VBA primitive through a
-               --  primitive generated for the Superblock Control.
-               --
                declare
                   FT_Root_Node : constant Type_1_Node_Type :=
                      New_Free_Tree.Peek_Completed_Root_Node (
@@ -933,6 +963,9 @@ is
       end loop Loop_Free_Tree_Completed_Prims;
    end Execute_Free_Tree;
 
+   --
+   --  Execute_Meta_Tree
+   --
    procedure Execute_Meta_Tree (
       Obj      : in out Object_Type;
       Progress : in out Boolean)
@@ -2445,6 +2478,9 @@ is
 
    end Execute_Crypto;
 
+   --
+   --  Execute_IO
+   --
    procedure Execute_IO (
       Obj               : in out Object_Type;
       IO_Buf            :        Block_IO.Data_Type;
@@ -2551,12 +2587,6 @@ is
                   Index : constant Block_IO.Data_Index_Type :=
                      Block_IO.Peek_Completed_Data_Index (Obj.IO_Obj);
 
-                  --
-                  --  Whenever we cannot hand a successful primitive over
-                  --  to the corresponding module, leave the loop but keep
-                  --  the completed primitive so that it might be processed
-                  --  next time.
-                  --
                   Mod_Progress : Boolean := True;
                begin
                   if Primitive.Has_Tag_Decrypt (Prim) then
@@ -2581,15 +2611,6 @@ is
                               raise Program_Error;
                            end if;
 
-                           --
-                           --  Having to override the Tag is needed because of
-                           --  the way the Crypto module is hooked up in the
-                           --  overall Data flow. Since it is the one that
-                           --  acknowledges the primitive to the pool in the
-                           --  read
-                           --  case, we have to use the Tag the pool module
-                           --  uses.
-                           --
                            Crypto.Submit_Primitive (
                               Obj.Crypto_Obj,
                               Primitive.Copy_Valid_Object_New_Tag (
@@ -2692,6 +2713,9 @@ is
       Obj.Execute_Progress := Progress;
    end Execute;
 
+   --
+   --  Execute_Progress
+   --
    function Execute_Progress (Obj : Object_Type)
    return Boolean
    is (Obj.Execute_Progress);

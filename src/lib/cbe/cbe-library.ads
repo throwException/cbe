@@ -50,20 +50,13 @@ is
       Info : out Info_Type);
 
    --
-   --  Check if the CBE can accept a new requeust
-   --
-   --  \return true if a request can be accepted, otherwise false
+   --  Client_Request_Acceptable
    --
    function Client_Request_Acceptable (Obj : Object_Type)
    return Boolean;
 
    --
-   --  Submit a new request
-   --
-   --  This method must only be called after executing 'Request_Acceptable'
-   --  returned true.
-   --
-   --  \param Req  block request
+   --  Submit_Client_Request
    --
    procedure Submit_Client_Request (
       Obj : in out Object_Type;
@@ -71,29 +64,20 @@ is
       ID  :        Snapshot_ID_Type);
 
    --
-   --  Check for any completed request
-   --
-   --  \return a valid block request will be returned if there is an
-   --         completed request, otherwise an invalid one
+   --  Peek_Completed_Client_Request
    --
    function Peek_Completed_Client_Request (Obj : Object_Type)
    return Request.Object_Type;
 
    --
-   --  Drops the completed request
-   --
-   --  This method must only be called after executing
-   --  'Peek_Completed_Request' returned a valid request.
+   --  Drop_Completed_Client_Request
    --
    procedure Drop_Completed_Client_Request (
       Obj : in out Object_Type;
       Req :        Request.Object_Type);
 
    --
-   --  Return write request for the backend block session
-   --
-   --  \param Req  return valid request in case the is one pending that
-   --             needs data, otherwise an invalid one is returned
+   --  Has_IO_Request
    --
    procedure Has_IO_Request (
       Obj      :     Object_Type;
@@ -101,26 +85,14 @@ is
       Data_Idx : out Block_IO.Data_Index_Type);
 
    --
-   --  Obtain data for write request for the backend block session
-   --
-   --  The CBE will transfer the payload to the given data.
-   --
-   --  \param Req       reference to the request processed by the CBE
-   --  \param Data      reference to the data associated with the request
-   --  \param Progress  return true if the CBE could process the request
+   --  IO_Request_In_Progress
    --
    procedure IO_Request_In_Progress (
       Obj      : in out Object_Type;
       Data_Idx :        Block_IO.Data_Index_Type);
 
    --
-   --  Submit read request data from the backend block session to the CBE
-   --
-   --  The given data will be transfered to the CBE.
-   --
-   --  \param Req       reference to the request from the CBE
-   --  \param Data      reference to the data associated with the request
-   --  \param Progress  return true if the CBE acknowledged the request
+   --  IO_Request_Completed
    --
    procedure IO_Request_Completed (
       Obj        : in out Object_Type;
@@ -266,21 +238,21 @@ is
       Data_Valid :        Boolean);
 
    --
-   --  Peek generated trust-anchor request
+   --  Peek_Generated_TA_Request
    --
    procedure Peek_Generated_TA_Request (
       Obj :     Object_Type;
       Req : out TA_Request.Object_Type);
 
    --
-   --  Drop generated trust-anchor request
+   --  Drop_Generated_TA_Request
    --
    procedure Drop_Generated_TA_Request (
       Obj : in out Object_Type;
       Req :        TA_Request.Object_Type);
 
    --
-   --  Peek generated trust-anchor superblock hash
+   --  Peek_Generated_TA_SB_Hash
    --
    procedure Peek_Generated_TA_SB_Hash (
       Obj  :     Object_Type;
@@ -288,7 +260,7 @@ is
       Hash : out Hash_Type);
 
    --
-   --  Peek generated trust-anchor key value ciphertext
+   --  Peek_Generated_TA_Key_Cipher
    --
    procedure Peek_Generated_TA_Key_Cipher (
       Obj       :     Object_Type;
@@ -296,7 +268,7 @@ is
       Key_Value : out Key_Value_Ciphertext_Type);
 
    --
-   --  Peek generated trust-anchor key value plaintext
+   --  Peek_Generated_TA_Key_Plain
    --
    procedure Peek_Generated_TA_Key_Plain (
       Obj       :     Object_Type;
@@ -304,7 +276,7 @@ is
       Key_Value : out Key_Value_Plaintext_Type);
 
    --
-   --  Mark generated TA create key request complete
+   --  Mark_Generated_TA_Create_Key_Request_Complete
    --
    procedure Mark_Generated_TA_Create_Key_Request_Complete (
       Obj       : in out Object_Type;
@@ -312,14 +284,14 @@ is
       Key_Value :        Key_Value_Plaintext_Type);
 
    --
-   --  Mark generated TA secure superblock request complete
+   --  Mark_Generated_TA_Secure_SB_Request_Complete
    --
    procedure Mark_Generated_TA_Secure_SB_Request_Complete (
       Obj       : in out Object_Type;
       Req       :        TA_Request.Object_Type);
 
    --
-   --  Mark generated TA decrypt key request complete
+   --  Mark_Generated_TA_Decrypt_Key_Request_Complete
    --
    procedure Mark_Generated_TA_Decrypt_Key_Request_Complete (
       Obj       : in out Object_Type;
@@ -327,7 +299,7 @@ is
       Key_Value :        Key_Value_Plaintext_Type);
 
    --
-   --  Mark generated TA encrypt key request complete
+   --  Mark_Generated_TA_Encrypt_Key_Request_Complete
    --
    procedure Mark_Generated_TA_Encrypt_Key_Request_Complete (
       Obj       : in out Object_Type;
@@ -349,6 +321,9 @@ is
    function Max_VBA (Obj : Object_Type)
    return Virtual_Block_Address_Type;
 
+   --
+   --  Execute_Progress
+   --
    function Execute_Progress (Obj : Object_Type)
    return Boolean;
 
@@ -356,26 +331,24 @@ private
 
    type Object_Type is record
 
-      Execute_Progress        : Boolean;
-      Cache_Obj               : Cache.Cache_Type;
-      Cache_Jobs_Data         : Cache.Jobs_Data_Type;
-      Cache_Slots_Data        : Cache.Slots_Data_Type;
-      Request_Pool_Obj        : Request_Pool.Object_Type;
-      Crypto_Obj              : Crypto.Object_Type;
-      IO_Obj                  : Block_IO.Object_Type;
-      Trans_Data              : Translation_Data_Type;
-      New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
-      Meta_Tree_Obj           : Meta_Tree.Object_Type;
-      Cur_SB                  : Superblocks_Index_Type;
-      Cur_Gen                 : Generation_Type;
-      Secure_Superblock       : Boolean;
-      Superblock              : Superblock_Type;
-
-      SB_Ctrl : Superblock_Control.Control_Type;
-      TA      : Trust_Anchor.Anchor_Type;
-      VBD_Rkg : VBD_Rekeying.Rekeying_Type;
-      FT_Rszg : FT_Resizing.Resizing_Type;
-      MT_Rszg : MT_Resizing.Resizing_Type;
+      Execute_Progress  : Boolean;
+      Cache_Obj         : Cache.Cache_Type;
+      Cache_Jobs_Data   : Cache.Jobs_Data_Type;
+      Cache_Slots_Data  : Cache.Slots_Data_Type;
+      Request_Pool_Obj  : Request_Pool.Object_Type;
+      Crypto_Obj        : Crypto.Object_Type;
+      IO_Obj            : Block_IO.Object_Type;
+      Trans_Data        : Translation_Data_Type;
+      New_Free_Tree_Obj : New_Free_Tree.Object_Type;
+      Meta_Tree_Obj     : Meta_Tree.Object_Type;
+      Cur_SB            : Superblocks_Index_Type;
+      Cur_Gen           : Generation_Type;
+      Superblock        : Superblock_Type;
+      SB_Ctrl           : Superblock_Control.Control_Type;
+      TA                : Trust_Anchor.Anchor_Type;
+      VBD_Rkg           : VBD_Rekeying.Rekeying_Type;
+      FT_Rszg           : FT_Resizing.Resizing_Type;
+      MT_Rszg           : MT_Resizing.Resizing_Type;
 
    end record;
 
@@ -385,10 +358,16 @@ private
    function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
 
+   --
+   --  Execute_Free_Tree
+   --
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 
+   --
+   --  Execute_Meta_Tree
+   --
    procedure Execute_Meta_Tree (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
@@ -449,6 +428,9 @@ private
       Crypto_Cipher_Buf :        Crypto.Cipher_Buffer_Type;
       Progress          : in out Boolean);
 
+   --
+   --  Execute_IO
+   --
    procedure Execute_IO (
       Obj               : in out Object_Type;
       IO_Buf            :        Block_IO.Data_Type;
