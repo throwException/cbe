@@ -9,7 +9,6 @@
 pragma Ada_2012;
 
 with CBE.Primitive;
-with SHA256_4K;
 
 package body CBE.Library
 with SPARK_Mode
@@ -766,54 +765,6 @@ is
       Trust_Anchor.Mark_Generated_Encrypt_Key_Request_Complete (
          Obj.TA, Req, Key_Value);
    end Mark_Generated_TA_Encrypt_Key_Request_Complete;
-
-   --
-   --  CBE_Hash_From_SHA256_4K_Hash
-   --
-   procedure CBE_Hash_From_SHA256_4K_Hash (
-      CBE_Hash : out Hash_Type;
-      SHA_Hash :     SHA256_4K.Hash_Type);
-
-   --
-   --  SHA256_4K_Data_From_CBE_Data
-   --
-   procedure SHA256_4K_Data_From_CBE_Data (
-      SHA_Data : out SHA256_4K.Data_Type;
-      CBE_Data :     Block_Data_Type);
-
-   --
-   --  CBE_Hash_From_SHA256_4K_Hash
-   --
-   procedure CBE_Hash_From_SHA256_4K_Hash (
-      CBE_Hash : out Hash_Type;
-      SHA_Hash :     SHA256_4K.Hash_Type)
-   is
-      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
-   begin
-      for CBE_Idx in CBE_Hash'Range loop
-         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
-         if CBE_Idx < CBE_Hash'Last then
-            SHA_Idx := SHA_Idx + 1;
-         end if;
-      end loop;
-   end CBE_Hash_From_SHA256_4K_Hash;
-
-   --
-   --  SHA256_4K_Data_From_CBE_Data
-   --
-   procedure SHA256_4K_Data_From_CBE_Data (
-      SHA_Data : out SHA256_4K.Data_Type;
-      CBE_Data :     Block_Data_Type)
-   is
-      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
-   begin
-      for SHA_Idx in SHA_Data'Range loop
-         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
-         if SHA_Idx < SHA_Data'Last then
-            CBE_Idx := CBE_Idx + 1;
-         end if;
-      end loop;
-   end SHA256_4K_Data_From_CBE_Data;
 
    --
    --  Idx_Of_Any_Invalid_Snap
@@ -2479,9 +2430,9 @@ is
    end Execute_Crypto;
 
    --
-   --  Execute_IO
+   --  Execute_Blk_IO
    --
-   procedure Execute_IO (
+   procedure Execute_Blk_IO (
       Obj               : in out Object_Type;
       IO_Buf            :        Block_IO.Data_Type;
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
@@ -2492,11 +2443,13 @@ is
 
       Loop_Generated_Crypto_Prims :
       loop
-         Declare_Crypto_Prim :
+
+         Declare_Generated_Crypto_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
                Block_IO.Peek_Generated_Crypto_Primitive (Obj.IO_Obj);
          begin
+
             exit Loop_Generated_Crypto_Prims when
                not Primitive.Valid (Prim) or else
                not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
@@ -2545,17 +2498,19 @@ is
 
             end case;
 
-         end Declare_Crypto_Prim;
+         end Declare_Generated_Crypto_Prim;
+
       end loop Loop_Generated_Crypto_Prims;
 
-      Loop_IO_Completed_Prims :
+      Loop_Completed_Prims :
       loop
-         Declare_Prim_15 :
+
+         Declare_Completed_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
                Block_IO.Peek_Completed_Primitive (Obj.IO_Obj);
          begin
-            exit Loop_IO_Completed_Prims when not Primitive.Valid (Prim);
+            exit Loop_Completed_Prims when not Primitive.Valid (Prim);
 
             case Primitive.Tag (Prim) is
             when Primitive.Tag_VBD_Rkg_Blk_IO_Read_Client_Data =>
@@ -2576,113 +2531,84 @@ is
                Block_IO.Drop_Completed_Primitive_New (Obj.IO_Obj, Prim);
                Progress := True;
 
-            when others =>
+            when Primitive.Tag_Cache_Blk_IO =>
 
-               if not Primitive.Success (Prim) then
-                  raise Program_Error;
-               end if;
-
-               Declare_Index_3 :
+               Declare_Slot_Idx :
                declare
-                  Index : constant Block_IO.Data_Index_Type :=
+                  Slot_Idx : constant Cache.Slots_Index_Type :=
+                     Cache.Slots_Index_Type (Primitive.Index (Prim));
+
+                  Data_Idx : constant Block_IO.Data_Index_Type :=
                      Block_IO.Peek_Completed_Data_Index (Obj.IO_Obj);
-
-                  Mod_Progress : Boolean := True;
                begin
-                  if Primitive.Has_Tag_Decrypt (Prim) then
 
-                     if not Crypto.Primitive_Acceptable (Obj.Crypto_Obj) then
-                        Mod_Progress := False;
-                     else
-                        Declare_Data :
-                        declare
-                           Data_Idx : Crypto.Jobs_Index_Type;
-                           SHA_Data : SHA256_4K.Data_Type;
-                           SHA_Hash : SHA256_4K.Hash_Type;
-                           CBE_Hash : Hash_Type;
-                        begin
-                           SHA256_4K_Data_From_CBE_Data (
-                              SHA_Data, IO_Buf (Index));
-                           SHA256_4K.Hash (SHA_Data, SHA_Hash);
-                           CBE_Hash_From_SHA256_4K_Hash (CBE_Hash, SHA_Hash);
-                           if CBE_Hash /=
-                              Block_IO.Peek_Completed_Hash (Obj.IO_Obj, Prim)
-                           then
-                              raise Program_Error;
-                           end if;
-
-                           Crypto.Submit_Primitive (
-                              Obj.Crypto_Obj,
-                              Primitive.Copy_Valid_Object_New_Tag (
-                                 Prim,
-                                 Block_IO.Peek_Completed_Tag (
-                                    Obj.IO_Obj, Prim)),
-                              Block_IO.Peek_Completed_Key_ID (
-                                 Obj.IO_Obj, Prim),
-                              Data_Idx);
-
-                           Crypto_Cipher_Buf (Data_Idx) := IO_Buf (Index);
-
-                        end Declare_Data;
-                     end if;
-
-                  elsif Primitive.Has_Tag_Cache_Blk_IO (Prim) then
-
-                     Declare_Slot_Idx :
-                     declare
-                        Slot_Idx : constant Cache.Slots_Index_Type :=
-                           Cache.Slots_Index_Type (Primitive.Index (Prim));
-                     begin
-                        if Primitive.Operation (Prim) = Read then
-                           Obj.Cache_Slots_Data (Slot_Idx) := IO_Buf (Index);
-                        end if;
-                        Cache.Mark_Generated_Primitive_Complete (
-                           Obj.Cache_Obj, Slot_Idx, Primitive.Success (Prim));
-
-                     end Declare_Slot_Idx;
-
-                  elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Prim) then
-                     Superblock_Control.Mark_Generated_Prim_Complete (
-                        Obj.SB_Ctrl, Prim);
-
-                  elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Read_SB (Prim) then
-                     Superblock_Control.Mark_Generated_Prim_Complete_Blk_Data (
-                        Obj.SB_Ctrl, Prim, IO_Buf (Index));
-
-                  elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Sync (Prim) then
-                     Superblock_Control.Mark_Generated_Prim_Complete (
-                        Obj.SB_Ctrl, Prim);
-
-                  elsif Primitive.Has_Tag_VBD_Rkg_Blk_IO (Prim) then
-
-                     case Primitive.Operation (Prim) is
-                     when Read =>
-
-                        VBD_Rekeying.Mark_Generated_Prim_Completed_Blk_Data (
-                           Obj.VBD_Rkg, Prim, IO_Buf (Index));
-
-                     when Write | Sync =>
-
-                        VBD_Rekeying.Mark_Generated_Prim_Completed (
-                           Obj.VBD_Rkg, Prim);
-
-                     end case;
-
-                  else
-                     raise Program_Error;
+                  if Primitive.Operation (Prim) = Read then
+                     Obj.Cache_Slots_Data (Slot_Idx) := IO_Buf (Data_Idx);
                   end if;
-                  exit Loop_IO_Completed_Prims when not Mod_Progress;
 
-               end Declare_Index_3;
+                  Cache.Mark_Generated_Primitive_Complete (
+                     Obj.Cache_Obj, Slot_Idx, Primitive.Success (Prim));
+
+               end Declare_Slot_Idx;
+
                Block_IO.Drop_Completed_Primitive (Obj.IO_Obj, Prim);
                Progress := True;
 
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Write_SB =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete (
+                  Obj.SB_Ctrl, Prim);
+
+               Block_IO.Drop_Completed_Primitive (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Read_SB =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_Blk_Data (
+                  Obj.SB_Ctrl, Prim,
+                  IO_Buf (Block_IO.Peek_Completed_Data_Index (Obj.IO_Obj)));
+
+               Block_IO.Drop_Completed_Primitive (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_Blk_IO_Sync =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete (
+                  Obj.SB_Ctrl, Prim);
+
+               Block_IO.Drop_Completed_Primitive (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when Primitive.Tag_VBD_Rkg_Blk_IO =>
+
+               case Primitive.Operation (Prim) is
+               when Read =>
+
+                  VBD_Rekeying.Mark_Generated_Prim_Completed_Blk_Data (
+                     Obj.VBD_Rkg, Prim,
+                     IO_Buf (Block_IO.Peek_Completed_Data_Index (Obj.IO_Obj)));
+
+               when Write | Sync =>
+
+                  VBD_Rekeying.Mark_Generated_Prim_Completed (
+                     Obj.VBD_Rkg, Prim);
+
+               end case;
+
+               Block_IO.Drop_Completed_Primitive (Obj.IO_Obj, Prim);
+               Progress := True;
+
+            when others =>
+
+               raise Program_Error;
+
             end case;
 
-         end Declare_Prim_15;
+         end Declare_Completed_Prim;
 
-      end loop Loop_IO_Completed_Prims;
-   end Execute_IO;
+      end loop Loop_Completed_Prims;
+
+   end Execute_Blk_IO;
 
    --
    --  Execute
@@ -2704,7 +2630,7 @@ is
       Execute_FT_Rszg (Obj, Progress);
       Execute_MT_Rszg (Obj, Progress);
       Execute_Cache (Obj, IO_Buf, Progress);
-      Execute_IO (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
+      Execute_Blk_IO (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Crypto (
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);

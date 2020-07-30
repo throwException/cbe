@@ -429,9 +429,9 @@ private
       Progress          : in out Boolean);
 
    --
-   --  Execute_IO
+   --  Execute_Blk_IO
    --
-   procedure Execute_IO (
+   procedure Execute_Blk_IO (
       Obj               : in out Object_Type;
       IO_Buf            :        Block_IO.Data_Type;
       Crypto_Cipher_Buf : in out Crypto.Cipher_Buffer_Type;
