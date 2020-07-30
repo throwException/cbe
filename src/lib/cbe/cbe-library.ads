@@ -386,7 +386,6 @@ private
    end record;
 
    type Cache_Prim_State_Type is (Invalid, Submitted, Complete);
-   type SCD_State_Type is (Inactive, Active);
 
    function Wait_For_Event_Invalid
    return Wait_For_Event_Type
@@ -442,31 +441,6 @@ private
       Secure_Superblock       : Boolean;
       Wait_For_Front_End      : Wait_For_Event_Type;
       Superblock              : Superblock_Type;
-
-      SCD_State    : SCD_State_Type;
-      SCD_Req      : Request.Object_Type;
-      SCD_Data     : Block_Data_Type;
-      SCD_Curr_Lvl : Tree_Level_Index_Type;
-
-      SCD_Cache_Prim        : Primitive.Object_Type;
-      SCD_Cache_Prim_State  : Cache_Prim_State_Type;
-      SCD_Cache_Prim_Data   : Block_Data_Type;
-
-      --
-      --  The array of new_PBA will either get populated from the Old_PBA
-      --  content or from newly allocated blocks.
-      --  The order of the array items corresponds to the level within
-      --  the tree.
-      --
-      SCD_New_PBAs   : Write_Back.New_PBAs_Type := (others => 0);
-      SCD_New_Blocks : Number_Of_Blocks_Type := 0;
-
-      --
-      --  This array contains all blocks that will get freed or rather
-      --  marked as reserved in the FT as they are still referenced by
-      --  an snapshot.
-      --
-      SCD_Free_Blocks : Tree_Level_Index_Type := 0;
 
       WB_Update_PBA : Physical_Block_Address_Type;
 
@@ -539,10 +513,6 @@ private
       Progress : in out Boolean);
 
    procedure Execute_Meta_Tree (
-      Obj      : in out Object_Type;
-      Progress : in out Boolean);
-
-   procedure Execute_SCD (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
 

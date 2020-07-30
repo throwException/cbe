@@ -105,7 +105,6 @@ is
       Tag_VBD_Cache,
       Tag_FT_Cache,
       Tag_WB_Cache,
-      Tag_SCD_Cache,
       Tag_Free_Tree_Query,
       Tag_Free_Tree_IO,
       Tag_Free_Tree_WB,
@@ -218,7 +217,6 @@ is
       when Tag_VBD_Cache => "VBD_Cache",
       when Tag_FT_Cache => "FT_Cache",
       when Tag_WB_Cache => "WB_Cache",
-      when Tag_SCD_Cache => "SCD_Cache",
       when Tag_Free_Tree_Query => "Free_Tree_Query",
       when Tag_Free_Tree_IO => "Free_Tree_IO",
       when Tag_Free_Tree_WB => "Free_Tree_WB",
@@ -509,7 +507,6 @@ is
    function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_WB_Cache (Obj : Object_Type) return Boolean;
-   function Has_Tag_SCD_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean;

@@ -434,9 +434,6 @@ is
    function Has_Tag_WB_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_WB_Cache);
 
-   function Has_Tag_SCD_Cache (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_SCD_Cache);
-
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Free_Tree_IO);
 
