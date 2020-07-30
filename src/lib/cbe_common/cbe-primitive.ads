@@ -95,19 +95,15 @@ is
       Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks,
       Tag_IO,
       Tag_Translation,
-      Tag_Write_Back,
       Tag_Cache,
       Tag_Cache_Flush,
       Tag_Cache_Blk_IO,
-      Tag_Lib_Cache_Sync,
       Tag_Decrypt,
       Tag_Encrypt,
       Tag_VBD_Cache,
       Tag_FT_Cache,
-      Tag_WB_Cache,
       Tag_Free_Tree_Query,
       Tag_Free_Tree_IO,
-      Tag_Free_Tree_WB,
       Tag_FT_MT,
       Tag_MT_Rszg_Cache,
       Tag_MT_Rszg_MT_Alloc,
@@ -207,19 +203,15 @@ is
       when Tag_SB_Ctrl_Blk_IO_Read_SB => "SB_Ctrl_Blk_IO_Read_SB",
       when Tag_IO => "IO",
       when Tag_Translation => "Translation",
-      when Tag_Write_Back => "Write_Back",
       when Tag_Cache => "Cache",
       when Tag_Cache_Flush => "Cache_Flush",
       when Tag_Cache_Blk_IO => "Cache_Blk_IO",
-      when Tag_Lib_Cache_Sync => "Lib_Cache_Sync",
       when Tag_Decrypt => "Decrypt",
       when Tag_Encrypt => "Encrypt",
       when Tag_VBD_Cache => "VBD_Cache",
       when Tag_FT_Cache => "FT_Cache",
-      when Tag_WB_Cache => "WB_Cache",
       when Tag_Free_Tree_Query => "Free_Tree_Query",
       when Tag_Free_Tree_IO => "Free_Tree_IO",
-      when Tag_Free_Tree_WB => "Free_Tree_WB",
       when Tag_FT_MT => "FT_MT",
       when Tag_MT_Rszg_Cache => "MT_Rszg_Cache",
       when Tag_MT_Rszg_MT_Alloc => "MT_Rszg_MT_Alloc",
@@ -497,18 +489,14 @@ is
 
    function Has_Tag_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Translation (Obj : Object_Type) return Boolean;
-   function Has_Tag_Write_Back (Obj : Object_Type) return Boolean;
    function Has_Tag_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_Cache_Flush (Obj : Object_Type) return Boolean;
    function Has_Tag_Cache_Blk_IO (Obj : Object_Type) return Boolean;
-   function Has_Tag_Lib_Cache_Sync (Obj : Object_Type) return Boolean;
    function Has_Tag_Decrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_Encrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean;
-   function Has_Tag_WB_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean;
-   function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean;
    function Has_Tag_MT_Rszg_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_MT_Rszg_MT_Alloc (Obj : Object_Type) return Boolean;

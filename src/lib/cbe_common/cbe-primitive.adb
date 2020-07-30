@@ -404,9 +404,6 @@ is
    function Has_Tag_Translation (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Translation);
 
-   function Has_Tag_Write_Back (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_Write_Back);
-
    function Has_Tag_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Cache);
 
@@ -415,9 +412,6 @@ is
 
    function Has_Tag_Cache_Blk_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Cache_Blk_IO);
-
-   function Has_Tag_Lib_Cache_Sync (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_Lib_Cache_Sync);
 
    function Has_Tag_Decrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Decrypt);
@@ -431,14 +425,8 @@ is
    function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_Cache);
 
-   function Has_Tag_WB_Cache (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_WB_Cache);
-
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Free_Tree_IO);
-
-   function Has_Tag_Free_Tree_WB (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_Free_Tree_WB);
 
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_MT);

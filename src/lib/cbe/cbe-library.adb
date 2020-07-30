@@ -30,11 +30,8 @@ is
 
       Obj.Cache_Jobs_Data  := (others => (others => 0));
       Obj.Cache_Slots_Data := (others => (others => 0));
-      Obj.Cache_Sync_State := Inactive;
       Obj.Trans_Data       := (others => (others => 0));
       Obj.VBD              := Virtual_Block_Device.Initialized_Object;
-      Obj.Write_Back_Obj   := Write_Back.Initialized_Object;
-      Obj.Write_Back_Data  := (others => (others => 0));
 
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
       Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
@@ -46,22 +43,6 @@ is
       Obj.Cur_Gen := Generation_Type'First;
       Obj.Cur_SB := Superblocks_Index_Type'First;
       Obj.Last_Secured_Generation := Generation_Type'First;
-
-      Obj.WB_Update_PBA := 0;
-
-      Obj.WB_Cache_Prim_1 := Primitive.Invalid_Object;
-      Obj.WB_Cache_Prim_1_State := Invalid;
-      Obj.WB_Cache_Prim_1_Data := (others => 0);
-
-      Obj.WB_Cache_Prim_2 := Primitive.Invalid_Object;
-      Obj.WB_Cache_Prim_2_State := Invalid;
-      Obj.WB_Cache_Prim_2_Data := (others => 0);
-
-      Obj.WB_Cache_Prim_3 := Primitive.Invalid_Object;
-      Obj.WB_Cache_Prim_3_State := Invalid;
-      Obj.WB_Cache_Prim_3_Data := (others => 0);
-
-      Obj.WB_Prim := Primitive.Invalid_Object;
 
       FT_Resizing.Initialize_Resizing (Obj.FT_Rszg);
       MT_Resizing.Initialize_Resizing (Obj.MT_Rszg);
@@ -1248,57 +1229,6 @@ is
          end if;
 
          case Primitive.Tag (Prim) is
-         when Primitive.Tag_Lib_Cache_Sync =>
-
-            case Obj.Cache_Sync_State is
-            when Active =>
-
-               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-               Obj.Cache_Sync_State := Inactive;
-               Progress := True;
-
-            when Inactive => raise Program_Error;
-            end case;
-
-         when Primitive.Tag_WB_Cache =>
-
-            if Obj.WB_Cache_Prim_1_State = Submitted and then
-               Primitive.Equal (Obj.WB_Cache_Prim_1, Prim)
-            then
-               if Primitive.Operation (Prim) = Read then
-                  Obj.WB_Cache_Prim_1_Data := Obj.Cache_Jobs_Data (Job_Idx);
-               end if;
-               Obj.WB_Cache_Prim_1_State := Complete;
-               Obj.WB_Cache_Prim_1 := Prim;
-               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-               Progress := True;
-
-            elsif Obj.WB_Cache_Prim_2_State = Submitted and then
-                  Primitive.Equal (Obj.WB_Cache_Prim_2, Prim)
-            then
-               if Primitive.Operation (Prim) = Read then
-                  Obj.WB_Cache_Prim_2_Data := Obj.Cache_Jobs_Data (Job_Idx);
-               end if;
-               Obj.WB_Cache_Prim_2_State := Complete;
-               Obj.WB_Cache_Prim_2 := Prim;
-               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-               Progress := True;
-
-            elsif Obj.WB_Cache_Prim_3_State = Submitted and then
-                  Primitive.Equal (Obj.WB_Cache_Prim_3, Prim)
-            then
-               if Primitive.Operation (Prim) = Read then
-                  Obj.WB_Cache_Prim_3_Data := Obj.Cache_Jobs_Data (Job_Idx);
-               end if;
-               Obj.WB_Cache_Prim_3_State := Complete;
-               Obj.WB_Cache_Prim_3 := Prim;
-               Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-               Progress := True;
-
-            else
-               raise Program_Error;
-            end if;
-
          when Primitive.Tag_VBD_Cache =>
 
             Virtual_Block_Device.Mark_Generated_Cache_Primitive_Complete (
@@ -2634,321 +2564,6 @@ is
 
    end Execute_TA;
 
-   procedure Execute_Writeback (
-      Obj              : in out Object_Type;
-      IO_Buf           : in out Block_IO.Data_Type;
-      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
-      Progress         : in out Boolean)
-   is
-   begin
-      --
-      --  The Write_Back module will store a changed branch including its leaf
-      --  node on the block device.
-      --
-      --  The way it currently operates is as follows:
-      --    1. (CRYPTO)   it hands the leaf Data to the Crypto module for
-      --                  encryption
-      --    2. (IO)       it hands the encrypted leaf Data to I/O module to
-      --                  write it to the block device
-      --    3. (CACHE)    starting by the lowest inner node it will update the
-      --                  node entry (PBA and Hash)
-      --    4. (COMPLETE) update root PBA and root Hash
-      --
-
-      Loop_WB_Completed_Prims :
-      loop
-         Declare_Prim_6 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Write_Back.Peek_Completed_Primitive (Obj.Write_Back_Obj);
-         begin
-            exit Loop_WB_Completed_Prims when
-               not Primitive.Valid (Prim);
-
-            if not Primitive.Success (Prim) then
-               raise Program_Error;
-            end if;
-
-            if Obj.Superblock.Snapshots (Curr_Snap (Obj)).Gen < Obj.Cur_Gen
-            then
-               declare
-                  Snap_Idx : constant Snapshots_Index_Type :=
-                     Idx_Of_Any_Invalid_Snap (Obj.Superblock.Snapshots);
-               begin
-                  Obj.Superblock.Snapshots (Snap_Idx) :=
-                     Obj.Superblock.Snapshots (Obj.Superblock.Curr_Snap);
-
-                  Obj.Superblock.Snapshots (Snap_Idx).Gen := Obj.Cur_Gen;
-                  Obj.Superblock.Snapshots (Snap_Idx).Keep := False;
-                  Obj.Superblock.Curr_Snap := Snap_Idx;
-               end;
-            end if;
-
-            declare
-               PBA : constant Physical_Block_Address_Type :=
-                  Write_Back.Peek_Completed_Root (Obj.Write_Back_Obj, Prim);
-
-               Snap_Idx : constant Snapshots_Index_Type :=
-                  Obj.Superblock.Curr_Snap;
-            begin
-               Obj.Superblock.Snapshots (Snap_Idx).Gen := Obj.Cur_Gen;
-               Obj.Superblock.Snapshots (Snap_Idx).PBA := PBA;
-               Write_Back.Peek_Completed_Root_Hash (
-                  Obj.Write_Back_Obj, Prim,
-                  Obj.Superblock.Snapshots (Snap_Idx).Hash);
-            end;
-
-            --
-            --  We touched the super-block, either by updating a snapshot or by
-            --  creating a new one - make sure it gets secured within the next
-            --  interval.
-            --
-            Write_Back.Drop_Completed_Primitive (Obj.Write_Back_Obj, Prim);
-
-            --
-            --  Since the write Request is finally finished, all nodes stored
-            --  at some place "save" (leafs on the block device, inner nodes
-            --  within the Cache, acknowledge the primitive.
-            --
-            Request_Pool.Mark_Generated_Primitive_Complete (
-               Obj.Request_Pool_Obj,
-               Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-               Primitive.Success (Prim));
-
-            pragma Debug (Debug.Print_String (
-               "========> Request_Pool.Mark_Completed_Primitive: "
-               & Primitive.To_String (Prim)));
-
-         end Declare_Prim_6;
-         Progress := True;
-
-         --
-         --  FIXME stalling translation as long as the write-back takes places
-         --        is not a good idea
-         --
-         Virtual_Block_Device.Trans_Resume_Translation (Obj.VBD);
-
-      end loop Loop_WB_Completed_Prims;
-
-      --
-      --  Give the leaf Data to the Crypto module.
-      --
-      Loop_WB_Generated_Crypto_Prims :
-      loop
-
-         Declare_Prim_7 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Write_Back.Peek_Generated_Crypto_Primitive (Obj.Write_Back_Obj);
-         begin
-            exit Loop_WB_Generated_Crypto_Prims when
-               not Primitive.Valid (Prim) or else
-               not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
-
-            --
-            --  The Data will be copied into the Crypto module's internal
-            --  buffer
-            --
-            Declare_Crypto_Data :
-            declare
-               Plain_Data_Index : constant Write_Back.Data_Index_Type :=
-                  Write_Back.Peek_Generated_Crypto_Data (
-                     Obj.Write_Back_Obj, Prim);
-
-               Data_Idx : Crypto.Jobs_Index_Type;
-            begin
-               Crypto.Submit_Primitive (
-                  Obj.Crypto_Obj,
-                  Prim,
-                  Obj.Superblock.Current_Key.ID,
-                  Data_Idx);
-
-               Crypto_Plain_Buf (Data_Idx) :=
-                  Obj.Write_Back_Data (Plain_Data_Index);
-
-            end Declare_Crypto_Data;
-            Write_Back.Drop_Generated_Crypto_Primitive (
-               Obj.Write_Back_Obj, Prim);
-
-         end Declare_Prim_7;
-         Progress := True;
-
-      end loop Loop_WB_Generated_Crypto_Prims;
-
-      --
-      --  Pass the encrypted leaf Data to the I/O module.
-      --
-      Loop_WB_Generated_IO_Prims :
-      loop
-         Declare_Prim_8 :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Write_Back.Peek_Generated_IO_Primitive (Obj.Write_Back_Obj);
-
-            Data_Idx : Block_IO.Data_Index_Type;
-         begin
-            exit Loop_WB_Generated_IO_Prims when
-               not Primitive.Valid (Prim) or else
-               not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-            Block_IO.Submit_Primitive (
-               Obj.IO_Obj, Primitive.Tag_Write_Back, Prim, Data_Idx);
-
-            if Primitive.Operation (Prim) = Write then
-               IO_Buf (Data_Idx) :=
-                  Obj.Write_Back_Data (Write_Back.Peek_Generated_IO_Data (
-                     Obj.Write_Back_Obj, Prim));
-            end if;
-
-            Write_Back.Drop_Generated_IO_Primitive (
-               Obj.Write_Back_Obj, Prim);
-
-         end Declare_Prim_8;
-         Progress := True;
-
-      end loop Loop_WB_Generated_IO_Prims;
-
-      --
-      --  Update the inner nodes of the tree. This is always done after the
-      --  encrypted leaf node was stored by the I/O module.
-      --
-      Loop_WB_Generated_Cache_Prims :
-      loop
-         if not Primitive.Valid (Obj.WB_Prim) then
-            Obj.WB_Prim :=
-               Write_Back.Peek_Generated_Cache_Primitive (
-                  Obj.Write_Back_Obj);
-         end if;
-
-         exit Loop_WB_Generated_Cache_Prims when
-            not Primitive.Valid (Obj.WB_Prim);
-
-         if Obj.WB_Cache_Prim_1_State = Invalid then
-            Obj.WB_Update_PBA :=
-               Write_Back.Peek_Generated_Cache_Update_PBA (
-                  Obj.Write_Back_Obj, Obj.WB_Prim);
-         end if;
-
-         Declare_PBAs :
-         declare
-            PBA : constant Physical_Block_Address_Type :=
-               Physical_Block_Address_Type (
-                  Primitive.Block_Number (Obj.WB_Prim));
-
-            Cache_Prim_1 : constant Primitive.Object_Type :=
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Read, False, Primitive.Tag_WB_Cache,
-                  Block_Number_Type (PBA), 0);
-
-            Cache_Prim_2 : constant Primitive.Object_Type :=
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Read, False, Primitive.Tag_WB_Cache,
-                  Block_Number_Type (Obj.WB_Update_PBA), 0);
-
-            Cache_Prim_3 : constant Primitive.Object_Type :=
-               Primitive.Valid_Object_No_Pool_Idx (
-                  Write, False, Primitive.Tag_WB_Cache,
-                  Block_Number_Type (Obj.WB_Update_PBA), 0);
-
-            Job_Idx : Cache.Jobs_Index_Type;
-         begin
-
-            if Obj.WB_Cache_Prim_1_State = Invalid then
-
-               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
-
-                  Obj.WB_Cache_Prim_1 := Cache_Prim_1;
-                  Obj.WB_Cache_Prim_1_State := Submitted;
-                  Cache.Submit_Primitive (
-                     Obj.Cache_Obj, Obj.WB_Cache_Prim_1, Job_Idx);
-
-                  if Primitive.Operation (Cache_Prim_1) = Write then
-                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_1_Data;
-                  end if;
-
-                  Progress := True;
-               end if;
-               exit Loop_WB_Generated_Cache_Prims;
-
-            elsif Obj.WB_Cache_Prim_1_State /= Complete or else
-                  not Primitive.Equal (Obj.WB_Cache_Prim_1, Cache_Prim_1)
-            then
-               exit Loop_WB_Generated_Cache_Prims;
-            end if;
-
-            if not Primitive.Success (Obj.WB_Cache_Prim_1) then
-               raise Program_Error;
-            end if;
-
-            if Obj.WB_Cache_Prim_2_State = Invalid then
-
-               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
-
-                  Obj.WB_Cache_Prim_2 := Cache_Prim_2;
-                  Obj.WB_Cache_Prim_2_State := Submitted;
-                  Cache.Submit_Primitive (
-                     Obj.Cache_Obj, Obj.WB_Cache_Prim_2, Job_Idx);
-
-                  if Primitive.Operation (Cache_Prim_2) = Write then
-                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_1_Data;
-                  end if;
-
-                  Progress := True;
-               end if;
-               exit Loop_WB_Generated_Cache_Prims;
-
-            elsif Obj.WB_Cache_Prim_2_State /= Complete or else
-                  not Primitive.Equal (Obj.WB_Cache_Prim_2, Cache_Prim_2)
-            then
-               exit Loop_WB_Generated_Cache_Prims;
-            end if;
-
-            if not Primitive.Success (Obj.WB_Cache_Prim_2) then
-               raise Program_Error;
-            end if;
-
-            if Obj.WB_Cache_Prim_3_State = Invalid then
-
-               if Cache.Primitive_Acceptable (Obj.Cache_Obj) then
-
-                  Write_Back.Drop_Generated_Cache_Primitive (
-                     Obj.Write_Back_Obj, Obj.WB_Prim);
-
-                  Write_Back.Update (
-                     Obj.Write_Back_Obj,
-                     PBA, Virtual_Block_Device.Get_Tree_Helper (Obj.VBD),
-                     Obj.WB_Cache_Prim_1_Data, Obj.WB_Cache_Prim_2_Data);
-
-                  Obj.WB_Cache_Prim_3 := Cache_Prim_3;
-                  Obj.WB_Cache_Prim_3_State := Submitted;
-                  Cache.Submit_Primitive (
-                     Obj.Cache_Obj, Obj.WB_Cache_Prim_3, Job_Idx);
-
-                  if Primitive.Operation (Cache_Prim_3) = Write then
-                     Obj.Cache_Jobs_Data (Job_Idx) := Obj.WB_Cache_Prim_2_Data;
-                  end if;
-
-                  Progress := True;
-               end if;
-               exit Loop_WB_Generated_Cache_Prims;
-
-            elsif Obj.WB_Cache_Prim_3_State /= Complete or else
-                  not Primitive.Equal (Obj.WB_Cache_Prim_3, Cache_Prim_3)
-            then
-               exit Loop_WB_Generated_Cache_Prims;
-            end if;
-
-            Obj.WB_Cache_Prim_1_State := Invalid;
-            Obj.WB_Cache_Prim_2_State := Invalid;
-            Obj.WB_Cache_Prim_3_State := Invalid;
-            Obj.WB_Prim := Primitive.Invalid_Object;
-
-         end Declare_PBAs;
-
-      end loop Loop_WB_Generated_Cache_Prims;
-
-   end Execute_Writeback;
-
    --
    --  Execute_Crypto
    --
@@ -2962,10 +2577,6 @@ is
    begin
       Crypto.Execute (Obj.Crypto_Obj, Progress);
 
-      --
-      --  Only writes primitives (encrypted Data) are handled here,
-      --  read primitives (decrypred Data) are handled in 'give_Read_Data'.
-      --
       Loop_Crypto_Completed_Prims :
       loop
          Declare_Prim :
@@ -2973,17 +2584,8 @@ is
             Prim : constant Primitive.Object_Type :=
                Crypto.Peek_Completed_Primitive (Obj.Crypto_Obj);
          begin
+            exit Loop_Crypto_Completed_Prims when not Primitive.Valid (Prim);
 
-            --
-            --  FIXME
-            --  By default, primitives of the crypto module are treated in a
-            --  special way as the initial integration of the module was done
-            --  breaking several principles of the modular design of the CBE.
-            --  However, newer modules (like VBD Rekeying) use the crypto
-            --  module in a simple server-client fashion for
-            --  encryption/decryption requests, as originally intended. We
-            --  filter those out through their tags.
-            --
             case Primitive.Tag (Prim) is
             when
                Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
@@ -3040,36 +2642,7 @@ is
 
             when others =>
 
-               exit Loop_Crypto_Completed_Prims when
-                  not Primitive.Valid (Prim) or else
-                  Primitive.Operation (Prim) = Read;
-
-               if not Primitive.Success (Prim) then
-                  raise Program_Error;
-               end if;
-
-               Declare_Index_2 :
-               declare
-                  Index : constant Write_Back.Data_Index_Type :=
-                     Write_Back.Peek_Generated_Crypto_Data (
-                        Obj.Write_Back_Obj, Prim);
-               begin
-                  --
-                  --  FIXME instead of copying the Data just ask the crypto
-                  --        module for the resulting Hash and omit further
-                  --        processing in case the operation failed
-                  --
-                  Obj.Write_Back_Data (Index) := Crypto_Cipher_Buf (
-                     Crypto.Data_Index (Obj.Crypto_Obj, Prim));
-
-                  Write_Back.Mark_Completed_Crypto_Primitive (
-                     Obj.Write_Back_Obj, Prim, Obj.Write_Back_Data (Index));
-
-               end Declare_Index_2;
-               Crypto.Drop_Completed_Primitive (Obj.Crypto_Obj);
-                  null;
-
-               Progress := True;
+               raise Program_Error;
 
             end case;
 
@@ -3254,10 +2827,6 @@ is
 
                      end Declare_Slot_Idx;
 
-                  elsif Primitive.Has_Tag_Write_Back (Prim) then
-                     Write_Back.Mark_Completed_IO_Primitive (
-                        Obj.Write_Back_Obj, Prim);
-
                   elsif Primitive.Has_Tag_SB_Ctrl_Blk_IO_Write_SB (Prim) then
                      Superblock_Control.Mark_Generated_Prim_Complete (
                         Obj.SB_Ctrl, Prim);
@@ -3326,7 +2895,6 @@ is
       Execute_Crypto (
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);
-      Execute_Writeback (Obj, IO_Buf, Crypto_Plain_Buf, Progress);
       Execute_Free_Tree (Obj, Progress);
 
       Obj.Execute_Progress := Progress;

@@ -357,26 +357,12 @@ is
 
 private
 
-   type Cache_Prim_State_Type is (Invalid, Submitted, Complete);
-
-   type Cache_Sync_State_Type is (Inactive, Active);
-
-   type Read_Request_State_Type is
-      (Invalid, Translate, Decrypt, Complete);
-
-   type Write_Request_State_Type is
-      (Invalid, Translate, Encrypt, Complete);
-
-   type Sync_Request_State_Type is
-      (Invalid, Cache_Writeback, Superblock_Update, Superblock_Writeback);
-
    type Object_Type is record
 
       Execute_Progress        : Boolean;
       Cache_Obj               : Cache.Cache_Type;
       Cache_Jobs_Data         : Cache.Jobs_Data_Type;
       Cache_Slots_Data        : Cache.Slots_Data_Type;
-      Cache_Sync_State        : Cache_Sync_State_Type;
       Request_Pool_Obj        : Request_Pool.Object_Type;
       Crypto_Obj              : Crypto.Object_Type;
       IO_Obj                  : Block_IO.Object_Type;
@@ -392,21 +378,6 @@ private
       Last_Secured_Generation : Generation_Type;
       Secure_Superblock       : Boolean;
       Superblock              : Superblock_Type;
-
-      WB_Update_PBA : Physical_Block_Address_Type;
-
-      WB_Cache_Prim_1       : Primitive.Object_Type;
-      WB_Cache_Prim_1_State : Cache_Prim_State_Type;
-      WB_Cache_Prim_1_Data  : Block_Data_Type;
-
-      WB_Cache_Prim_2       : Primitive.Object_Type;
-      WB_Cache_Prim_2_State : Cache_Prim_State_Type;
-      WB_Cache_Prim_2_Data  : Block_Data_Type;
-
-      WB_Cache_Prim_3       : Primitive.Object_Type;
-      WB_Cache_Prim_3_State : Cache_Prim_State_Type;
-      WB_Cache_Prim_3_Data  : Block_Data_Type;
-      WB_Prim               : Primitive.Object_Type;
 
       SB_Ctrl : Superblock_Control.Control_Type;
       TA      : Trust_Anchor.Anchor_Type;
@@ -488,12 +459,6 @@ private
    procedure Execute_MT_Rszg (
       Obj      : in out Object_Type;
       Progress : in out Boolean);
-
-   procedure Execute_Writeback (
-      Obj              : in out Object_Type;
-      IO_Buf           : in out Block_IO.Data_Type;
-      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
-      Progress         : in out Boolean);
 
    --
    --  Execute_Crypto
