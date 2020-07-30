@@ -100,7 +100,6 @@ is
       Tag_Cache_Blk_IO,
       Tag_Decrypt,
       Tag_Encrypt,
-      Tag_VBD_Cache,
       Tag_FT_Cache,
       Tag_Free_Tree_Query,
       Tag_Free_Tree_IO,
@@ -208,7 +207,6 @@ is
       when Tag_Cache_Blk_IO => "Cache_Blk_IO",
       when Tag_Decrypt => "Decrypt",
       when Tag_Encrypt => "Encrypt",
-      when Tag_VBD_Cache => "VBD_Cache",
       when Tag_FT_Cache => "FT_Cache",
       when Tag_Free_Tree_Query => "Free_Tree_Query",
       when Tag_Free_Tree_IO => "Free_Tree_IO",
@@ -494,7 +492,6 @@ is
    function Has_Tag_Cache_Blk_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_Decrypt (Obj : Object_Type) return Boolean;
    function Has_Tag_Encrypt (Obj : Object_Type) return Boolean;
-   function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean;
    function Has_Tag_Free_Tree_IO (Obj : Object_Type) return Boolean;
    function Has_Tag_FT_MT (Obj : Object_Type) return Boolean;

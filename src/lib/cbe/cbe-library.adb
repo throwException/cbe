@@ -32,7 +32,6 @@ is
       Obj.Cache_Jobs_Data  := (others => (others => 0));
       Obj.Cache_Slots_Data := (others => (others => 0));
       Obj.Trans_Data       := (others => (others => 0));
-      Obj.VBD              := Virtual_Block_Device.Initialized_Object;
 
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
@@ -771,26 +770,6 @@ is
       end loop;
    end SHA256_4K_Data_From_CBE_Data;
 
-   function Curr_Snap (Obj : Object_Type)
-   return Snapshots_Index_Type
-   is (Obj.Superblock.Curr_Snap);
-
-   function Snap_Slot_For_ID (
-      Obj : Object_Type;
-      ID  : Generation_Type)
-   return Snapshots_Index_Type
-   is
-   begin
-      for I in Snapshots_Index_Type loop
-         if Obj.Superblock.Snapshots (I).Valid and then
-            Obj.Superblock.Snapshots (I).Gen = ID
-         then
-            return I;
-         end if;
-      end loop;
-      raise Program_Error;
-   end Snap_Slot_For_ID;
-
    --
    --  Idx_Of_Any_Invalid_Snap
    --
@@ -814,98 +793,6 @@ is
    return Virtual_Block_Address_Type
    is (
       Superblock_Control.Max_VBA (Obj.Superblock));
-
-   procedure Execute_VBD (
-      Obj              : in out Object_Type;
-      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
-      Progress         : in out Boolean)
-   is
-      Prim    : Primitive.Object_Type;
-      Job_Idx : Cache.Jobs_Index_Type;
-   begin
-      Virtual_Block_Device.Execute (Obj.VBD, Obj.Trans_Data);
-      if Virtual_Block_Device.Execute_Progress (Obj.VBD) then
-         Progress := True;
-      end if;
-
-      Loop_Generated_Cache_Prims :
-      loop
-         Prim := Virtual_Block_Device.Peek_Generated_Cache_Primitive (Obj.VBD);
-
-         exit Loop_Generated_Cache_Prims when
-            not Primitive.Valid (Prim) or else
-            not Cache.Primitive_Acceptable (Obj.Cache_Obj);
-
-         Cache.Submit_Primitive (Obj.Cache_Obj, Prim, Job_Idx);
-
-         if Primitive.Operation (Prim) = Write then
-            Obj.Cache_Jobs_Data (Job_Idx) :=
-               Virtual_Block_Device.Peek_Generated_Cache_Data (Obj.VBD);
-         end if;
-         Virtual_Block_Device.Drop_Generated_Cache_Primitive (
-            Obj.VBD, Prim);
-
-         Progress := True;
-
-      end loop Loop_Generated_Cache_Prims;
-
-      --
-      --  Submit Block-IO read-primitives for completed primitives of the VBD
-      --
-      Loop_VBD_Completed_Prims :
-      loop
-         declare
-            Prim : Primitive.Object_Type :=
-               Virtual_Block_Device.Peek_Completed_Primitive (Obj.VBD);
-         begin
-            exit Loop_VBD_Completed_Prims when
-               not Primitive.Valid (Prim) or else
-               Primitive.Operation (Prim) /= Read;
-
-            if Virtual_Block_Device.Peek_Completed_Generation (Obj.VBD) =
-               Initial_Generation
-            then
-               --  write all 0 to cache entry
-               --  write all 0 to result buffer
-               --  mark primitive complete at request pool
-
-               exit Loop_VBD_Completed_Prims when
-                  not Crypto.Primitive_Acceptable (Obj.Crypto_Obj);
-
-               Declare_Data_Idx :
-               declare
-                  Data_Idx : Crypto.Jobs_Index_Type;
-               begin
-                  Primitive.Success (Prim, True);
-                  Crypto.Submit_Completed_Primitive (
-                     Obj.Crypto_Obj,
-                     Prim,
-                     Virtual_Block_Device.Peek_Completed_Key_ID (Obj.VBD),
-                     Data_Idx);
-
-                  Crypto_Plain_Buf (Data_Idx) := (others => 0);
-               end Declare_Data_Idx;
-
-               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
-               Progress := True;
-
-            else
-
-               exit Loop_VBD_Completed_Prims when
-                  not Block_IO.Primitive_Acceptable (Obj.IO_Obj);
-
-               Block_IO.Submit_Primitive_Decrypt (
-                  Obj.IO_Obj, Prim,
-                  Virtual_Block_Device.Peek_Completed_Hash (Obj.VBD),
-                  Virtual_Block_Device.Peek_Completed_Key_ID (Obj.VBD));
-
-               Virtual_Block_Device.Drop_Completed_Primitive (Obj.VBD);
-               Progress := True;
-
-            end if;
-         end;
-      end loop Loop_VBD_Completed_Prims;
-   end Execute_VBD;
 
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
@@ -1215,14 +1102,6 @@ is
          end if;
 
          case Primitive.Tag (Prim) is
-         when Primitive.Tag_VBD_Cache =>
-
-            Virtual_Block_Device.Mark_Generated_Cache_Primitive_Complete (
-                  Obj.VBD, Prim, Obj.Cache_Jobs_Data (Job_Idx));
-
-            Cache.Drop_Completed_Primitive (Obj.Cache_Obj, Job_Idx);
-            Progress := True;
-
          when Primitive.Tag_FT_Cache =>
 
             New_Free_Tree.Mark_Generated_Cache_Primitive_Complete (
@@ -1335,78 +1214,6 @@ is
    is
    begin
       Request_Pool.Execute (Obj.Request_Pool_Obj, Progress);
-
-      Loop_Pool_Generated_VBD_Prims :
-      loop
-         Declare_VBD_Prim :
-         declare
-            Prim : constant Primitive.Object_Type :=
-               Request_Pool.Peek_Generated_VBD_Primitive (
-                  Obj.Request_Pool_Obj);
-         begin
-
-            exit Loop_Pool_Generated_VBD_Prims when
-               not Primitive.Valid (Prim) or else
-               not Virtual_Block_Device.Primitive_Acceptable (Obj.VBD);
-
-            Declare_Snap_Slot_Idx :
-            declare
-               Snap_ID : constant Snapshot_ID_Type :=
-                  Request_Pool.Peek_Generated_VBD_Primitive_ID (
-                     Obj.Request_Pool_Obj,
-                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
-
-               Snap_Slot_Idx : constant Snapshots_Index_Type := (
-                  if Snap_ID = 0 then Curr_Snap (Obj)
-                  else Snap_Slot_For_ID (Obj, Generation_Type (Snap_ID)));
-            begin
-
-               if Primitive.Block_Number (Prim) >
-                     Block_Number_Type (
-                        Obj.Superblock.Snapshots (Snap_Slot_Idx)
-                           .Nr_Of_Leafs - 1)
-               then
-
-                  Request_Pool.Drop_Generated_Primitive (
-                     Obj.Request_Pool_Obj,
-                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
-
-                  Request_Pool.Mark_Generated_Primitive_Complete (
-                     Obj.Request_Pool_Obj,
-                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)),
-                     False);
-
-                  Progress := True;
-
-               else
-
-                  Virtual_Block_Device.Submit_Primitive (
-                     Obj.VBD,
-                     Obj.Superblock.Snapshots (Snap_Slot_Idx).PBA,
-                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Gen,
-                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Hash,
-                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Max_Level,
-                     Obj.Superblock.Degree,
-                     Obj.Superblock.Snapshots (Snap_Slot_Idx).Nr_Of_Leafs,
-                     Prim,
-                     Obj.Superblock.State = Rekeying,
-                     Obj.Superblock.Rekeying_VBA,
-                     Obj.Superblock.Previous_Key.ID,
-                     Obj.Superblock.Current_Key.ID);
-
-                  Request_Pool.Drop_Generated_Primitive (
-                     Obj.Request_Pool_Obj,
-                     Pool_Idx_Slot_Content (Primitive.Pool_Idx_Slot (Prim)));
-
-                  Progress := True;
-
-               end if;
-
-            end Declare_Snap_Slot_Idx;
-
-         end Declare_VBD_Prim;
-
-      end loop Loop_Pool_Generated_VBD_Prims;
 
       Loop_Pool_Generated_SB_Ctrl_Prims :
       loop
@@ -2875,9 +2682,8 @@ is
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_FT_Rszg (Obj, Progress);
       Execute_MT_Rszg (Obj, Progress);
-      Execute_VBD (Obj, Crypto_Plain_Buf, Progress);
-      Execute_Cache  (Obj, IO_Buf, Progress);
-      Execute_IO     (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
+      Execute_Cache (Obj, IO_Buf, Progress);
+      Execute_IO (Obj, IO_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Crypto (
          Obj, IO_Buf, Crypto_Plain_Buf, Crypto_Cipher_Buf, Progress);
       Execute_Meta_Tree (Obj, Progress);

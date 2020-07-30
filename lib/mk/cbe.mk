@@ -7,7 +7,6 @@ SRC_ADB += cbe-request_pool.adb
 SRC_ADB += cbe-crypto.adb
 SRC_ADB += cbe-tree_helper.adb
 SRC_ADB += cbe-translation.adb
-SRC_ADB += cbe-virtual_block_device.adb
 SRC_ADB += cbe-cache.adb
 SRC_ADB += cbe-new_free_tree.adb
 SRC_ADB += cbe-ft_resizing.adb

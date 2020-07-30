@@ -419,9 +419,6 @@ is
    function Has_Tag_Encrypt (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_Encrypt);
 
-   function Has_Tag_VBD_Cache (Obj : Object_Type) return Boolean
-   is (Obj.Tag = Tag_VBD_Cache);
-
    function Has_Tag_FT_Cache (Obj : Object_Type) return Boolean
    is (Obj.Tag = Tag_FT_Cache);
 

@@ -10,7 +10,6 @@ pragma Ada_2012;
 
 with CBE.Request_Pool;
 with CBE.Crypto;
-with CBE.Virtual_Block_Device;
 with CBE.Block_IO;
 with CBE.Request;
 with CBE.Cache;
@@ -365,7 +364,6 @@ private
       Crypto_Obj              : Crypto.Object_Type;
       IO_Obj                  : Block_IO.Object_Type;
       Trans_Data              : Translation_Data_Type;
-      VBD                     : Virtual_Block_Device.Object_Type;
       New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
       Meta_Tree_Obj           : Meta_Tree.Object_Type;
       Cur_SB                  : Superblocks_Index_Type;
@@ -381,24 +379,11 @@ private
 
    end record;
 
-   function Curr_Snap (Obj : Object_Type)
-   return Snapshots_Index_Type;
-
-   function Snap_Slot_For_ID (
-      Obj : Object_Type;
-      ID  : Generation_Type)
-   return Snapshots_Index_Type;
-
    --
    --  Idx_Of_Any_Invalid_Snap
    --
    function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
    return Snapshots_Index_Type;
-
-   procedure Execute_VBD (
-      Obj              : in out Object_Type;
-      Crypto_Plain_Buf : in out Crypto.Plain_Buffer_Type;
-      Progress         : in out Boolean);
 
    procedure Execute_Free_Tree (
       Obj      : in out Object_Type;
