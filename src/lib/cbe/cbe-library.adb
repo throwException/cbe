@@ -34,7 +34,6 @@ is
       Obj.VBD              := Virtual_Block_Device.Initialized_Object;
 
       New_Free_Tree.Initialized_Object (Obj.New_Free_Tree_Obj);
-      Obj.New_Free_Tree_Prim := Primitive.Invalid_Object;
       Meta_Tree.Initialized_Object (Obj.Meta_Tree_Obj);
 
       Obj.Secure_Superblock := False;
@@ -958,8 +957,7 @@ is
                   Obj.New_Free_Tree_Obj);
          begin
             exit Loop_Free_Tree_Generated_Meta_Tree_Prims when
-               not Primitive.Valid (Prim);
-            exit Loop_Free_Tree_Generated_Meta_Tree_Prims when
+               not Primitive.Valid (Prim) or else
                not Meta_Tree.Request_Acceptable (Obj.Meta_Tree_Obj);
 
             Meta_Tree.Submit_Primitive (
@@ -976,8 +974,8 @@ is
 
             New_Free_Tree.Drop_Generated_Meta_Tree_Primitive (
                Obj.New_Free_Tree_Obj, Prim);
-            Obj.New_Free_Tree_Prim := Prim;
             Progress := True;
+
          end Declare_Free_Tree_Generated_Prim;
       end loop Loop_Free_Tree_Generated_Meta_Tree_Prims;
 
@@ -1090,10 +1088,6 @@ is
             exit Loop_Completed_Meta_Tree_Primitives when
                not Primitive.Valid (Prim);
 
-            pragma Debug (Debug.Print_String (
-               "Loop_Completed_Meta_Tree_Primitives: "
-               & Primitive.To_String (Prim)));
-
             case Primitive.Tag (Prim) is
             when Primitive.Tag_FT_MT =>
 
@@ -1105,22 +1099,14 @@ is
                   Obj.Superblock.Meta_Gen    := Node.Gen;
                   Obj.Superblock.Meta_Number := Node.PBA;
                   Obj.Superblock.Meta_Hash   := Node.Hash;
-
-                  pragma Debug (Debug.Print_String (
-                     "Loop_Completed_Meta_Tree_Primitives: "
-                     & " Node: " & Debug.To_String (Node.PBA)
-                     & " Prim: " & Primitive.To_String (Prim)));
                end;
 
-               Primitive.Success (Obj.New_Free_Tree_Prim,
-                  Primitive.Success (Prim));
-
                New_Free_Tree.Mark_Generated_Meta_Tree_Primitive_Complete (
-                  Obj.New_Free_Tree_Obj, Obj.New_Free_Tree_Prim,
+                  Obj.New_Free_Tree_Obj,
+                  Prim,
                   Meta_Tree.Peek_Completed_New_PBA (Obj.Meta_Tree_Obj, Prim));
 
-               Meta_Tree.Drop_Completed_Primitive (
-                  Obj.Meta_Tree_Obj, Prim);
+               Meta_Tree.Drop_Completed_Primitive (Obj.Meta_Tree_Obj, Prim);
                Progress := True;
 
             when Primitive.Tag_FT_Rszg_MT_Alloc =>

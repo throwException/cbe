@@ -368,7 +368,6 @@ private
       Trans_Data              : Translation_Data_Type;
       VBD                     : Virtual_Block_Device.Object_Type;
       New_Free_Tree_Obj       : New_Free_Tree.Object_Type;
-      New_Free_Tree_Prim      : Primitive.Object_Type;
       Meta_Tree_Obj           : Meta_Tree.Object_Type;
       Cur_SB                  : Superblocks_Index_Type;
       Cur_Gen                 : Generation_Type;
