@@ -93,7 +93,8 @@ is
             exit Loop_SB_Check_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Check_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Check_Blk_IO =>
 
                exit Loop_SB_Check_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -106,7 +107,7 @@ is
 
                Obj.Execute_Progress := True;
 
-            elsif Primitive.Has_Tag_SB_Check_VBD_Check (Prim) then
+            when Primitive.Tag_SB_Check_VBD_Check =>
 
                if VBD_Check.Primitive_Acceptable (Obj.VBD_Chk) then
 
@@ -128,7 +129,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Check_FT_Check (Prim) then
+            when Primitive.Tag_SB_Check_FT_Check =>
 
                if Free_Tree_Check.Primitive_Acceptable (Obj.FT_Chk) then
 
@@ -150,7 +151,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Check_MT_Check (Prim) then
+            when Primitive.Tag_SB_Check_MT_Check =>
 
                if Free_Tree_Check.Primitive_Acceptable (Obj.FT_Chk) then
 
@@ -172,9 +173,11 @@ is
 
                end if;
 
-            else
+            when others =>
+
                raise Program_Error;
-            end if;
+
+            end case;
 
          end Declare_SB_Check_Generated_Prim;
 
@@ -221,7 +224,8 @@ is
             exit Loop_VBD_Check_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_VBD_Check_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Check_Blk_IO =>
 
                exit Loop_VBD_Check_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -230,9 +234,9 @@ is
                   Obj.Blk_IO, Primitive.Tag_VBD_Check_Blk_IO, Prim);
 
                Obj.Execute_Progress := True;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             VBD_Check.Drop_Generated_Primitive (Obj.VBD_Chk, Prim);
 
@@ -253,16 +257,17 @@ is
             exit Loop_VBD_Check_Completed_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Check_VBD_Check (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Check_VBD_Check =>
 
                Superblock_Check.
                   Mark_Generated_VBD_Check_Primitive_Complete (
                      Obj.SB_Chk, Prim);
 
                Obj.Execute_Progress := True;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             VBD_Check.Drop_Completed_Primitive (Obj.VBD_Chk, Prim);
 
@@ -298,7 +303,8 @@ is
             exit Loop_FT_Check_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_FT_Check_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_FT_Check_Blk_IO =>
 
                exit Loop_FT_Check_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -307,9 +313,9 @@ is
                   Obj.Blk_IO, Primitive.Tag_FT_Check_Blk_IO, Prim);
 
                Obj.Execute_Progress := True;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Free_Tree_Check.Drop_Generated_Primitive (Obj.FT_Chk, Prim);
 
@@ -330,7 +336,8 @@ is
             exit Loop_FT_Check_Completed_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Check_FT_Check (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Check_FT_Check =>
 
                Superblock_Check.
                   Mark_Generated_FT_Check_Primitive_Complete (
@@ -339,7 +346,7 @@ is
                         Obj.FT_Chk, Prim));
 
                Obj.Execute_Progress := True;
-            elsif Primitive.Has_Tag_SB_Check_MT_Check (Prim) then
+            when Primitive.Tag_SB_Check_MT_Check =>
 
                Superblock_Check.
                   Mark_Generated_FT_Check_Primitive_Complete (
@@ -348,9 +355,9 @@ is
                         Obj.FT_Chk, Prim));
 
                Obj.Execute_Progress := True;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Free_Tree_Check.Drop_Completed_Primitive (Obj.FT_Chk, Prim);
 
@@ -378,29 +385,30 @@ is
                raise Program_Error;
             end if;
 
-            if Primitive.Has_Tag_SB_Check_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Check_Blk_IO =>
 
                Superblock_Check.Mark_Generated_Blk_IO_Primitive_Complete (
                   Obj.SB_Chk, Prim,
                   Blk_IO_Buf (
                      Block_IO.Peek_Completed_Data_Index (Obj.Blk_IO)));
 
-            elsif Primitive.Has_Tag_VBD_Check_Blk_IO (Prim) then
+            when Primitive.Tag_VBD_Check_Blk_IO =>
 
                VBD_Check.Mark_Generated_Primitive_Complete (
                   Obj.VBD_Chk, Prim,
                   Blk_IO_Buf (
                      Block_IO.Peek_Completed_Data_Index (Obj.Blk_IO)));
 
-            elsif Primitive.Has_Tag_FT_Check_Blk_IO (Prim) then
+            when Primitive.Tag_FT_Check_Blk_IO =>
 
                Free_Tree_Check.Mark_Generated_Primitive_Complete (
                   Obj.FT_Chk, Prim,
                   Blk_IO_Buf (
                      Block_IO.Peek_Completed_Data_Index (Obj.Blk_IO)));
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Block_IO.Drop_Completed_Primitive (Obj.Blk_IO, Prim);
 

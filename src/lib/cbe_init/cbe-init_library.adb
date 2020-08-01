@@ -117,7 +117,8 @@ is
             exit Loop_SB_Init_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Init_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Init_Blk_IO =>
 
                exit Loop_SB_Init_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -150,7 +151,7 @@ is
 
                end Declare_Data_Idx_1;
 
-            elsif Primitive.Has_Tag_SB_Init_VBD_Init (Prim) then
+            when Primitive.Tag_SB_Init_VBD_Init =>
 
                if VBD_Initializer.Primitive_Acceptable (Obj.VBD_Init) then
 
@@ -170,7 +171,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Init_FT_Init (Prim) then
+            when Primitive.Tag_SB_Init_FT_Init =>
 
                if Free_Tree_Initializer.Primitive_Acceptable (Obj.FT_Init) then
 
@@ -190,7 +191,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Init_MT_Init (Prim) then
+            when Primitive.Tag_SB_Init_MT_Init =>
 
                if Free_Tree_Initializer.Primitive_Acceptable (Obj.FT_Init) then
 
@@ -210,7 +211,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Init_TA_Create_Key (Prim) then
+            when Primitive.Tag_SB_Init_TA_Create_Key =>
 
                if Trust_Anchor.Primitive_Acceptable (Obj.TA) then
 
@@ -223,7 +224,7 @@ is
 
                end if;
 
-            elsif Primitive.Has_Tag_SB_Init_TA_Encrypt_Key (Prim) then
+            when Primitive.Tag_SB_Init_TA_Encrypt_Key =>
 
                if Trust_Anchor.Primitive_Acceptable (Obj.TA) then
 
@@ -239,9 +240,9 @@ is
 
                end if;
 
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
          end Declare_SB_Init_Generated_Prim;
 
@@ -290,7 +291,8 @@ is
             exit Loop_VBD_Init_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_VBD_Init_Blk_Alloc (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Init_Blk_Alloc =>
 
                exit Loop_VBD_Init_Generated_Prims when
                   not Block_Allocator.Primitive_Acceptable (Obj.Blk_Alloc);
@@ -298,7 +300,7 @@ is
                Block_Allocator.Submit_Primitive (Obj.Blk_Alloc, Prim);
                Obj.Execute_Progress := True;
 
-            elsif Primitive.Has_Tag_VBD_Init_Blk_IO (Prim) then
+            when Primitive.Tag_VBD_Init_Blk_IO =>
 
                exit Loop_VBD_Init_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -319,9 +321,9 @@ is
                   Obj.Execute_Progress := True;
 
                end Declare_Data_Idx_3;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             VBD_Initializer.Drop_Generated_Primitive (Obj.VBD_Init, Prim);
 
@@ -342,7 +344,8 @@ is
             exit Loop_VBD_Init_Completed_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Init_VBD_Init (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Init_VBD_Init =>
 
                Superblock_Initializer.
                   Mark_Generated_VBD_Init_Primitive_Complete (
@@ -350,9 +353,9 @@ is
                      VBD_Initializer.Peek_Completed_Root (Obj.VBD_Init, Prim));
 
                Obj.Execute_Progress := True;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             VBD_Initializer.Drop_Completed_Primitive (Obj.VBD_Init, Prim);
 
@@ -390,7 +393,8 @@ is
             exit Loop_FT_Init_Generated_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_FT_Init_Blk_Alloc =>
 
                exit Loop_FT_Init_Generated_Prims when
                   not Block_Allocator.Primitive_Acceptable (Obj.Blk_Alloc);
@@ -398,7 +402,7 @@ is
                Block_Allocator.Submit_Primitive (Obj.Blk_Alloc, Prim);
                Obj.Execute_Progress := True;
 
-            elsif Primitive.Has_Tag_FT_Init_Blk_IO (Prim) then
+            when Primitive.Tag_FT_Init_Blk_IO =>
 
                exit Loop_FT_Init_Generated_Prims when
                   not Block_IO.Primitive_Acceptable (Obj.Blk_IO);
@@ -418,9 +422,9 @@ is
                   Obj.Execute_Progress := True;
 
                end Declare_Data_Idx_4;
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Free_Tree_Initializer.Drop_Generated_Primitive (Obj.FT_Init, Prim);
 
@@ -441,7 +445,8 @@ is
             exit Loop_FT_Init_Completed_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Init_FT_Init (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Init_FT_Init =>
 
                Superblock_Initializer.
                   Mark_Generated_FT_Init_Primitive_Complete (
@@ -451,7 +456,7 @@ is
 
                Obj.Execute_Progress := True;
 
-            elsif Primitive.Has_Tag_SB_Init_MT_Init (Prim) then
+            when Primitive.Tag_SB_Init_MT_Init =>
 
                Superblock_Initializer.
                   Mark_Generated_FT_Init_Primitive_Complete (
@@ -461,9 +466,9 @@ is
 
                Obj.Execute_Progress := True;
 
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Free_Tree_Initializer.Drop_Completed_Primitive (Obj.FT_Init, Prim);
 
@@ -498,23 +503,24 @@ is
             exit Loop_Blk_Alloc_Completed_Prims when
                not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_VBD_Init_Blk_Alloc (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_VBD_Init_Blk_Alloc =>
 
                VBD_Initializer.Mark_Generated_Primitive_Complete (
                   Obj.VBD_Init, Prim);
 
                Obj.Execute_Progress := True;
 
-            elsif Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim) then
+            when Primitive.Tag_FT_Init_Blk_Alloc =>
 
                Free_Tree_Initializer.Mark_Generated_Primitive_Complete (
                   Obj.FT_Init, Prim);
 
                Obj.Execute_Progress := True;
 
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Block_Allocator.Drop_Completed_Primitive (Obj.Blk_Alloc, Prim);
 
@@ -540,25 +546,26 @@ is
                raise Program_Error;
             end if;
 
-            if Primitive.Has_Tag_SB_Init_Blk_IO (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Init_Blk_IO =>
 
                Superblock_Initializer.
                   Mark_Generated_Blk_IO_Primitive_Complete (
                      Obj.SB_Init, Prim);
 
-            elsif Primitive.Has_Tag_VBD_Init_Blk_IO (Prim) then
+            when Primitive.Tag_VBD_Init_Blk_IO =>
 
                VBD_Initializer.Mark_Generated_Primitive_Complete (
                   Obj.VBD_Init, Prim);
 
-            elsif Primitive.Has_Tag_FT_Init_Blk_IO (Prim) then
+            when Primitive.Tag_FT_Init_Blk_IO =>
 
                Free_Tree_Initializer.Mark_Generated_Primitive_Complete (
                   Obj.FT_Init, Prim);
 
-            else
+            when others =>
                raise Program_Error;
-            end if;
+            end case;
 
             Block_IO.Drop_Completed_Primitive (Obj.Blk_IO, Prim);
 
@@ -580,25 +587,26 @@ is
          begin
             exit Loop_Completed_TA_Prims when not Primitive.Valid (Prim);
 
-            if Primitive.Has_Tag_SB_Init_TA_Create_Key (Prim) then
+            case Primitive.Tag (Prim) is
+            when Primitive.Tag_SB_Init_TA_Create_Key =>
 
                Superblock_Initializer.Mark_Generated_TA_CK_Primitive_Complete
                   (Obj.SB_Init, Prim,
                    Trust_Anchor.Peek_Completed_Key_Value_Plaintext (
                       Obj.TA, Prim));
 
-            elsif Primitive.Has_Tag_SB_Init_TA_Encrypt_Key (Prim) then
+            when Primitive.Tag_SB_Init_TA_Encrypt_Key =>
 
                Superblock_Initializer.Mark_Generated_TA_EK_Primitive_Complete
                   (Obj.SB_Init, Prim,
                    Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
                       Obj.TA, Prim));
 
-            else
+            when others =>
 
                raise Program_Error;
 
-            end if;
+            end case;
 
             Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
 

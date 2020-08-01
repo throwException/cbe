@@ -221,7 +221,10 @@ is
 
                Progress := True;
 
-            elsif not Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim) then
+            elsif
+               Primitive."/=" (
+                  Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_Alloc)
+            then
 
                raise Program_Error;
 
@@ -317,7 +320,10 @@ is
 
             Progress := True;
 
-         elsif not Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim) then
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_Alloc)
+         then
 
             raise Program_Error;
 
@@ -360,8 +366,11 @@ is
             Lvl_To_Write := Lvl_Idx - 1;
             Progress := True;
 
-         elsif not Primitive.Has_Tag_FT_Init_Blk_IO (Prim) or else
-               Primitive.Block_Number (Prim) /= Block_Number_Type (Child.PBA)
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_IO)
+            or else
+            Primitive.Block_Number (Prim) /= Block_Number_Type (Child.PBA)
          then
 
             raise Program_Error;
@@ -458,7 +467,10 @@ is
 
             Progress := True;
 
-         elsif not Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim) then
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_Alloc)
+         then
 
             raise Program_Error;
 
@@ -501,8 +513,11 @@ is
             Lvl_To_Write := Lvl_Idx - 1;
             Progress := True;
 
-         elsif not Primitive.Has_Tag_FT_Init_Blk_IO (Prim) or else
-               Primitive.Block_Number (Prim) /= Block_Number_Type (Child.PBA)
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_IO)
+            or else
+            Primitive.Block_Number (Prim) /= Block_Number_Type (Child.PBA)
          then
 
             raise Program_Error;
@@ -654,7 +669,9 @@ is
    is
       Data : Block_Data_Type;
    begin
-      if not Primitive.Has_Tag_FT_Init_Blk_IO (Prim) or else
+      if Primitive."/=" (
+            Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_IO)
+         or else
          not Primitive.Equal (Prim, Obj.Gen_Prim) or else
          Obj.Gen_Prim_Dropped
       then
@@ -693,10 +710,18 @@ is
    begin
       if Primitive.Valid (Obj.Gen_Prim) and then
          Obj.Gen_Prim_Dropped and then
-         ((Primitive.Has_Tag_FT_Init_Blk_Alloc (Obj.Gen_Prim) and then
-           Primitive.Has_Tag_FT_Init_Blk_Alloc (Prim)) or else
-          (Primitive.Has_Tag_FT_Init_Blk_IO (Obj.Gen_Prim) and then
-           Primitive.Has_Tag_FT_Init_Blk_IO (Prim) and then
+         ((Primitive."=" (
+              Primitive.Tag (Obj.Gen_Prim), Primitive.Tag_FT_Init_Blk_Alloc)
+           and then
+           Primitive."=" (
+              Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_Alloc))
+          or else
+          (Primitive."=" (
+              Primitive.Tag (Obj.Gen_Prim), Primitive.Tag_FT_Init_Blk_IO)
+           and then
+           Primitive."=" (
+              Primitive.Tag (Prim), Primitive.Tag_FT_Init_Blk_IO)
+           and then
            Primitive.Block_Number (Obj.Gen_Prim) =
               Primitive.Block_Number (Prim)))
       then

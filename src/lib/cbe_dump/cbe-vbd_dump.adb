@@ -297,7 +297,10 @@ is
             Lvl_To_Read := Lvl_Idx - 1;
             Progress := True;
 
-         elsif not Primitive.Has_Tag_VBD_Dump_Blk_IO (Prim) then
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_VBD_Dump_Blk_IO)
+         then
 
             raise Program_Error;
 
@@ -370,7 +373,10 @@ is
             Lvl_To_Read := Lvl_Idx - 1;
             Progress := True;
 
-         elsif not Primitive.Has_Tag_VBD_Dump_Blk_IO (Prim) then
+         elsif
+            Primitive."/=" (
+               Primitive.Tag (Prim), Primitive.Tag_VBD_Dump_Blk_IO)
+         then
 
             raise Program_Error;
 
@@ -661,9 +667,13 @@ is
    is
    begin
       if Primitive.Valid (Obj.Gen_Prim) and then
-         Obj.Gen_Prim_Dropped and then
-          (Primitive.Has_Tag_VBD_Dump_Blk_IO (Obj.Gen_Prim) and then
-           Primitive.Has_Tag_VBD_Dump_Blk_IO (Prim) and then
+         Obj.Gen_Prim_Dropped and then (
+            Primitive."=" (
+               Primitive.Tag (Obj.Gen_Prim), Primitive.Tag_VBD_Dump_Blk_IO)
+            and then
+            Primitive."=" (
+               Primitive.Tag (Prim), Primitive.Tag_VBD_Dump_Blk_IO)
+            and then
            Primitive.Block_Number (Obj.Gen_Prim) =
               Primitive.Block_Number (Prim))
       then

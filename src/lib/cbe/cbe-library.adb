@@ -161,7 +161,6 @@ is
       Prim : constant Primitive.Object_Type :=
          Block_IO.Peek_Generated_Blk_Dev_Primitive (Obj.IO_Obj);
    begin
-
       if Primitive.Valid (Prim) then
 
          Data_Idx := Block_IO.Peek_Generated_Data_Index (Obj.IO_Obj, Prim);
@@ -216,32 +215,27 @@ is
       VBA           : out Virtual_Block_Address_Type;
       Plain_Buf_Idx : out Crypto.Plain_Buffer_Index_Type)
    is
+      Prim : constant Primitive.Object_Type :=
+         Crypto.Peek_Generated_Client_Primitive (Obj.Crypto_Obj);
    begin
+      if Primitive.Valid (Prim) then
 
-      Declare_Prim :
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Crypto.Peek_Generated_Client_Primitive (Obj.Crypto_Obj);
-      begin
-
-         if Primitive.Valid (Prim) and then
-            Primitive.Has_Tag_Crypto_IO_Client_Supply_Data (Prim)
-         then
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_Crypto_IO_Client_Supply_Data =>
 
             Req := Crypto.Peek_Generated_Req (Obj.Crypto_Obj, Prim);
             VBA := Crypto.Peek_Generated_VBA (Obj.Crypto_Obj, Prim);
             Plain_Buf_Idx :=
                Crypto.Peek_Generated_Plain_Buf_Idx (Obj.Crypto_Obj, Prim);
+            return;
 
-         else
+         when others => null;
+         end case;
 
-            Req := Request.Invalid_Object;
-            VBA := Virtual_Block_Address_Type'First;
-            Plain_Buf_Idx := Crypto.Plain_Buffer_Index_Type'First;
-
-         end if;
-
-      end Declare_Prim;
+      end if;
+      Req := Request.Invalid_Object;
+      VBA := Virtual_Block_Address_Type'First;
+      Plain_Buf_Idx := Crypto.Plain_Buffer_Index_Type'First;
 
    end Client_Transfer_Read_Data_Required;
 
@@ -281,32 +275,27 @@ is
       VBA           : out Virtual_Block_Address_Type;
       Plain_Buf_Idx : out Crypto.Plain_Buffer_Index_Type)
    is
+      Prim : constant Primitive.Object_Type :=
+         Crypto.Peek_Generated_Client_Primitive (Obj.Crypto_Obj);
    begin
+      if Primitive.Valid (Prim) then
 
-      Declare_Prim :
-      declare
-         Prim : constant Primitive.Object_Type :=
-            Crypto.Peek_Generated_Client_Primitive (Obj.Crypto_Obj);
-      begin
-
-         if Primitive.Valid (Prim) and then
-            Primitive.Has_Tag_Crypto_IO_Client_Obtain_Data (Prim)
-         then
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_Crypto_IO_Client_Obtain_Data =>
 
             Req := Crypto.Peek_Generated_Req (Obj.Crypto_Obj, Prim);
             VBA := Crypto.Peek_Generated_VBA (Obj.Crypto_Obj, Prim);
             Plain_Buf_Idx :=
                Crypto.Peek_Generated_Plain_Buf_Idx (Obj.Crypto_Obj, Prim);
+            return;
 
-         else
+         when others => null;
+         end case;
 
-            Req := Request.Invalid_Object;
-            VBA := Virtual_Block_Address_Type'First;
-            Plain_Buf_Idx := Crypto.Plain_Buffer_Index_Type'First;
-
-         end if;
-
-      end Declare_Prim;
+      end if;
+      Req := Request.Invalid_Object;
+      VBA := Virtual_Block_Address_Type'First;
+      Plain_Buf_Idx := Crypto.Plain_Buffer_Index_Type'First;
 
    end Client_Transfer_Write_Data_Required;
 
@@ -348,25 +337,29 @@ is
       Idx  : Crypto.Jobs_Index_Type;
       Prim : Primitive.Object_Type;
    begin
-
       Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim);
-      if not Primitive.Valid (Prim) or else
-         not Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim)
-      then
-         Key_ID := Key_ID_Invalid;
-         Req := Request.Invalid_Object;
-         return;
-      end if;
+      if Primitive.Valid (Prim) then
 
-      Key_ID := Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx);
-      Req := Request.Valid_Object (
-         Op     => Read,
-         Succ   => False,
-         Blk_Nr => 0,
-         Off    => 0,
-         Cnt    => 1,
-         Key    => 0,
-         Tg     => Request.Tag_Type (Idx));
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_SB_Ctrl_Crypto_Remove_Key =>
+
+            Key_ID := Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx);
+            Req := Request.Valid_Object (
+               Op     => Read,
+               Succ   => False,
+               Blk_Nr => 0,
+               Off    => 0,
+               Cnt    => 1,
+               Key    => 0,
+               Tg     => Request.Tag_Type (Idx));
+            return;
+
+         when others => null;
+         end case;
+
+      end if;
+      Key_ID := Key_ID_Invalid;
+      Req := Request.Invalid_Object;
 
    end Crypto_Remove_Key_Required;
 
@@ -407,25 +400,29 @@ is
       Idx  : Crypto.Jobs_Index_Type;
       Prim : Primitive.Object_Type;
    begin
-
       Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim);
-      if not Primitive.Valid (Prim) or else
-         not Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim)
-      then
-         Key := Key_Plaintext_Invalid;
-         Req := Request.Invalid_Object;
-         return;
-      end if;
+      if Primitive.Valid (Prim) then
 
-      Key := Crypto.Peek_Generated_Key (Obj.Crypto_Obj, Idx);
-      Req := Request.Valid_Object (
-         Op     => Read,
-         Succ   => False,
-         Blk_Nr => 0,
-         Off    => 0,
-         Cnt    => 1,
-         Key    => 0,
-         Tg     => Request.Tag_Type (Idx));
+         case Primitive.Tag (Prim) is
+         when Primitive.Tag_SB_Ctrl_Crypto_Add_Key =>
+
+            Key := Crypto.Peek_Generated_Key (Obj.Crypto_Obj, Idx);
+            Req := Request.Valid_Object (
+               Op     => Read,
+               Succ   => False,
+               Blk_Nr => 0,
+               Off    => 0,
+               Cnt    => 1,
+               Key    => 0,
+               Tg     => Request.Tag_Type (Idx));
+            return;
+
+         when others => null;
+         end case;
+
+      end if;
+      Key := Key_Plaintext_Invalid;
+      Req := Request.Invalid_Object;
 
    end Crypto_Add_Key_Required;
 
@@ -495,26 +492,44 @@ is
 
                Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Idx, Prim_1);
                Data_Index := Crypto.Plain_Buffer_Index_Type (Idx);
-               if not Primitive.Valid (Prim_1) or else
-                  Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim_1) or else
-                  Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim_1) or else
-                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (Prim_1)
-                  or else
-                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (Prim_1)
-                  or else
-                  Primitive.Operation (Prim_1) /= Write
+
+               if Primitive.Valid (Prim_1) and then
+                  Primitive.Operation (Prim_1) = Write
                then
+
+                  case Primitive.Tag (Prim_1) is
+                  when
+                     Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
+                     Primitive.Tag_SB_Ctrl_Crypto_Remove_Key |
+                     Primitive.Tag_Crypto_IO_Crypto_Dev_Decrypt |
+                     Primitive.Tag_Crypto_IO_Crypto_Dev_Encrypt
+                  =>
+
+                     Req := Request.Invalid_Object;
+                     return;
+
+                  when others =>
+
+                     Req := Request.Valid_Object (
+                        Op     => Write,
+                        Succ   => False,
+                        Blk_Nr => Primitive.Block_Number (Prim_1),
+                        Off    => 0,
+                        Cnt    => 1,
+                        Key    =>
+                           Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
+                        Tg     => 0);
+
+                     return;
+
+                  end case;
+
+               else
+
                   Req := Request.Invalid_Object;
                   return;
+
                end if;
-               Req := Request.Valid_Object (
-                  Op     => CBE.Write,
-                  Succ   => False,
-                  Blk_Nr => Primitive.Block_Number (Prim_1),
-                  Off    => 0,
-                  Cnt    => 1,
-                  Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
-                  Tg     => 0);
 
             end Declare_Idx;
 
@@ -590,33 +605,50 @@ is
 
             Declare_Idx :
             declare
-               Idx : Crypto.Jobs_Index_Type;
+               Idx    : Crypto.Jobs_Index_Type;
                Prim_1 : Primitive.Object_Type;
             begin
 
-               Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj, Idx, Prim_1);
-
+               Crypto.Peek_Generated_Primitive (Obj.Crypto_Obj,  Idx, Prim_1);
                Data_Index := Crypto.Cipher_Buffer_Index_Type (Idx);
-               if not Primitive.Valid (Prim_1) or else
-                  Primitive.Has_Tag_SB_Ctrl_Crypto_Add_Key (Prim_1) or else
-                  Primitive.Has_Tag_SB_Ctrl_Crypto_Remove_Key (Prim_1) or else
-                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Decrypt (Prim_1)
-                  or else
-                  Primitive.Has_Tag_Crypto_IO_Crypto_Dev_Encrypt (Prim_1)
-                  or else
-                  Primitive.Operation (Prim_1) /= Read
+
+               if Primitive.Valid (Prim_1) and then
+                  Primitive.Operation (Prim_1) = Read
                then
+
+                  case Primitive.Tag (Prim_1) is
+                  when
+                     Primitive.Tag_SB_Ctrl_Crypto_Add_Key |
+                     Primitive.Tag_SB_Ctrl_Crypto_Remove_Key |
+                     Primitive.Tag_Crypto_IO_Crypto_Dev_Decrypt |
+                     Primitive.Tag_Crypto_IO_Crypto_Dev_Encrypt
+                  =>
+
+                     Req := Request.Invalid_Object;
+                     return;
+
+                  when others =>
+
+                     Req := Request.Valid_Object (
+                        Op     => Read,
+                        Succ   => False,
+                        Blk_Nr => Primitive.Block_Number (Prim_1),
+                        Off    => 0,
+                        Cnt    => 1,
+                        Key    =>
+                           Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
+                        Tg     => 0);
+
+                     return;
+
+                  end case;
+
+               else
+
                   Req := Request.Invalid_Object;
                   return;
+
                end if;
-               Req := Request.Valid_Object (
-                  Op     => Read,
-                  Succ   => False,
-                  Blk_Nr => Primitive.Block_Number (Prim_1),
-                  Off    => 0,
-                  Cnt    => 1,
-                  Key    => Crypto.Peek_Generated_Key_ID (Obj.Crypto_Obj, Idx),
-                  Tg     => 0);
 
             end Declare_Idx;
 
