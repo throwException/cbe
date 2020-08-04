@@ -13,6 +13,11 @@
 #include <cbe/types.h>
 #include <cbe/spark_object.h>
 
+
+extern "C" void cbe_init_cxx_init();
+extern "C" void cbe_init_cxx_final();
+
+
 namespace Cbe_init {
 
 	class Library;

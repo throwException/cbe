@@ -228,13 +228,9 @@ void Component::construct(Genode::Env &env)
 	timer.msleep(3000);
 	Genode::log("start checking");
 
-	/**
-	 * We have to call adainit, so, the secondary stack of SPARK
-	 * for, e.g., variable-sized return values gets initialized.
-	 */
-	adainit();
-
 	Cbe::assert_valid_object_size<Cbe_check::Library>();
+
+	cbe_check_cxx_init();
 
 	static Main main(env);
 }

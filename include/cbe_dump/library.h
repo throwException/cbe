@@ -16,6 +16,11 @@
 /* CBE dump includes */
 #include <cbe_dump/configuration.h>
 
+
+extern "C" void cbe_dump_cxx_init();
+extern "C" void cbe_dump_cxx_final();
+
+
 namespace Cbe_dump {
 
 	class Library;

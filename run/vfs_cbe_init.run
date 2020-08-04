@@ -111,6 +111,8 @@ exec truncate -s [cbe_image_size_mb]M bin/[cbe_image_file]
 append boot_modules {
 	core init timer lx_block cbe_init
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
+	external_trust_anchor_cxx.lib.so
+	cbe_init_cxx.lib.so
 	log_terminal report_rom
 }
 

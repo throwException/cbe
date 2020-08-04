@@ -19,6 +19,10 @@
 #include <cbe/spark_object.h>
 
 
+extern "C" void cbe_cxx_init();
+extern "C" void cbe_cxx_final();
+
+
 namespace Cbe {
 
 	using namespace Genode;

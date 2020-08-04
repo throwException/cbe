@@ -14,7 +14,6 @@
 #include <base/heap.h>
 #include <base/thread.h>
 #include <root/root.h>
-#include <terminal_session/connection.h>
 #include <util/bit_allocator.h>
 
 /* cbe includes */
@@ -32,9 +31,6 @@
 /* cbe-init includes */
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
-
-/* repo includes */
-#include <util/sha256_4k.h>
 
 /* local includes */
 #include <util.h>
@@ -2490,23 +2486,28 @@ extern "C" void print_cstring_buffered(char const     *input,
 
 }
 
-extern "C" void adainit();
 
 void Component::construct(Genode::Env &env)
 {
 	env.exec_static_constructors();
 
-	/**
-	 * We have to call adainit, so, the secondary stack of SPARK
-	 * for, e.g., variable-sized return values gets initialized.
-	 */
-	adainit();
-
 	Cbe::assert_valid_object_size<Cbe::Library>();
+	cbe_cxx_init();
+
 	Cbe::assert_valid_object_size<Cbe_init::Library>();
+	cbe_init_cxx_init();
+
 	Cbe::assert_valid_object_size<Cbe_check::Library>();
+	cbe_check_cxx_init();
+
 	Cbe::assert_valid_object_size<Cbe_dump::Library>();
+	cbe_dump_cxx_init();
+
+	Cbe::assert_valid_object_size<External::Trust_anchor>();
+	external_trust_anchor_cxx_init();
+
 	Cbe::assert_valid_object_size<External::Crypto>();
+	external_crypto_cxx_init();
 
 	static Cbe::Main inst(env);
 }

@@ -159,6 +159,8 @@ catch { exec $dd if=/dev/urandom of=bin/[cbe_image_file] bs=1M count=[cbe_image_
 append boot_modules {
 	core init timer cbe_tester
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
+	cbe_cxx.lib.so cbe_check_cxx.lib.so cbe_dump_cxx.lib.so cbe_init_cxx.lib.so
+	external_crypto_cxx.lib.so external_trust_anchor_cxx.lib.so
 	log_terminal report_rom lx_block
 }
 

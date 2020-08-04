@@ -18,6 +18,10 @@
 #include <cbe/spark_object.h>
 
 
+extern "C" void external_trust_anchor_cxx_init();
+extern "C" void external_trust_anchor_cxx_final();
+
+
 namespace External {
 
 	using namespace Cbe;

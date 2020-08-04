@@ -240,6 +240,9 @@ append boot_modules {
 	lx_fs
 	spark.lib.so
 	libsparkcrypto.lib.so
+	external_trust_anchor_cxx.lib.so
+	external_crypto_cxx.lib.so
+	cbe_cxx.lib.so
 	vfs_cbe.lib.so
 	vfs_cbe.sh
 	vfs.lib.so

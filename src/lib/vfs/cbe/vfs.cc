@@ -2703,11 +2703,11 @@ extern "C" Vfs::File_system_factory *vfs_file_system_factory(void)
 	/* the CBE library requires a stack larger than the default */
 	Genode::Thread::myself()->stack_size(64*1024);
 
-	adainit();
-
 	Cbe::assert_valid_object_size<Cbe::Library>();
-	Cbe::assert_valid_object_size<External::Crypto>();
 	Cbe::assert_valid_object_size<External::Trust_anchor>();
+
+	cbe_cxx_init();
+	external_trust_anchor_cxx_init();
 
 	static Factory factory;
 	return &factory;

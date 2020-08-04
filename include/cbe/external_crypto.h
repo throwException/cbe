@@ -18,6 +18,10 @@
 #include <cbe/spark_object.h>
 
 
+extern "C" void external_crypto_cxx_init();
+extern "C" void external_crypto_cxx_final();
+
+
 namespace External {
 
 	class Crypto;

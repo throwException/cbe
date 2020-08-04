@@ -246,13 +246,9 @@ void Component::construct(Genode::Env &env)
 	env.exec_static_constructors();
 	Timer::Connection timer { env };
 
-	/**
-	 * We have to call adainit, so, the secondary stack of SPARK
-	 * for, e.g., variable-sized return values gets initialized.
-	 */
-	adainit();
-
 	Cbe::assert_valid_object_size<Cbe_dump::Library>();
+
+	cbe_dump_cxx_init();
 
 	static Main main(env);
 }
