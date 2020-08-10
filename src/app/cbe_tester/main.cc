@@ -13,6 +13,7 @@
 #include <base/component.h>
 #include <base/heap.h>
 #include <base/thread.h>
+#include <block/request_stream.h>
 #include <root/root.h>
 #include <util/bit_allocator.h>
 
@@ -43,6 +44,74 @@ namespace Cbe {
 
 	struct Block_session_component;
 	struct Main;
+
+	static inline Block::Request convert_from(Cbe::Request const &r)
+	{
+		struct Operation_type_not_convertable : Genode::Exception { };
+		auto convert_op = [&] (Cbe::Request::Operation o) {
+			switch (o) {
+			case Cbe::Request::Operation::INVALID:          return Block::Operation::Type::INVALID;
+			case Cbe::Request::Operation::READ:             return Block::Operation::Type::READ;
+			case Cbe::Request::Operation::WRITE:            return Block::Operation::Type::WRITE;
+			case Cbe::Request::Operation::SYNC:             return Block::Operation::Type::SYNC;
+			case Cbe::Request::Operation::CREATE_SNAPSHOT:  throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::DISCARD_SNAPSHOT: throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::REKEY:            throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::EXTEND_VBD:       throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::EXTEND_FT:        throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::RESUME_REKEYING:  throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::DEINITIALIZE:     throw Operation_type_not_convertable();
+			case Cbe::Request::Operation::INITIALIZE:       throw Operation_type_not_convertable();
+			}
+			return Block::Operation::Type::INVALID;
+		};
+		return Block::Request {
+			.operation = {
+				.type         = convert_op(r.operation()),
+				.block_number = r.block_number(),
+				.count        = r.count(),
+			},
+			.success   = r.success(),
+			.offset    = (Block::off_t)r.offset(),
+			.tag       = { .value = r.tag() },
+		};
+	}
+
+	static inline Cbe::Request convert_to(Block::Request const &r)
+	{
+		auto convert_op = [&] (Block::Operation::Type t) {
+			switch (t) {
+			case Block::Operation::Type::INVALID: return Cbe::Request::Operation::INVALID;
+			case Block::Operation::Type::READ:    return Cbe::Request::Operation::READ;
+			case Block::Operation::Type::WRITE:   return Cbe::Request::Operation::WRITE;
+			case Block::Operation::Type::SYNC:    return Cbe::Request::Operation::SYNC;
+			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID;
+			}
+			return Cbe::Request::Operation::INVALID;
+		};
+		return Cbe::Request(
+			convert_op(r.operation.type),
+			r.success,
+			r.operation.block_number,
+			(Genode::uint64_t)r.offset,
+			(Number_of_blocks)r.operation.count,
+			0,
+			(Genode::uint32_t)r.tag.value);
+	}
+} /* namespace Cbe */
+
+
+char const *to_string(Block::Operation::Type type)
+{
+	struct Unknown_operation_type : Genode::Exception { };
+	switch (type) {
+	case Block::Operation::Type::INVALID: return "invalid";
+	case Block::Operation::Type::READ: return "read";
+	case Block::Operation::Type::WRITE: return "write";
+	case Block::Operation::Type::SYNC: return "sync";
+	case Block::Operation::Type::TRIM: return "trim";
+	}
+	throw Unknown_operation_type();
 }
 
 
