@@ -15,7 +15,6 @@
 
 /* CBE includes */
 #include <cbe/types.h>
-#include <cbe/util.h>
 #include <cbe/spark_object.h>
 
 

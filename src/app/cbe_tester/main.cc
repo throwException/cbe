@@ -18,7 +18,6 @@
 
 /* cbe includes */
 #include <cbe/library.h>
-#include <cbe/util.h>
 #include <cbe/external_crypto.h>
 
 /* cbe-check includes */
