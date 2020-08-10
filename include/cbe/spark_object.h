@@ -12,6 +12,7 @@
 /* Genode includes */
 #include <base/stdint.h>
 #include <base/output.h>
+#include <base/log.h>
 
 namespace Cbe {
 
