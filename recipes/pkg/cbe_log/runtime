@@ -10,7 +10,7 @@
 		<rom label="ld.lib.so"/>
 		<rom label="cbe_log.config"/>
 		<rom label="init"/>
-		<rom label="nit_fb"/>
+		<rom label="gui_fb"/>
 		<rom label="terminal"/>
 		<rom label="terminal_log"/>
 	</content>
