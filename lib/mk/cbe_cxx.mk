@@ -1,4 +1,4 @@
-LIBS += spark libsparkcrypto aes_cbc_4k sha256_4k cbe cbe_common cbe_cxx_common
+LIBS += spark libsparkcrypto sha256_4k cbe cbe_common cbe_cxx_common
 
 INC_DIR += $(REP_DIR)/src/lib/cbe
 INC_DIR += $(REP_DIR)/src/lib/cbe_common
