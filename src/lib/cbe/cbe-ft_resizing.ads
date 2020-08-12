@@ -43,6 +43,29 @@ is
       Nr_Of_PBAs       :        Number_Of_Blocks_Type);
 
    --
+   --  Submit_Primitive_Alloc
+   --
+   procedure Submit_Primitive_Alloc_PBAs (
+      Rszg                : in out Resizing_Type;
+      Prim                :        Primitive.Object_Type;
+      Curr_Gen            :        Generation_Type;
+      Free_Gen            :        Generation_Type;
+      FT_Root             :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx      :        Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves     :        Tree_Number_Of_Leafs_Type;
+      FT_Degree           :        Tree_Degree_Type;
+      VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
+      VBD_Degree          :        Tree_Degree_Type;
+      VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      Nr_Of_Required_Blks :        Number_Of_Blocks_Type;
+      New_PBAs            :        Tree_Walk_PBAs_Type;
+      Old_T1_Nodes        :        Type_1_Node_Walk_Type;
+      Rekeying            :        Boolean;
+      Previous_Key_ID     :        Key_ID_Type;
+      Current_Key_ID      :        Key_ID_Type;
+      Rekeying_VBA        :        Virtual_Block_Address_Type);
+
+   --
    --  Peek_Completed_Primitive
    --
    function Peek_Completed_Primitive (Rszg : Resizing_Type)
@@ -214,7 +237,8 @@ private
 
    type Job_Operation_Type is (
       Invalid,
-      FT_Extension_Step
+      FT_Extension_Step,
+      Allocate_PBAs
    );
 
    type Job_State_Type is (
@@ -260,27 +284,36 @@ private
    is array (Tree_Level_Index_Type) of Generation_Type;
 
    type Job_Type is record
-      Operation        : Job_Operation_Type;
-      State            : Job_State_Type;
-      Submitted_Prim   : Primitive.Object_Type;
-      Generated_Prim   : Primitive.Object_Type;
-      FT_Root          : Type_1_Node_Type;
-      FT_Max_Lvl_Idx   : Tree_Level_Index_Type;
-      FT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
-      FT_Degree        : Tree_Degree_Type;
-      T1_Blks          : Type_1_Node_Blocks_Type;
-      T2_Blk           : Type_2_Node_Block_Type;
-      Lvl_Idx          : Tree_Level_Index_Type;
-      Alloc_Lvl_Idx    : Tree_Level_Index_Type;
-      VBA              : Virtual_Block_Address_Type;
-      Old_PBAs         : Tree_Level_PBAs_Type;
-      Old_Generations  : Tree_Level_Generations_Type;
-      New_PBAs         : Tree_Level_PBAs_Type;
-      PBA              : Physical_Block_Address_Type;
-      Nr_Of_PBAs       : Number_Of_Blocks_Type;
-      Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
-      MT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
-      Curr_Gen         : Generation_Type;
+      Operation           : Job_Operation_Type;
+      State               : Job_State_Type;
+      Submitted_Prim      : Primitive.Object_Type;
+      Generated_Prim      : Primitive.Object_Type;
+      FT_Root             : Type_1_Node_Type;
+      FT_Max_Lvl_Idx      : Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
+      FT_Degree           : Tree_Degree_Type;
+      T1_Blks             : Type_1_Node_Blocks_Type;
+      T2_Blk              : Type_2_Node_Block_Type;
+      Lvl_Idx             : Tree_Level_Index_Type;
+      Alloc_Lvl_Idx       : Tree_Level_Index_Type;
+      VBA                 : Virtual_Block_Address_Type;
+      Old_PBAs            : Tree_Level_PBAs_Type;
+      Old_Generations     : Tree_Level_Generations_Type;
+      New_PBAs            : Tree_Level_PBAs_Type;
+      PBA                 : Physical_Block_Address_Type;
+      Nr_Of_PBAs          : Number_Of_Blocks_Type;
+      Nr_Of_Leaves        : Tree_Number_Of_Leafs_Type;
+      MT_Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
+      Curr_Gen            : Generation_Type;
+      Free_Gen            : Generation_Type;
+      VBD_Max_Lvl_Idx     : Tree_Level_Index_Type;
+      VBD_Degree          : Tree_Degree_Type;
+      VBD_Highest_VBA     : Virtual_Block_Address_Type;
+      VBD_New_PBAs        : Tree_Walk_PBAs_Type;
+      VBD_Old_T1_Nodes    : Type_1_Node_Walk_Type;
+      Rekeying            : Boolean;
+      Previous_Key_ID     : Key_ID_Type;
+      Current_Key_ID      : Key_ID_Type;
    end record;
 
    type Jobs_Index_Type is range 0 .. Nr_Of_Jobs - 1;

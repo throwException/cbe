@@ -182,7 +182,16 @@ is
             Nr_Of_PBAs => Number_Of_Blocks_Type'First,
             Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             MT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
-            Curr_Gen => Generation_Type'First);
+            Curr_Gen => Generation_Type'First,
+            Free_Gen => Generation_Type'First,
+            VBD_Max_Lvl_Idx => Tree_Level_Index_Type'First,
+            VBD_Degree => Tree_Degree_Type'First,
+            VBD_Highest_VBA => Virtual_Block_Address_Type'First,
+            VBD_New_PBAs => (others => Physical_Block_Address_Type'First),
+            VBD_Old_T1_Nodes => (others => Type_1_Node_Invalid),
+            Rekeying => Boolean'First,
+            Previous_Key_ID => Key_ID_Type'First,
+            Current_Key_ID => Key_ID_Type'First);
       end loop Initialize_Each_Job;
    end Initialize_Resizing;
 
@@ -241,6 +250,77 @@ is
       raise Program_Error;
 
    end Submit_Primitive;
+
+   --
+   --  Submit_Primitive_Alloc
+   --
+   procedure Submit_Primitive_Alloc_PBAs (
+      Rszg                : in out Resizing_Type;
+      Prim                :        Primitive.Object_Type;
+      Curr_Gen            :        Generation_Type;
+      Free_Gen            :        Generation_Type;
+      FT_Root             :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx      :        Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves     :        Tree_Number_Of_Leafs_Type;
+      FT_Degree           :        Tree_Degree_Type;
+      VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
+      VBD_Degree          :        Tree_Degree_Type;
+      VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      Nr_Of_Required_Blks :        Number_Of_Blocks_Type;
+      New_PBAs            :        Tree_Walk_PBAs_Type;
+      Old_T1_Nodes        :        Type_1_Node_Walk_Type;
+      Rekeying            :        Boolean;
+      Previous_Key_ID     :        Key_ID_Type;
+      Current_Key_ID      :        Key_ID_Type;
+      Rekeying_VBA        :        Virtual_Block_Address_Type)
+   is
+   begin
+
+      Find_Invalid_Job :
+      for Idx in Rszg.Jobs'Range loop
+
+         if Rszg.Jobs (Idx).Operation = Invalid then
+
+            case Primitive.Tag (Prim) is
+            when
+               Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Non_Rkg |
+               Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Rkg_Curr_Gen_Blks |
+               Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Rkg_Old_Gen_Blks
+            =>
+
+               Rszg.Jobs (Idx).Operation        := Allocate_PBAs;
+               Rszg.Jobs (Idx).Submitted_Prim   := Prim;
+               Rszg.Jobs (Idx).Curr_Gen         := Curr_Gen;
+               Rszg.Jobs (Idx).Free_Gen         := Free_Gen;
+               Rszg.Jobs (Idx).FT_Root          := FT_Root;
+               Rszg.Jobs (Idx).FT_Max_Lvl_Idx   := FT_Max_Lvl_Idx;
+               Rszg.Jobs (Idx).FT_Nr_Of_Leaves  := FT_Nr_Of_Leaves;
+               Rszg.Jobs (Idx).FT_Degree        := FT_Degree;
+               Rszg.Jobs (Idx).VBD_Max_Lvl_Idx  := VBD_Max_Lvl_Idx;
+               Rszg.Jobs (Idx).VBD_Degree       := VBD_Degree;
+               Rszg.Jobs (Idx).VBD_Highest_VBA  := VBD_Highest_VBA;
+               Rszg.Jobs (Idx).Nr_Of_PBAs       := Nr_Of_Required_Blks;
+               Rszg.Jobs (Idx).VBD_New_PBAs     := New_PBAs;
+               Rszg.Jobs (Idx).VBD_Old_T1_Nodes := Old_T1_Nodes;
+               Rszg.Jobs (Idx).Rekeying         := Rekeying;
+               Rszg.Jobs (Idx).Previous_Key_ID  := Previous_Key_ID;
+               Rszg.Jobs (Idx).Current_Key_ID   := Current_Key_ID;
+               Rszg.Jobs (Idx).VBA              := Rekeying_VBA;
+               Rszg.Jobs (Idx).State            := Submitted;
+               return;
+
+            when others =>
+
+               raise Program_Error;
+
+            end case;
+
+         end if;
+
+      end loop Find_Invalid_Job;
+      raise Program_Error;
+
+   end Submit_Primitive_Alloc_PBAs;
 
    --
    --  Peek_Completed_Primitive
@@ -1349,6 +1429,10 @@ is
          when FT_Extension_Step =>
 
             Execute_FT_Extension_Step (Rszg.Jobs (Idx), Idx, Progress);
+
+         when Allocate_PBAs =>
+
+            raise Program_Error;
 
          when Invalid =>
 
