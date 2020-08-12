@@ -1607,47 +1607,55 @@ is
    begin
       VBD_Rekeying.Execute (Obj.VBD_Rkg, Progress);
 
-      Loop_Generated_FT_Prims :
+      Loop_Generated_FT_Rszg_Prims :
       loop
 
-         Declare_FT_Prim :
+         Declare_FT_Rszg_Prim :
          declare
             Prim : constant Primitive.Object_Type :=
-               VBD_Rekeying.Peek_Generated_FT_Primitive (Obj.VBD_Rkg);
+               VBD_Rekeying.Peek_Generated_FT_Rszg_Primitive (Obj.VBD_Rkg);
          begin
-            exit Loop_Generated_FT_Prims when
+            exit Loop_Generated_FT_Rszg_Prims when
                not Primitive.Valid (Prim) or else
-               not New_Free_Tree.Request_Acceptable (Obj.New_Free_Tree_Obj);
+               not FT_Resizing.Primitive_Acceptable (Obj.FT_Rszg);
 
-            New_Free_Tree.Submit_Request (
-               Obj.New_Free_Tree_Obj,
-               (Obj.Superblock.Free_Number,
-                Obj.Superblock.Free_Gen,
-                Obj.Superblock.Free_Hash),
-               (Obj.Superblock.Free_Max_Level,
-                Obj.Superblock.Free_Degree,
-                Obj.Superblock.Free_Leafs),
-               Obj.Cur_Gen,
-               VBD_Rekeying.Peek_Generated_Free_Gen (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_Nr_Of_Blks (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_New_PBAs (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_T1_Node_Walk (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_Max_Level (Obj.VBD_Rkg, Prim),
-               Prim,
-               VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim),
-               Obj.Superblock.Degree,
-               Max_VBA (Obj),
-               Obj.Superblock.State = Rekeying,
-               VBD_Rekeying.Peek_Generated_Old_Key_ID (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_New_Key_ID (Obj.VBD_Rkg, Prim),
-               VBD_Rekeying.Peek_Generated_VBA (Obj.VBD_Rkg, Prim));
+            FT_Resizing.Submit_Primitive_Alloc_PBAs (
+               Rszg                => Obj.FT_Rszg,
+               Prim                => Prim,
+               Curr_Gen            => Obj.Cur_Gen,
+               Free_Gen            => VBD_Rekeying.Peek_Generated_Free_Gen (
+                                         Obj.VBD_Rkg, Prim),
+               FT_Root             => (Obj.Superblock.Free_Number,
+                                       Obj.Superblock.Free_Gen,
+                                       Obj.Superblock.Free_Hash),
+               FT_Max_Lvl_Idx      => Obj.Superblock.Free_Max_Level,
+               FT_Nr_Of_Leaves     => Obj.Superblock.Free_Leafs,
+               FT_Degree           => Obj.Superblock.Free_Degree,
+               VBD_Max_Lvl_Idx     => VBD_Rekeying.Peek_Generated_Max_Level (
+                                         Obj.VBD_Rkg, Prim),
+               VBD_Degree          => Obj.Superblock.Degree,
+               VBD_Highest_VBA     => Max_VBA (Obj),
+               Nr_Of_Required_Blks => VBD_Rekeying.Peek_Generated_Nr_Of_Blks (
+                                         Obj.VBD_Rkg, Prim),
+               New_PBAs            => VBD_Rekeying.Peek_Generated_New_PBAs (
+                                         Obj.VBD_Rkg, Prim),
+               Old_T1_Nodes        =>
+                  VBD_Rekeying.Peek_Generated_T1_Node_Walk (
+                     Obj.VBD_Rkg, Prim),
+               Rekeying            => Obj.Superblock.State = Rekeying,
+               Previous_Key_ID     => VBD_Rekeying.Peek_Generated_Old_Key_ID (
+                                         Obj.VBD_Rkg, Prim),
+               Current_Key_ID      => VBD_Rekeying.Peek_Generated_New_Key_ID (
+                                         Obj.VBD_Rkg, Prim),
+               Rekeying_VBA        => VBD_Rekeying.Peek_Generated_VBA (
+                                         Obj.VBD_Rkg, Prim));
 
             VBD_Rekeying.Drop_Generated_Primitive (Obj.VBD_Rkg, Prim);
             Progress := True;
 
-         end Declare_FT_Prim;
+         end Declare_FT_Rszg_Prim;
 
-      end loop Loop_Generated_FT_Prims;
+      end loop Loop_Generated_FT_Rszg_Prims;
 
       Loop_Generated_Crypto_Prims :
       loop

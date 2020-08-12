@@ -307,6 +307,8 @@ is
                Rszg.Jobs (Idx).Current_Key_ID   := Current_Key_ID;
                Rszg.Jobs (Idx).VBA              := Rekeying_VBA;
                Rszg.Jobs (Idx).State            := Submitted;
+
+               Debug.Print_String ("XXX");
                return;
 
             when others =>

@@ -163,9 +163,9 @@ is
    return Primitive.Object_Type;
 
    --
-   --  Peek_Generated_FT_Primitive
+   --  Peek_Generated_FT_Rszg_Primitive
    --
-   function Peek_Generated_FT_Primitive (Rkg : Rekeying_Type)
+   function Peek_Generated_FT_Rszg_Primitive (Rkg : Rekeying_Type)
    return Primitive.Object_Type;
    --
    --  Peek_Generated_New_PBAs

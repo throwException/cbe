@@ -1522,7 +1522,7 @@ is
       Prim := Primitive.Valid_Object_No_Pool_Idx (
          Op     => Primitive_Operation_Type'First,
          Succ   => False,
-         Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg,
+         Tg     => Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Non_Rkg,
          Blk_Nr => Block_Number_Type'First,
          Idx    => Prim_Idx);
 
@@ -1616,7 +1616,8 @@ is
          Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
-            Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks,
+            Tg     =>
+               Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Rkg_Curr_Gen_Blks,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Prim_Idx);
 
@@ -1625,7 +1626,7 @@ is
          Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
-            Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks,
+            Tg     => Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Rkg_Old_Gen_Blks,
             Blk_Nr => Block_Number_Type'First,
             Idx    => Prim_Idx);
 
@@ -1766,7 +1767,7 @@ is
       Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
          Op     => Primitive_Operation_Type'First,
          Succ   => False,
-         Tg     => Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg,
+         Tg     => Primitive.Tag_VBD_Rkg_FT_Rszg_Alloc_For_Non_Rkg,
          Blk_Nr => Block_Number_Type'First,
          Idx    => Prim_Idx);
 
@@ -3037,9 +3038,9 @@ is
    end Peek_Generated_Cache_Primitive;
 
    --
-   --  Peek_Generated_FT_Primitive
+   --  Peek_Generated_FT_Rszg_Primitive
    --
-   function Peek_Generated_FT_Primitive (Rkg : Rekeying_Type)
+   function Peek_Generated_FT_Rszg_Primitive (Rkg : Rekeying_Type)
    return Primitive.Object_Type
    is
    begin
@@ -3069,7 +3070,7 @@ is
       end loop Inspect_Each_Job;
       return Primitive.Invalid_Object;
 
-   end Peek_Generated_FT_Primitive;
+   end Peek_Generated_FT_Rszg_Primitive;
 
    --
    --  Peek_Generated_Crypto_Primitive
