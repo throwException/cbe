@@ -193,6 +193,7 @@ is
             Previous_Key_ID => Key_ID_Type'First,
             Current_Key_ID => Key_ID_Type'First);
       end loop Initialize_Each_Job;
+      Rszg.VBA := 0;
    end Initialize_Resizing;
 
    --
@@ -1116,6 +1117,238 @@ is
    end Set_Args_For_Write_Back_Of_Inner_Lvl;
 
    --
+   --  Initialize_Args_Of_Operation_Allocate_PBAs
+   --
+   procedure Initialize_Args_Of_Operation_Allocate_PBAs (
+      FT_Max_Lvl_Idx  :     Tree_Level_Index_Type;
+      Old_PBAs        : out Tree_Level_PBAs_Type;
+      Old_Generations : out Tree_Level_Generations_Type;
+      New_PBAs        : out Tree_Level_PBAs_Type;
+      Lvl_Idx         : out Tree_Level_Index_Type)
+   is
+   begin
+
+      Old_PBAs := (others => 0);
+      Old_Generations := (others => 0);
+      New_PBAs := (others => 0);
+      Lvl_Idx := FT_Max_Lvl_Idx;
+
+   end Initialize_Args_Of_Operation_Allocate_PBAs;
+
+   --
+   --  Set_Args_In_Order_To_Read_Inner_Node
+   --
+   procedure Set_Args_In_Order_To_Read_Inner_Node (
+      FT_Root         :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      FT_Degree       :        Tree_Degree_Type;
+      T1_Blks         :        Type_1_Node_Blocks_Type;
+      Lvl_Idx         :        Tree_Level_Index_Type;
+      VBA             :        Virtual_Block_Address_Type;
+      Job_Idx         :        Jobs_Index_Type;
+      Old_PBAs        : in out Tree_Level_PBAs_Type;
+      Old_Generations : in out Tree_Level_Generations_Type;
+      State           :    out Job_State_Type;
+      Generated_Prim  :    out Primitive.Object_Type;
+      Progress        :    out Boolean)
+   is
+   begin
+
+      if Lvl_Idx = FT_Max_Lvl_Idx then
+
+         Old_PBAs (Lvl_Idx) := FT_Root.PBA;
+         Old_Generations (Lvl_Idx) := FT_Root.Gen;
+
+         Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_FT_Rszg_Cache,
+            Blk_Nr => Block_Number_Type (FT_Root.PBA),
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+      else
+
+         Declare_Child :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               T1_Child_Idx_For_VBA (VBA, Lvl_Idx + 1, FT_Degree);
+
+            Child : constant Type_1_Node_Type :=
+               T1_Blks (Lvl_Idx + 1) (Child_Idx);
+         begin
+
+            Old_PBAs (Lvl_Idx) := Child.PBA;
+            Old_Generations (Lvl_Idx) := Child.Gen;
+
+            Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+               Op     => Read,
+               Succ   => False,
+               Tg     => Primitive.Tag_FT_Rszg_Cache,
+               Blk_Nr => Block_Number_Type (Child.PBA),
+               Idx    => Primitive.Index_Type (Job_Idx));
+
+         end Declare_Child;
+
+      end if;
+
+      State := Read_Inner_Node_Pending;
+      Progress := True;
+
+   end Set_Args_In_Order_To_Read_Inner_Node;
+
+   --
+   --  Execute_Allocate_PBAs
+   --
+   procedure Execute_Allocate_PBAs (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      VBA      :        Virtual_Block_Address_Type;
+      Progress : in out Boolean)
+   is
+   begin
+
+      case Job.State is
+      when Submitted =>
+
+         Initialize_Args_Of_Operation_Allocate_PBAs (
+            FT_Max_Lvl_Idx  => Job.FT_Max_Lvl_Idx,
+            Old_PBAs        => Job.Old_PBAs,
+            Old_Generations => Job.Old_Generations,
+            New_PBAs        => Job.New_PBAs,
+            Lvl_Idx         => Job.Lvl_Idx);
+
+         Set_Args_In_Order_To_Read_Inner_Node (
+            FT_Root         => Job.FT_Root,
+            FT_Max_Lvl_Idx  => Job.FT_Max_Lvl_Idx,
+            FT_Degree       => Job.FT_Degree,
+            T1_Blks         => Job.T1_Blks,
+            Lvl_Idx         => Job.Lvl_Idx,
+            VBA             => VBA,
+            Job_Idx         => Job_Idx,
+            Old_PBAs        => Job.Old_PBAs,
+            Old_Generations => Job.Old_Generations,
+            State           => Job.State,
+            Generated_Prim  => Job.Generated_Prim,
+            Progress        => Progress);
+
+      when Read_Inner_Node_Completed =>
+
+         Check_That_Primitive_Was_Successful (Job.Generated_Prim);
+         Check_Hash_Of_Read_Node (
+            FT_Root        => Job.FT_Root,
+            FT_Max_Lvl_Idx => Job.FT_Max_Lvl_Idx,
+            FT_Degree      => Job.FT_Degree,
+            T1_Blks        => Job.T1_Blks,
+            T2_Blk         => Job.T2_Blk,
+            Lvl_Idx        => Job.Lvl_Idx,
+            VBA            => VBA);
+
+         if Job.Lvl_Idx > 1 then
+
+            Job.Lvl_Idx := Job.Lvl_Idx - 1;
+            Set_Args_In_Order_To_Read_Inner_Node (
+               FT_Root         => Job.FT_Root,
+               FT_Max_Lvl_Idx  => Job.FT_Max_Lvl_Idx,
+               FT_Degree       => Job.FT_Degree,
+               T1_Blks         => Job.T1_Blks,
+               Lvl_Idx         => Job.Lvl_Idx,
+               VBA             => VBA,
+               Job_Idx         => Job_Idx,
+               Old_PBAs        => Job.Old_PBAs,
+               Old_Generations => Job.Old_Generations,
+               State           => Job.State,
+               Generated_Prim  => Job.Generated_Prim,
+               Progress        => Progress);
+
+         else
+
+            raise Program_Error;
+
+         end if;
+
+      when others =>
+
+         null;
+
+      end case;
+
+   end Execute_Allocate_PBAs;
+
+   --
+   --  Check_Hash_Of_Read_Node
+   --
+   procedure Check_Hash_Of_Read_Node (
+      FT_Root        : Type_1_Node_Type;
+      FT_Max_Lvl_Idx : Tree_Level_Index_Type;
+      FT_Degree      : Tree_Degree_Type;
+      T1_Blks        : Type_1_Node_Blocks_Type;
+      T2_Blk         : Type_2_Node_Block_Type;
+      Lvl_Idx        : Tree_Level_Index_Type;
+      VBA            : Virtual_Block_Address_Type)
+   is
+   begin
+
+      if Lvl_Idx = FT_Max_Lvl_Idx then
+
+         if Hash_Of_T1_Node_Blk (T1_Blks (Lvl_Idx)) /= FT_Root.Hash then
+            raise Program_Error;
+         end if;
+
+      elsif Lvl_Idx > 1 then
+
+         Declare_T1_Child_Idx :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               T1_Child_Idx_For_VBA (VBA, Lvl_Idx + 1, FT_Degree);
+         begin
+
+            if Hash_Of_T1_Node_Blk (T1_Blks (Lvl_Idx)) /=
+                  T1_Blks (Lvl_Idx + 1) (Child_Idx).Hash
+            then
+               raise Program_Error;
+            end if;
+
+         end Declare_T1_Child_Idx;
+
+      elsif Lvl_Idx = 1 then
+
+         Declare_T2_Child_Idx :
+         declare
+            Child_Idx : constant Type_1_Node_Block_Index_Type :=
+               T1_Child_Idx_For_VBA (VBA, Lvl_Idx + 1, FT_Degree);
+         begin
+
+            if Hash_Of_T2_Node_Blk (T2_Blk) /=
+                  T1_Blks (Lvl_Idx + 1) (Child_Idx).Hash
+            then
+               raise Program_Error;
+            end if;
+
+         end Declare_T2_Child_Idx;
+
+      else
+
+         raise Program_Error;
+
+      end if;
+
+   end Check_Hash_Of_Read_Node;
+
+   --
+   --  Check_That_Primitive_Was_Successful
+   --
+   procedure Check_That_Primitive_Was_Successful (
+      Prim : Primitive.Object_Type)
+   is
+   begin
+
+      if not Primitive.Success (Prim) then
+         raise Program_Error;
+      end if;
+
+   end Check_That_Primitive_Was_Successful;
+
+   --
    --  Execute_FT_Extension_Step
    --
    procedure Execute_FT_Extension_Step (
@@ -1434,7 +1667,7 @@ is
 
          when Allocate_PBAs =>
 
-            raise Program_Error;
+            Execute_Allocate_PBAs (Rszg.Jobs (Idx), Idx, Rszg.VBA, Progress);
 
          when Invalid =>
 
@@ -1850,6 +2083,7 @@ is
 
             Rszg.Jobs (Idx).State := Read_Inner_Node_Completed;
             Rszg.Jobs (Idx).Generated_Prim := Prim;
+            Debug.Print_String ("YYY");
 
             if Rszg.Jobs (Idx).Lvl_Idx > 1 then
 

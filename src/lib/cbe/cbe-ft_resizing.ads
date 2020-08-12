@@ -322,6 +322,7 @@ private
 
    type Resizing_Type is record
       Jobs : Jobs_Type;
+      VBA  : Virtual_Block_Address_Type;
    end record;
 
    --
@@ -395,6 +396,21 @@ private
       Progress :    out Boolean);
 
    --
+   --  Execute_Allocate_PBAs
+   --
+   procedure Execute_Allocate_PBAs (
+      Job      : in out Job_Type;
+      Job_Idx  :        Jobs_Index_Type;
+      VBA      :        Virtual_Block_Address_Type;
+      Progress : in out Boolean);
+
+   --
+   --  Check_That_Primitive_Was_Successful
+   --
+   procedure Check_That_Primitive_Was_Successful (
+      Prim : Primitive.Object_Type);
+
+   --
    --  Tree_Max_Max_VBA
    --
    function Tree_Max_Max_VBA (
@@ -413,5 +429,44 @@ private
       Job_State   : out Job_State_Type;
       Progress    : out Boolean;
       Prim        : out Primitive.Object_Type);
+
+   --
+   --  Initialize_Args_Of_Operation_Allocate_PBAs
+   --
+   procedure Initialize_Args_Of_Operation_Allocate_PBAs (
+      FT_Max_Lvl_Idx  :     Tree_Level_Index_Type;
+      Old_PBAs        : out Tree_Level_PBAs_Type;
+      Old_Generations : out Tree_Level_Generations_Type;
+      New_PBAs        : out Tree_Level_PBAs_Type;
+      Lvl_Idx         : out Tree_Level_Index_Type);
+
+   --
+   --  Set_Args_In_Order_To_Read_Inner_Node
+   --
+   procedure Set_Args_In_Order_To_Read_Inner_Node (
+      FT_Root         :        Type_1_Node_Type;
+      FT_Max_Lvl_Idx  :        Tree_Level_Index_Type;
+      FT_Degree       :        Tree_Degree_Type;
+      T1_Blks         :        Type_1_Node_Blocks_Type;
+      Lvl_Idx         :        Tree_Level_Index_Type;
+      VBA             :        Virtual_Block_Address_Type;
+      Job_Idx         :        Jobs_Index_Type;
+      Old_PBAs        : in out Tree_Level_PBAs_Type;
+      Old_Generations : in out Tree_Level_Generations_Type;
+      State           :    out Job_State_Type;
+      Generated_Prim  :    out Primitive.Object_Type;
+      Progress        :    out Boolean);
+
+   --
+   --  Check_Hash_Of_Read_Node
+   --
+   procedure Check_Hash_Of_Read_Node (
+      FT_Root        : Type_1_Node_Type;
+      FT_Max_Lvl_Idx : Tree_Level_Index_Type;
+      FT_Degree      : Tree_Degree_Type;
+      T1_Blks        : Type_1_Node_Blocks_Type;
+      T2_Blk         : Type_2_Node_Block_Type;
+      Lvl_Idx        : Tree_Level_Index_Type;
+      VBA            : Virtual_Block_Address_Type);
 
 end CBE.FT_Resizing;
