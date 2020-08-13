@@ -13,6 +13,8 @@ exec rm -rf var/libcache/cbe_dump
 exec rm -rf var/libcache/cbe_dump_cxx
 exec rm -rf var/libcache/external_crypto
 exec rm -rf var/libcache/external_crypto_cxx
+exec rm -rf var/libcache/external_trust_anchor
+exec rm -rf var/libcache/external_trust_anchor_cxx
 
 set dd [installed_command dd]
 
