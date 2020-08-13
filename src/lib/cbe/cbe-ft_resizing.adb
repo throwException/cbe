@@ -1197,6 +1197,218 @@ is
    end Set_Args_In_Order_To_Read_Inner_Node;
 
    --
+   --  Type_2_Node_Is_Free
+   --
+   function Type_2_Node_Is_Free (
+      Snapshots        : Snapshots_Type;
+      Last_Secured_Gen : Generation_Type;
+      Node             : Type_2_Node_Type;
+      Rekeying         : Boolean;
+      Previous_Key_ID  : Key_ID_Type;
+      Rekeying_VBA     : Virtual_Block_Address_Type)
+   return Boolean
+   is
+   begin
+      if Node.PBA = 0 or else
+         Node.PBA = PBA_Invalid or else
+         Node.Free_Gen > Last_Secured_Gen
+      then
+         return False;
+      end if;
+
+      if not Node.Reserved then
+         return True;
+      end if;
+
+      if Rekeying and then
+         Node.Last_Key_ID = Previous_Key_ID and then
+         Node.Last_VBA < Rekeying_VBA
+      then
+         return True;
+      end if;
+
+      For_Each_Snapshot :
+      for Snap of Snapshots loop
+
+         if Snap.Valid and then
+            Node.Free_Gen > Snap.Gen and then
+            Node.Alloc_Gen < Snap.Gen + 1
+         then
+            return False;
+         end if;
+
+      end loop For_Each_Snapshot;
+
+      return True;
+
+   end Type_2_Node_Is_Free;
+
+   --
+   --  Allocate_Free_Type_2_Node
+   --
+   procedure Allocate_Free_Type_2_Node (
+      Tag : Primitive.Tag_Type;
+)
+   is
+   begin
+
+      case Tag is
+      when
+         Primitive.Tag_Pool_VBD |
+         Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
+      =>
+
+         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+
+         Entries (Natural (Info.Index)).PBA :=
+            Old_Blocks (I).PBA;
+
+         Entries (Natural (Info.Index)).Alloc_Gen :=
+            Old_Blocks (I).Gen;
+         Entries (Natural (Info.Index)).Free_Gen :=
+            Free_Gen;
+
+         Entries (Natural (Info.Index)).Last_VBA    :=
+            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
+
+         if Rekeying then
+            if VBA < Rekeying_VBA then
+               Entries (Natural (Info.Index)).Last_Key_ID :=
+                  Current_Key_ID;
+            else
+               Entries (Natural (Info.Index)).Last_Key_ID :=
+                  Previous_Key_ID;
+            end if;
+         else
+            Entries (Natural (Info.Index)).Last_Key_ID :=
+               Current_Key_ID;
+         end if;
+
+         Entries (Natural (Info.Index)).Reserved    := True;
+
+      when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks =>
+
+         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+
+         Entries (Natural (Info.Index)).PBA :=
+            Old_Blocks (I).PBA;
+
+         Entries (Natural (Info.Index)).Alloc_Gen :=
+            Old_Blocks (I).Gen;
+         Entries (Natural (Info.Index)).Free_Gen :=
+            Free_Gen;
+
+         Entries (Natural (Info.Index)).Last_VBA    :=
+            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
+
+         Entries (Natural (Info.Index)).Last_Key_ID :=
+            Previous_Key_ID;
+
+         Entries (Natural (Info.Index)).Reserved := False;
+
+      when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
+
+         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+
+         Entries (Natural (Info.Index)).Alloc_Gen :=
+            Old_Blocks (I).Gen;
+         Entries (Natural (Info.Index)).Free_Gen :=
+            Free_Gen;
+
+         declare
+            Node_Highest_VBA :
+               constant Virtual_Block_Address_Type :=
+                  VBD_Node_Highest_VBA (VBD_Degree_Log_2, I, VBA);
+         begin
+
+            if Rekeying_VBA < Node_Highest_VBA and then
+               Rekeying_VBA < VBD_Highest_VBA
+            then
+
+               Entries (Natural (Info.Index)).Last_VBA    :=
+                  Rekeying_VBA + 1;
+
+               Entries (Natural (Info.Index)).Last_Key_ID :=
+                  Previous_Key_ID;
+
+            elsif
+               Rekeying_VBA = Node_Highest_VBA or else
+               Rekeying_VBA = VBD_Highest_VBA
+            then
+
+               Entries (Natural (Info.Index)).Last_VBA    :=
+                  VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
+
+               Entries (Natural (Info.Index)).Last_Key_ID :=
+                  Current_Key_ID;
+
+            else
+
+               raise Program_Error;
+
+            end if;
+
+         end;
+
+         Entries (Natural (Info.Index)).Reserved := True;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+
+   end Allocate_Free_Type_2_Node;
+
+   --
+   --  New_PBA_Required_For_VBD_Level
+   --
+   function New_PBA_Required_For_VBD_Level (
+      New_PBAs : Tree_Walk_PBAs_Type;
+      Lvl_Idx  : Tree_Level_Index_Type)
+   return Boolean
+   is (
+       New_PBAs (Lvl_Idx) = 0);
+
+   --
+   --  Allocate_Free_PBAs_From_Type_2_Node_Block
+   --
+   procedure Allocate_Free_PBAs_From_Type_2_Node_Block ()
+   is
+   begin
+
+      For_Each_T2_Node :
+      for Node_Idx in T2_Blk'Range loop
+
+         if Type_2_Node_Is_Free (
+               Node => T2_Blk (Node_Idx))
+         then
+
+            For_Each_VBD_Lvl :
+            for VBD_Lvl in 0 .. VBD_Max_Lvl_Idx loop
+
+               if New_PBA_Required_For_VBD_Level (
+                     New_PBAs => New_PBAs,
+                     Lvl_Idx  => VBD_Lvl)
+               then
+
+                  Allocate_Free_Type_2_Node (
+                     );
+
+                  Nr_Of_Required_PBAs := Nr_Of_Required_PBAs - 1;
+                  exit For_Each_VBD_Lvl when Nr_Of_Required_PBAs = 0;
+
+               end if;
+
+            end loop For_Each_VBD_Lvl;
+
+         end if;
+
+      end loop For_Each_T2_Node;
+
+   end Allocate_Free_PBAs_From_Type_2_Node_Block;
+
+   --
    --  Execute_Allocate_PBAs
    --
    procedure Execute_Allocate_PBAs (
@@ -1262,7 +1474,8 @@ is
 
          else
 
-            raise Program_Error;
+            Allocate_Free_PBAs_From_Type_2_Node_Block (
+               );
 
          end if;
 
