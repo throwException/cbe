@@ -183,12 +183,15 @@ is
             Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             MT_Nr_Of_Leaves => Tree_Number_Of_Leafs_Type'First,
             Curr_Gen => Generation_Type'First,
+            Last_Secured_Gen => Generation_Type'First,
             Free_Gen => Generation_Type'First,
             VBD_Max_Lvl_Idx => Tree_Level_Index_Type'First,
             VBD_Degree => Tree_Degree_Type'First,
+            VBD_Snapshots => (others => Snapshot_Invalid),
+            VBD_Degree_Log_2 => Tree_Degree_Log_2_Type'First,
             VBD_Highest_VBA => Virtual_Block_Address_Type'First,
             VBD_New_PBAs => (others => Physical_Block_Address_Type'First),
-            VBD_Old_T1_Nodes => (others => Type_1_Node_Invalid),
+            VBD_T1_Node_Walk => (others => Type_1_Node_Invalid),
             Rekeying => Boolean'First,
             Previous_Key_ID => Key_ID_Type'First,
             Current_Key_ID => Key_ID_Type'First);
@@ -253,23 +256,25 @@ is
    end Submit_Primitive;
 
    --
-   --  Submit_Primitive_Alloc
+   --  Submit_Primitive_Alloc_PBAs
    --
    procedure Submit_Primitive_Alloc_PBAs (
       Rszg                : in out Resizing_Type;
       Prim                :        Primitive.Object_Type;
       Curr_Gen            :        Generation_Type;
+      Last_Secured_Gen    :        Generation_Type;
       Free_Gen            :        Generation_Type;
       FT_Root             :        Type_1_Node_Type;
       FT_Max_Lvl_Idx      :        Tree_Level_Index_Type;
       FT_Nr_Of_Leaves     :        Tree_Number_Of_Leafs_Type;
       FT_Degree           :        Tree_Degree_Type;
+      VBD_Snapshots       :        Snapshots_Type;
       VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
       VBD_Degree          :        Tree_Degree_Type;
       VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      VBD_T1_Node_Walk    :        Type_1_Node_Walk_Type;
       Nr_Of_Required_Blks :        Number_Of_Blocks_Type;
-      New_PBAs            :        Tree_Walk_PBAs_Type;
-      Old_T1_Nodes        :        Type_1_Node_Walk_Type;
+      New_PBAs            :        Tree_Level_PBAs_Type;
       Rekeying            :        Boolean;
       Previous_Key_ID     :        Key_ID_Type;
       Current_Key_ID      :        Key_ID_Type;
@@ -292,17 +297,19 @@ is
                Rszg.Jobs (Idx).Operation        := Allocate_PBAs;
                Rszg.Jobs (Idx).Submitted_Prim   := Prim;
                Rszg.Jobs (Idx).Curr_Gen         := Curr_Gen;
+               Rszg.Jobs (Idx).Last_Secured_Gen := Last_Secured_Gen;
                Rszg.Jobs (Idx).Free_Gen         := Free_Gen;
                Rszg.Jobs (Idx).FT_Root          := FT_Root;
                Rszg.Jobs (Idx).FT_Max_Lvl_Idx   := FT_Max_Lvl_Idx;
                Rszg.Jobs (Idx).FT_Nr_Of_Leaves  := FT_Nr_Of_Leaves;
                Rszg.Jobs (Idx).FT_Degree        := FT_Degree;
                Rszg.Jobs (Idx).VBD_Max_Lvl_Idx  := VBD_Max_Lvl_Idx;
+               Rszg.Jobs (Idx).VBD_Snapshots    := VBD_Snapshots;
                Rszg.Jobs (Idx).VBD_Degree       := VBD_Degree;
                Rszg.Jobs (Idx).VBD_Highest_VBA  := VBD_Highest_VBA;
+               Rszg.Jobs (Idx).VBD_T1_Node_Walk := VBD_T1_Node_Walk;
                Rszg.Jobs (Idx).Nr_Of_PBAs       := Nr_Of_Required_Blks;
                Rszg.Jobs (Idx).VBD_New_PBAs     := New_PBAs;
-               Rszg.Jobs (Idx).VBD_Old_T1_Nodes := Old_T1_Nodes;
                Rszg.Jobs (Idx).Rekeying         := Rekeying;
                Rszg.Jobs (Idx).Previous_Key_ID  := Previous_Key_ID;
                Rszg.Jobs (Idx).Current_Key_ID   := Current_Key_ID;
@@ -1120,11 +1127,13 @@ is
    --  Initialize_Args_Of_Operation_Allocate_PBAs
    --
    procedure Initialize_Args_Of_Operation_Allocate_PBAs (
-      FT_Max_Lvl_Idx  :     Tree_Level_Index_Type;
-      Old_PBAs        : out Tree_Level_PBAs_Type;
-      Old_Generations : out Tree_Level_Generations_Type;
-      New_PBAs        : out Tree_Level_PBAs_Type;
-      Lvl_Idx         : out Tree_Level_Index_Type)
+      FT_Max_Lvl_Idx   :     Tree_Level_Index_Type;
+      VBD_Degree       :     Tree_Degree_Type;
+      VBD_Degree_Log_2 : out Tree_Degree_Log_2_Type;
+      Old_PBAs         : out Tree_Level_PBAs_Type;
+      Old_Generations  : out Tree_Level_Generations_Type;
+      New_PBAs         : out Tree_Level_PBAs_Type;
+      Lvl_Idx          : out Tree_Level_Index_Type)
    is
    begin
 
@@ -1132,6 +1141,8 @@ is
       Old_Generations := (others => 0);
       New_PBAs := (others => 0);
       Lvl_Idx := FT_Max_Lvl_Idx;
+      VBD_Degree_Log_2 :=
+         Tree_Degree_Log_2_Type (Log_2 (Unsigned_32 (VBD_Degree)));
 
    end Initialize_Args_Of_Operation_Allocate_PBAs;
 
@@ -1200,29 +1211,29 @@ is
    --  Type_2_Node_Is_Free
    --
    function Type_2_Node_Is_Free (
+      T2_Node          : Type_2_Node_Type;
       Snapshots        : Snapshots_Type;
       Last_Secured_Gen : Generation_Type;
-      Node             : Type_2_Node_Type;
       Rekeying         : Boolean;
-      Previous_Key_ID  : Key_ID_Type;
-      Rekeying_VBA     : Virtual_Block_Address_Type)
+      Rekeying_VBA     : Virtual_Block_Address_Type;
+      Previous_Key_ID  : Key_ID_Type)
    return Boolean
    is
    begin
-      if Node.PBA = 0 or else
-         Node.PBA = PBA_Invalid or else
-         Node.Free_Gen > Last_Secured_Gen
+      if T2_Node.PBA = 0 or else
+         T2_Node.PBA = PBA_Invalid or else
+         T2_Node.Free_Gen > Last_Secured_Gen
       then
          return False;
       end if;
 
-      if not Node.Reserved then
+      if not T2_Node.Reserved then
          return True;
       end if;
 
       if Rekeying and then
-         Node.Last_Key_ID = Previous_Key_ID and then
-         Node.Last_VBA < Rekeying_VBA
+         T2_Node.Last_Key_ID = Previous_Key_ID and then
+         T2_Node.Last_VBA < Rekeying_VBA
       then
          return True;
       end if;
@@ -1231,8 +1242,8 @@ is
       for Snap of Snapshots loop
 
          if Snap.Valid and then
-            Node.Free_Gen > Snap.Gen and then
-            Node.Alloc_Gen < Snap.Gen + 1
+            T2_Node.Free_Gen > Snap.Gen and then
+            T2_Node.Alloc_Gen < Snap.Gen + 1
          then
             return False;
          end if;
@@ -1244,113 +1255,125 @@ is
    end Type_2_Node_Is_Free;
 
    --
+   --  VBD_Node_Lowest_VBA
+   --
+   function VBD_Node_Lowest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type
+   is (
+      Virtual_Block_Address_Type (
+         Unsigned_64 (VBD_Leaf_VBA) and
+         Shift_Left (
+            Unsigned_64'Last,
+            Natural (
+               Unsigned_32 (VBD_Degree_Log_2) *
+               Unsigned_32 (VBD_Level)))));
+
+   --
+   --  VBD_Node_Highest_VBA
+   --
+   function VBD_Node_Highest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type
+   is (
+      VBD_Node_Lowest_VBA (VBD_Degree_Log_2, VBD_Level, VBD_Leaf_VBA) +
+         VBD_Node_Nr_Of_VBAs (VBD_Degree_Log_2, VBD_Level) - 1);
+
+   --
+   --  VBD_Node_Nr_Of_VBAs
+   --
+   function VBD_Node_Nr_Of_VBAs (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type)
+   return Virtual_Block_Address_Type
+   is (
+      Virtual_Block_Address_Type (
+         Shift_Left (
+            Unsigned_64 (1),
+            Natural (VBD_Level) * Natural (VBD_Degree_Log_2))));
+
+   --
    --  Allocate_Free_Type_2_Node
    --
    procedure Allocate_Free_Type_2_Node (
-      Tag : Primitive.Tag_Type;
-)
+      Free_Gen           :     Generation_Type;
+      Submitted_Prim_Tag :     Primitive.Tag_Type;
+      VBD_T1_Node        :     Type_1_Node_Type;
+      VBD_Degree_Log_2   :     Tree_Degree_Log_2_Type;
+      VBD_Highest_VBA    :     Virtual_Block_Address_Type;
+      VBD_Lvl            :     Tree_Level_Index_Type;
+      VBA                :     Virtual_Block_Address_Type;
+      Rekeying           :     Boolean;
+      Rekeying_VBA       :     Virtual_Block_Address_Type;
+      Previous_Key_ID    :     Key_ID_Type;
+      Current_Key_ID     :     Key_ID_Type;
+      New_PBA            :     Physical_Block_Address_Type;
+      T2_Node            : out Type_2_Node_Type)
    is
    begin
+      T2_Node.Alloc_Gen := VBD_T1_Node.Gen;
+      T2_Node.Free_Gen := Free_Gen;
 
-      case Tag is
+      case Submitted_Prim_Tag is
       when
          Primitive.Tag_Pool_VBD |
          Primitive.Tag_VBD_Rkg_FT_Alloc_For_Non_Rkg
       =>
-
-         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
-
-         Entries (Natural (Info.Index)).PBA :=
-            Old_Blocks (I).PBA;
-
-         Entries (Natural (Info.Index)).Alloc_Gen :=
-            Old_Blocks (I).Gen;
-         Entries (Natural (Info.Index)).Free_Gen :=
-            Free_Gen;
-
-         Entries (Natural (Info.Index)).Last_VBA    :=
-            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
+         T2_Node.PBA := VBD_T1_Node.PBA;
+         T2_Node.Reserved := True;
+         T2_Node.Last_VBA :=
+            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, VBD_Lvl, VBA);
 
          if Rekeying then
             if VBA < Rekeying_VBA then
-               Entries (Natural (Info.Index)).Last_Key_ID :=
-                  Current_Key_ID;
+               T2_Node.Last_Key_ID := Current_Key_ID;
             else
-               Entries (Natural (Info.Index)).Last_Key_ID :=
-                  Previous_Key_ID;
+               T2_Node.Last_Key_ID := Previous_Key_ID;
             end if;
          else
-            Entries (Natural (Info.Index)).Last_Key_ID :=
-               Current_Key_ID;
+            T2_Node.Last_Key_ID := Current_Key_ID;
          end if;
-
-         Entries (Natural (Info.Index)).Reserved    := True;
 
       when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Curr_Gen_Blks =>
 
-         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
-
-         Entries (Natural (Info.Index)).PBA :=
-            Old_Blocks (I).PBA;
-
-         Entries (Natural (Info.Index)).Alloc_Gen :=
-            Old_Blocks (I).Gen;
-         Entries (Natural (Info.Index)).Free_Gen :=
-            Free_Gen;
-
-         Entries (Natural (Info.Index)).Last_VBA    :=
-            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
-
-         Entries (Natural (Info.Index)).Last_Key_ID :=
-            Previous_Key_ID;
-
-         Entries (Natural (Info.Index)).Reserved := False;
+         T2_Node.PBA := VBD_T1_Node.PBA;
+         T2_Node.Reserved := False;
+         T2_Node.Last_Key_ID := Previous_Key_ID;
+         T2_Node.Last_VBA :=
+            VBD_Node_Lowest_VBA (VBD_Degree_Log_2, VBD_Lvl, VBA);
 
       when Primitive.Tag_VBD_Rkg_FT_Alloc_For_Rkg_Old_Gen_Blks =>
 
-         New_Blocks (I) := Entries (Natural (Info.Index)).PBA;
+         T2_Node.PBA := New_PBA;
+         T2_Node.Reserved := True;
 
-         Entries (Natural (Info.Index)).Alloc_Gen :=
-            Old_Blocks (I).Gen;
-         Entries (Natural (Info.Index)).Free_Gen :=
-            Free_Gen;
-
+         Declare_VBD_Node_Highest_VBA :
          declare
-            Node_Highest_VBA :
-               constant Virtual_Block_Address_Type :=
-                  VBD_Node_Highest_VBA (VBD_Degree_Log_2, I, VBA);
+            VBD_Node_High_VBA : constant Virtual_Block_Address_Type :=
+               VBD_Node_Highest_VBA (VBD_Degree_Log_2, VBD_Lvl, VBA);
          begin
 
-            if Rekeying_VBA < Node_Highest_VBA and then
+            if Rekeying_VBA < VBD_Node_High_VBA and then
                Rekeying_VBA < VBD_Highest_VBA
             then
-
-               Entries (Natural (Info.Index)).Last_VBA    :=
-                  Rekeying_VBA + 1;
-
-               Entries (Natural (Info.Index)).Last_Key_ID :=
-                  Previous_Key_ID;
-
+               T2_Node.Last_Key_ID := Previous_Key_ID;
+               T2_Node.Last_VBA := Rekeying_VBA + 1;
             elsif
-               Rekeying_VBA = Node_Highest_VBA or else
+               Rekeying_VBA = VBD_Node_High_VBA or else
                Rekeying_VBA = VBD_Highest_VBA
             then
-
-               Entries (Natural (Info.Index)).Last_VBA    :=
-                  VBD_Node_Lowest_VBA (VBD_Degree_Log_2, I, VBA);
-
-               Entries (Natural (Info.Index)).Last_Key_ID :=
-                  Current_Key_ID;
-
+               T2_Node.Last_Key_ID := Current_Key_ID;
+               T2_Node.Last_VBA :=
+                  VBD_Node_Lowest_VBA (VBD_Degree_Log_2, VBD_Lvl, VBA);
             else
-
                raise Program_Error;
-
             end if;
 
-         end;
-
-         Entries (Natural (Info.Index)).Reserved := True;
+         end Declare_VBD_Node_Highest_VBA;
 
       when others =>
 
@@ -1361,39 +1384,68 @@ is
    end Allocate_Free_Type_2_Node;
 
    --
-   --  New_PBA_Required_For_VBD_Level
+   --  New_PBA_Required_For_VBD_Node
    --
-   function New_PBA_Required_For_VBD_Level (
-      New_PBAs : Tree_Walk_PBAs_Type;
-      Lvl_Idx  : Tree_Level_Index_Type)
+   function New_PBA_Required_For_VBD_Node (
+      New_PBA : Physical_Block_Address_Type)
    return Boolean
-   is (
-       New_PBAs (Lvl_Idx) = 0);
+   is (New_PBA = 0);
 
    --
    --  Allocate_Free_PBAs_From_Type_2_Node_Block
    --
-   procedure Allocate_Free_PBAs_From_Type_2_Node_Block ()
+   procedure Allocate_Free_PBAs_From_Type_2_Node_Block (
+      T2_Node_Blk         : in out Type_2_Node_Block_Type;
+      Nr_Of_Required_PBAs : in out Number_Of_Blocks_Type;
+      New_PBAs            : in out Tree_Level_PBAs_Type;
+      Free_Gen            :        Generation_Type;
+      Submitted_Prim_Tag  :        Primitive.Tag_Type;
+      Snapshots           :        Snapshots_Type;
+      Last_Secured_Gen    :        Generation_Type;
+      VBD_Degree_Log_2    :        Tree_Degree_Log_2_Type;
+      VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
+      VBD_T1_Node_Walk    :        Type_1_Node_Walk_Type;
+      VBA                 :        Virtual_Block_Address_Type;
+      Rekeying            :        Boolean;
+      Rekeying_VBA        :        Virtual_Block_Address_Type;
+      Previous_Key_ID     :        Key_ID_Type;
+      Current_Key_ID      :        Key_ID_Type)
    is
    begin
 
       For_Each_T2_Node :
-      for Node_Idx in T2_Blk'Range loop
+      for T2_Node_Idx in T2_Node_Blk'Range loop
 
          if Type_2_Node_Is_Free (
-               Node => T2_Blk (Node_Idx))
+               T2_Node          => T2_Node_Blk (T2_Node_Idx),
+               Snapshots        => Snapshots,
+               Last_Secured_Gen => Last_Secured_Gen,
+               Rekeying         => Rekeying,
+               Rekeying_VBA     => Rekeying_VBA,
+               Previous_Key_ID  => Previous_Key_ID)
          then
 
             For_Each_VBD_Lvl :
             for VBD_Lvl in 0 .. VBD_Max_Lvl_Idx loop
 
-               if New_PBA_Required_For_VBD_Level (
-                     New_PBAs => New_PBAs,
-                     Lvl_Idx  => VBD_Lvl)
-               then
+               if New_PBA_Required_For_VBD_Node (New_PBAs (VBD_Lvl)) then
 
+                  New_PBAs (VBD_Lvl) := T2_Node_Blk (T2_Node_Idx).PBA;
                   Allocate_Free_Type_2_Node (
-                     );
+                     Free_Gen           => Free_Gen,
+                     Submitted_Prim_Tag => Submitted_Prim_Tag,
+                     VBD_T1_Node        => VBD_T1_Node_Walk (VBD_Lvl),
+                     VBD_Degree_Log_2   => VBD_Degree_Log_2,
+                     VBD_Highest_VBA    => VBD_Highest_VBA,
+                     VBD_Lvl            => VBD_Lvl,
+                     VBA                => VBA,
+                     Rekeying           => Rekeying,
+                     Rekeying_VBA       => Rekeying_VBA,
+                     Previous_Key_ID    => Previous_Key_ID,
+                     Current_Key_ID     => Current_Key_ID,
+                     T2_Node            => T2_Node_Blk (T2_Node_Idx),
+                     New_PBA            => New_PBAs (VBD_Lvl));
 
                   Nr_Of_Required_PBAs := Nr_Of_Required_PBAs - 1;
                   exit For_Each_VBD_Lvl when Nr_Of_Required_PBAs = 0;
@@ -1423,11 +1475,13 @@ is
       when Submitted =>
 
          Initialize_Args_Of_Operation_Allocate_PBAs (
-            FT_Max_Lvl_Idx  => Job.FT_Max_Lvl_Idx,
-            Old_PBAs        => Job.Old_PBAs,
-            Old_Generations => Job.Old_Generations,
-            New_PBAs        => Job.New_PBAs,
-            Lvl_Idx         => Job.Lvl_Idx);
+            FT_Max_Lvl_Idx   => Job.FT_Max_Lvl_Idx,
+            Old_PBAs         => Job.Old_PBAs,
+            Old_Generations  => Job.Old_Generations,
+            New_PBAs         => Job.New_PBAs,
+            Lvl_Idx          => Job.Lvl_Idx,
+            VBD_Degree_Log_2 => Job.VBD_Degree_Log_2,
+            VBD_Degree       => Job.VBD_Degree);
 
          Set_Args_In_Order_To_Read_Inner_Node (
             FT_Root         => Job.FT_Root,
@@ -1475,7 +1529,22 @@ is
          else
 
             Allocate_Free_PBAs_From_Type_2_Node_Block (
-               );
+               T2_Node_Blk         => Job.T2_Blk,
+               Nr_Of_Required_PBAs => Job.Nr_Of_PBAs,
+               Snapshots           => Job.VBD_Snapshots,
+               Free_Gen            => Job.Free_Gen,
+               Submitted_Prim_Tag  => Primitive.Tag (Job.Submitted_Prim),
+               Last_Secured_Gen    => Job.Last_Secured_Gen,
+               VBD_Degree_Log_2    => Job.VBD_Degree_Log_2,
+               VBD_Highest_VBA     => Job.VBD_Highest_VBA,
+               VBD_Max_Lvl_Idx     => Job.VBD_Max_Lvl_Idx,
+               VBD_T1_Node_Walk    => Job.VBD_T1_Node_Walk,
+               New_PBAs            => Job.New_PBAs,
+               VBA                 => VBA,
+               Rekeying            => Job.Rekeying,
+               Rekeying_VBA        => Job.VBA,
+               Previous_Key_ID     => Job.Previous_Key_ID,
+               Current_Key_ID      => Job.Current_Key_ID);
 
          end if;
 

@@ -87,8 +87,8 @@ is
    type Snapshot_ID_Type is range 0 .. 2**32 - 1;
    type Key_ID_Type is range 0 .. 2**32 - 1;
 
-   type Tree_Walk_PBAs_Type
-   is array (Tree_Level_Index_Type'Range) of Physical_Block_Address_Type;
+   type Tree_Level_PBAs_Type
+   is array (Tree_Level_Index_Type) of Physical_Block_Address_Type;
 
    type Request_Operation_Type is (
       Initialize,

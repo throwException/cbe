@@ -1634,14 +1634,19 @@ is
                VBD_Max_Lvl_Idx     => VBD_Rekeying.Peek_Generated_Max_Level (
                                          Obj.VBD_Rkg, Prim),
                VBD_Degree          => Obj.Superblock.Degree,
+               VBD_Snapshots       => VBD_Rekeying.Peek_Generated_Snapshots (
+                                         Obj.VBD_Rkg, Prim),
+               Last_Secured_Gen    =>
+                  VBD_Rekeying.Peek_Generated_Last_Secured_Gen (
+                     Obj.VBD_Rkg, Prim),
                VBD_Highest_VBA     => Max_VBA (Obj),
+               VBD_T1_Node_Walk    =>
+                  VBD_Rekeying.Peek_Generated_T1_Node_Walk (
+                     Obj.VBD_Rkg, Prim),
                Nr_Of_Required_Blks => VBD_Rekeying.Peek_Generated_Nr_Of_Blks (
                                          Obj.VBD_Rkg, Prim),
                New_PBAs            => VBD_Rekeying.Peek_Generated_New_PBAs (
                                          Obj.VBD_Rkg, Prim),
-               Old_T1_Nodes        =>
-                  VBD_Rekeying.Peek_Generated_T1_Node_Walk (
-                     Obj.VBD_Rkg, Prim),
                Rekeying            => Obj.Superblock.State = Rekeying,
                Previous_Key_ID     => VBD_Rekeying.Peek_Generated_Old_Key_ID (
                                          Obj.VBD_Rkg, Prim),

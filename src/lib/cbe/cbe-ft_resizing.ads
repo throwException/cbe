@@ -43,23 +43,25 @@ is
       Nr_Of_PBAs       :        Number_Of_Blocks_Type);
 
    --
-   --  Submit_Primitive_Alloc
+   --  Submit_Primitive_Alloc_PBAs
    --
    procedure Submit_Primitive_Alloc_PBAs (
       Rszg                : in out Resizing_Type;
       Prim                :        Primitive.Object_Type;
       Curr_Gen            :        Generation_Type;
+      Last_Secured_Gen    :        Generation_Type;
       Free_Gen            :        Generation_Type;
       FT_Root             :        Type_1_Node_Type;
       FT_Max_Lvl_Idx      :        Tree_Level_Index_Type;
       FT_Nr_Of_Leaves     :        Tree_Number_Of_Leafs_Type;
       FT_Degree           :        Tree_Degree_Type;
+      VBD_Snapshots       :        Snapshots_Type;
       VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
       VBD_Degree          :        Tree_Degree_Type;
       VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      VBD_T1_Node_Walk    :        Type_1_Node_Walk_Type;
       Nr_Of_Required_Blks :        Number_Of_Blocks_Type;
-      New_PBAs            :        Tree_Walk_PBAs_Type;
-      Old_T1_Nodes        :        Type_1_Node_Walk_Type;
+      New_PBAs            :        Tree_Level_PBAs_Type;
       Rekeying            :        Boolean;
       Previous_Key_ID     :        Key_ID_Type;
       Current_Key_ID      :        Key_ID_Type;
@@ -277,43 +279,43 @@ private
    type Type_1_Node_Blocks_Type
    is array (Type_1_Node_Blocks_Index_Type) of Type_1_Node_Block_Type;
 
-   type Tree_Level_PBAs_Type
-   is array (Tree_Level_Index_Type) of Physical_Block_Address_Type;
-
    type Tree_Level_Generations_Type
    is array (Tree_Level_Index_Type) of Generation_Type;
 
    type Job_Type is record
-      Operation           : Job_Operation_Type;
-      State               : Job_State_Type;
-      Submitted_Prim      : Primitive.Object_Type;
-      Generated_Prim      : Primitive.Object_Type;
-      FT_Root             : Type_1_Node_Type;
-      FT_Max_Lvl_Idx      : Tree_Level_Index_Type;
-      FT_Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
-      FT_Degree           : Tree_Degree_Type;
-      T1_Blks             : Type_1_Node_Blocks_Type;
-      T2_Blk              : Type_2_Node_Block_Type;
-      Lvl_Idx             : Tree_Level_Index_Type;
-      Alloc_Lvl_Idx       : Tree_Level_Index_Type;
-      VBA                 : Virtual_Block_Address_Type;
-      Old_PBAs            : Tree_Level_PBAs_Type;
-      Old_Generations     : Tree_Level_Generations_Type;
-      New_PBAs            : Tree_Level_PBAs_Type;
-      PBA                 : Physical_Block_Address_Type;
-      Nr_Of_PBAs          : Number_Of_Blocks_Type;
-      Nr_Of_Leaves        : Tree_Number_Of_Leafs_Type;
-      MT_Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
-      Curr_Gen            : Generation_Type;
-      Free_Gen            : Generation_Type;
-      VBD_Max_Lvl_Idx     : Tree_Level_Index_Type;
-      VBD_Degree          : Tree_Degree_Type;
-      VBD_Highest_VBA     : Virtual_Block_Address_Type;
-      VBD_New_PBAs        : Tree_Walk_PBAs_Type;
-      VBD_Old_T1_Nodes    : Type_1_Node_Walk_Type;
-      Rekeying            : Boolean;
-      Previous_Key_ID     : Key_ID_Type;
-      Current_Key_ID      : Key_ID_Type;
+      Operation        : Job_Operation_Type;
+      State            : Job_State_Type;
+      Submitted_Prim   : Primitive.Object_Type;
+      Generated_Prim   : Primitive.Object_Type;
+      FT_Root          : Type_1_Node_Type;
+      FT_Max_Lvl_Idx   : Tree_Level_Index_Type;
+      FT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
+      FT_Degree        : Tree_Degree_Type;
+      T1_Blks          : Type_1_Node_Blocks_Type;
+      T2_Blk           : Type_2_Node_Block_Type;
+      Lvl_Idx          : Tree_Level_Index_Type;
+      Alloc_Lvl_Idx    : Tree_Level_Index_Type;
+      VBA              : Virtual_Block_Address_Type;
+      Old_PBAs         : Tree_Level_PBAs_Type;
+      Old_Generations  : Tree_Level_Generations_Type;
+      New_PBAs         : Tree_Level_PBAs_Type;
+      PBA              : Physical_Block_Address_Type;
+      Nr_Of_PBAs       : Number_Of_Blocks_Type;
+      Nr_Of_Leaves     : Tree_Number_Of_Leafs_Type;
+      MT_Nr_Of_Leaves  : Tree_Number_Of_Leafs_Type;
+      Curr_Gen         : Generation_Type;
+      Last_Secured_Gen : Generation_Type;
+      Free_Gen         : Generation_Type;
+      VBD_Max_Lvl_Idx  : Tree_Level_Index_Type;
+      VBD_Degree       : Tree_Degree_Type;
+      VBD_Snapshots    : Snapshots_Type;
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Highest_VBA  : Virtual_Block_Address_Type;
+      VBD_New_PBAs     : Tree_Level_PBAs_Type;
+      VBD_T1_Node_Walk : Type_1_Node_Walk_Type;
+      Rekeying         : Boolean;
+      Previous_Key_ID  : Key_ID_Type;
+      Current_Key_ID   : Key_ID_Type;
    end record;
 
    type Jobs_Index_Type is range 0 .. Nr_Of_Jobs - 1;
@@ -434,11 +436,13 @@ private
    --  Initialize_Args_Of_Operation_Allocate_PBAs
    --
    procedure Initialize_Args_Of_Operation_Allocate_PBAs (
-      FT_Max_Lvl_Idx  :     Tree_Level_Index_Type;
-      Old_PBAs        : out Tree_Level_PBAs_Type;
-      Old_Generations : out Tree_Level_Generations_Type;
-      New_PBAs        : out Tree_Level_PBAs_Type;
-      Lvl_Idx         : out Tree_Level_Index_Type);
+      FT_Max_Lvl_Idx   :     Tree_Level_Index_Type;
+      VBD_Degree       :     Tree_Degree_Type;
+      VBD_Degree_Log_2 : out Tree_Degree_Log_2_Type;
+      Old_PBAs         : out Tree_Level_PBAs_Type;
+      Old_Generations  : out Tree_Level_Generations_Type;
+      New_PBAs         : out Tree_Level_PBAs_Type;
+      Lvl_Idx          : out Tree_Level_Index_Type);
 
    --
    --  Set_Args_In_Order_To_Read_Inner_Node
@@ -468,5 +472,89 @@ private
       T2_Blk         : Type_2_Node_Block_Type;
       Lvl_Idx        : Tree_Level_Index_Type;
       VBA            : Virtual_Block_Address_Type);
+
+   --
+   --  Type_2_Node_Is_Free
+   --
+   function Type_2_Node_Is_Free (
+      T2_Node          : Type_2_Node_Type;
+      Snapshots        : Snapshots_Type;
+      Last_Secured_Gen : Generation_Type;
+      Rekeying         : Boolean;
+      Rekeying_VBA     : Virtual_Block_Address_Type;
+      Previous_Key_ID  : Key_ID_Type)
+   return Boolean;
+
+   --
+   --  Allocate_Free_Type_2_Node
+   --
+   procedure Allocate_Free_Type_2_Node (
+      Free_Gen           :     Generation_Type;
+      Submitted_Prim_Tag :     Primitive.Tag_Type;
+      VBD_T1_Node        :     Type_1_Node_Type;
+      VBD_Degree_Log_2   :     Tree_Degree_Log_2_Type;
+      VBD_Highest_VBA    :     Virtual_Block_Address_Type;
+      VBD_Lvl            :     Tree_Level_Index_Type;
+      VBA                :     Virtual_Block_Address_Type;
+      Rekeying           :     Boolean;
+      Rekeying_VBA       :     Virtual_Block_Address_Type;
+      Previous_Key_ID    :     Key_ID_Type;
+      Current_Key_ID     :     Key_ID_Type;
+      New_PBA            :     Physical_Block_Address_Type;
+      T2_Node            : out Type_2_Node_Type);
+
+   --
+   --  Allocate_Free_PBAs_From_Type_2_Node_Block
+   --
+   procedure Allocate_Free_PBAs_From_Type_2_Node_Block (
+      T2_Node_Blk         : in out Type_2_Node_Block_Type;
+      Nr_Of_Required_PBAs : in out Number_Of_Blocks_Type;
+      New_PBAs            : in out Tree_Level_PBAs_Type;
+      Free_Gen            :        Generation_Type;
+      Submitted_Prim_Tag  :        Primitive.Tag_Type;
+      Snapshots           :        Snapshots_Type;
+      Last_Secured_Gen    :        Generation_Type;
+      VBD_Degree_Log_2    :        Tree_Degree_Log_2_Type;
+      VBD_Highest_VBA     :        Virtual_Block_Address_Type;
+      VBD_Max_Lvl_Idx     :        Tree_Level_Index_Type;
+      VBD_T1_Node_Walk    :        Type_1_Node_Walk_Type;
+      VBA                 :        Virtual_Block_Address_Type;
+      Rekeying            :        Boolean;
+      Rekeying_VBA        :        Virtual_Block_Address_Type;
+      Previous_Key_ID     :        Key_ID_Type;
+      Current_Key_ID      :        Key_ID_Type);
+
+   --
+   --  New_PBA_Required_For_VBD_Node
+   --
+   function New_PBA_Required_For_VBD_Node (
+      New_PBA : Physical_Block_Address_Type)
+   return Boolean;
+
+   --
+   --  VBD_Node_Lowest_VBA
+   --
+   function VBD_Node_Lowest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  VBD_Node_Highest_VBA
+   --
+   function VBD_Node_Highest_VBA (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type;
+      VBD_Leaf_VBA     : Virtual_Block_Address_Type)
+   return Virtual_Block_Address_Type;
+
+   --
+   --  VBD_Node_Nr_Of_VBAs
+   --
+   function VBD_Node_Nr_Of_VBAs (
+      VBD_Degree_Log_2 : Tree_Degree_Log_2_Type;
+      VBD_Level        : Tree_Level_Index_Type)
+   return Virtual_Block_Address_Type;
 
 end CBE.FT_Resizing;

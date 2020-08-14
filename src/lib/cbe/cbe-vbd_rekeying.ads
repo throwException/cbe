@@ -173,7 +173,23 @@ is
    function Peek_Generated_New_PBAs (
       Rkg  : Rekeying_Type;
       Prim : Primitive.Object_Type)
-   return Tree_Walk_PBAs_Type;
+   return Tree_Level_PBAs_Type;
+
+   --
+   --  Peek_Generated_Snapshots
+   --
+   function Peek_Generated_Snapshots (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Snapshots_Type;
+
+   --
+   --  Peek_Generated_Last_Secured_Gen
+   --
+   function Peek_Generated_Last_Secured_Gen (
+      Rkg  : Rekeying_Type;
+      Prim : Primitive.Object_Type)
+   return Generation_Type;
 
    --
    --  Peek_Generated_Old_Key_ID
@@ -315,7 +331,7 @@ is
    procedure Mark_Generated_Prim_Completed_New_PBAs (
       Rkg      : in out Rekeying_Type;
       Prim     :        Primitive.Object_Type;
-      New_PBAs :        Tree_Walk_PBAs_Type);
+      New_PBAs :        Tree_Level_PBAs_Type);
 
    --
    --  Mark_Generated_Prim_Completed_Hash
@@ -421,7 +437,7 @@ private
       First_Snapshot   : Boolean;
       VBA              : Virtual_Block_Address_Type;
       T1_Node_Walk     : Type_1_Node_Walk_Type;
-      New_PBAs         : Tree_Walk_PBAs_Type;
+      New_PBAs         : Tree_Level_PBAs_Type;
       PBA              : Physical_Block_Address_Type;
       Req              : Request.Object_Type;
       Hash             : Hash_Type;
@@ -539,7 +555,7 @@ private
       Prim_Idx          :        Primitive.Index_Type;
       T1_Blks           :        Type_1_Node_Blocks_Type;
       T1_Walk           :    out Type_1_Node_Walk_Type;
-      New_PBAs          : in out Tree_Walk_PBAs_Type;
+      New_PBAs          : in out Tree_Level_PBAs_Type;
       Nr_Of_Blks        :    out Number_Of_Blocks_Type;
       Free_Gen          :    out Generation_Type;
       Prim              :    out Primitive.Object_Type);
@@ -556,7 +572,7 @@ private
       Prim_Idx          :     Primitive.Index_Type;
       T1_Blks           :     Type_1_Node_Blocks_Type;
       T1_Walk           : out Type_1_Node_Walk_Type;
-      New_PBAs          : out Tree_Walk_PBAs_Type;
+      New_PBAs          : out Tree_Level_PBAs_Type;
       Nr_Of_Blks        : out Number_Of_Blocks_Type;
       Free_Gen          : out Generation_Type;
       Prim              : out Primitive.Object_Type);
@@ -597,7 +613,7 @@ private
       Snapshot_Degree   :     Tree_Degree_Type;
       VBA               :     Virtual_Block_Address_Type;
       T1_Blks           :     Type_1_Node_Blocks_Type;
-      New_PBAs          : out Tree_Walk_PBAs_Type);
+      New_PBAs          : out Tree_Level_PBAs_Type);
 
    --
    --  Add_New_Branch_To_Snap_Using_PBA_Contingent
@@ -631,7 +647,7 @@ private
       Snapshot        : in out Snapshot_Type;
       Snapshot_Degree :        Tree_Degree_Type;
       VBA             :        Virtual_Block_Address_Type;
-      New_PBAs        :        Tree_Walk_PBAs_Type;
+      New_PBAs        :        Tree_Level_PBAs_Type;
       Leaf_Hash       :        Hash_Type;
       Curr_Gen        :        Generation_Type;
       T1_Blks         : in out Type_1_Node_Blocks_Type);
@@ -664,7 +680,7 @@ private
    --  Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node
    --
    procedure Set_Args_In_Order_To_Write_Client_Data_To_Leaf_Node (
-      New_PBAs         :     Tree_Walk_PBAs_Type;
+      New_PBAs         :     Tree_Level_PBAs_Type;
       Job_Idx          :     Jobs_Index_Type;
       State            : out Job_State_Type;
       Generated_Prim   : out Primitive.Object_Type;
@@ -689,7 +705,7 @@ private
       Snapshot_Degree  :     Tree_Degree_Type;
       VBA              :     Virtual_Block_Address_Type;
       T1_Blks          :     Type_1_Node_Blocks_Type;
-      New_PBAs         : out Tree_Walk_PBAs_Type;
+      New_PBAs         : out Tree_Level_PBAs_Type;
       Nr_Of_Blks       : out Number_Of_Blocks_Type);
 
    --
