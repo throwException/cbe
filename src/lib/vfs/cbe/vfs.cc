@@ -55,12 +55,6 @@ extern "C" void adainit();
 extern "C" void print_u8(unsigned char const u) { Genode::log(u); }
 
 
-extern "C" void print_cstring(char const *s, Genode::size_t len)
-{
-	Genode::log(Genode::Cstring(s, len));
-}
-
-
 class Vfs_cbe::Wrapper
 {
 	private:

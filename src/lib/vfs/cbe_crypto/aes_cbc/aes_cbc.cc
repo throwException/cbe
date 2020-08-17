@@ -16,12 +16,6 @@
 extern "C" void print_u8(unsigned char const u) { Genode::log(u); }
 
 
-extern "C" void print_cstring(char const *s, Genode::size_t len)
-{
-	Genode::log(Genode::Cstring(s, len));
-}
-
-
 /*
  * The SPARK compiler might generate a call to memcmp when it wants to
  * compare objects. For the time being we implement here and hopefully
