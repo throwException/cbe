@@ -16,9 +16,6 @@
 #include <cbe_crypto/interface.h>
 
 
-#define DBG Genode::error
-
-
 namespace Vfs_cbe_crypto {
 
 	using namespace Vfs;
@@ -700,7 +697,6 @@ class Vfs_cbe_crypto::Keys_file_system : public Vfs::File_system
 				return OPENDIR_ERR_PERMISSION_DENIED;
 			}
 
-			DBG(__func__, ":", __LINE__);
 			_key_reg.update(_vfs_env);
 
 			bool const top = _top_dir(path);
