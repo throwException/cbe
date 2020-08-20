@@ -1,10 +1,8 @@
-_/src/vbox5-nova
 _/raw/cbe_vbox5-nova
+_/src/vbox5-nova
 _/src/base-nova
 _/src/libc
 _/src/init
-_/src/gui_fb
-_/src/libc
 _/src/posix
 _/src/zlib
 _/src/libiconv
