@@ -1,18 +1,18 @@
 <runtime ram="76M" caps="1000" binary="init" config="cbe_shell.config">
 
 	<requires>
-		<nitpicker/>
+		<gui/>
 		<timer/>
-		<file_system label="cbe"   writeable="yes"/>
-		<file_system label="fonts" writeable="no"/>
+		<file_system label="cbe"    writeable="yes"/>
+		<file_system label="fonts"  writeable="no"/>
 		<rom    label="clipboard"/>
 		<report label="clipboard"/>
 		<rm/>
 	</requires>
 
 	<content>
-		<rom label="ld.lib.so"/>
 		<rom label="cbe_shell.config"/>
+		<rom label="ld.lib.so"/>
 		<rom label="libc.lib.so"/>
 		<rom label="libm.lib.so"/>
 		<rom label="init"/>
