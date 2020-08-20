@@ -117,32 +117,25 @@ struct Util::Block_io
 		   write ? Packet_descriptor::WRITE
 		         : Packet_descriptor::READ, lba, count)
 	{
-log(__func__,__LINE__);
 		if (write) {
-log(__func__,__LINE__);
 			if (data && len) {
-log(__func__,__LINE__);
 				void *p = addr<void*>();
 				Genode::memcpy(p, data, len);
 			} else {
-log(__func__,__LINE__);
 				Genode::error("invalid data for write");
 				throw Io_error();
 			}
 		}
 
-log(__func__,__LINE__);
 		_block.tx()->submit_packet(_p);
 		_p = _block.tx()->get_acked_packet();
 		if (!_p.succeeded()) {
-log(__func__,__LINE__);
 			Genode::error("could not ", write ? "write" : "read",
 			              " block-range [", _p.block_number(), ",",
 			              _p.block_number() + count, ")");
 			_block.tx()->release_packet(_p);
 			throw Io_error();
 		}
-log(__func__,__LINE__);
 	}
 
 	~Block_io() { _block.tx()->release_packet(_p); }
