@@ -1,11 +1,8 @@
-_/pkg/cbe_block
 _/pkg/cbe_check
-_/pkg/cbe_dump
 _/pkg/cbe_fs
 _/pkg/cbe_init
-_/pkg/cbe_log
 _/pkg/cbe_shell
-_/pkg/cbe_tester
 _/pkg/cbe_vbox5-nova
 _/pkg/cbe_vfs
 _/pkg/cbe_vm_fs
+_/pkg/download_coreplus
