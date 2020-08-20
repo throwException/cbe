@@ -141,9 +141,9 @@ namespace Cbe {
 
 		private:
 
-			Operation const _operation;
-			bool            _success;
-			uint32_t  const _tag;
+			Operation _operation;
+			bool      _success;
+			uint32_t  _tag;
 
 		public:
 
