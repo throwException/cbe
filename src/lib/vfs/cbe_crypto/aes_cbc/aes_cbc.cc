@@ -106,7 +106,6 @@ struct Crypto : Cbe_crypto::Interface
 		Cbe::Block_data const &block_data =
 			*reinterpret_cast<Cbe::Block_data const*>(src);
 
-		log(__func__, ": request: ", request);
 		_external_crypto.submit_encryption_request(request, block_data, key_id);
 		return true;
 	}
@@ -152,7 +151,6 @@ struct Crypto : Cbe_crypto::Interface
 		Cbe::Block_data const &block_data =
 			*reinterpret_cast<Cbe::Block_data const*>(src);
 
-		log(__func__, ": request: ", request);
 		_external_crypto.submit_decryption_request(request, block_data, key_id);
 		return true;
 	}
