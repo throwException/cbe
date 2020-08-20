@@ -9,6 +9,8 @@
 		<rom label="init"/>
 		<rom label="init.config"/>
 		<rom label="ld.lib.so"/>
+		<rom label="cbe_init_cxx.lib.so"/>
+		<rom label="external_trust_anchor_cxx.lib.so"/>
 		<rom label="libsparkcrypto.lib.so"/>
 		<rom label="spark.lib.so"/>
 		<rom label="vfs.lib.so"/>
