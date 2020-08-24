@@ -587,6 +587,10 @@ is
          begin
             exit Loop_Completed_TA_Prims when not Primitive.Valid (Prim);
 
+            if not Primitive.Success (Prim) then
+               raise Program_Error;
+            end if;
+
             case Primitive.Tag (Prim) is
             when Primitive.Tag_SB_Init_TA_Create_Key =>
 
