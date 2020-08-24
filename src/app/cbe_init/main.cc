@@ -11,13 +11,17 @@
 #include <base/component.h>
 #include <base/heap.h>
 #include <block_session/connection.h>
+#include <os/path.h>
+#include <vfs/dir_file_system.h>
+#include <vfs/file_system_factory.h>
+#include <vfs/simple_env.h>
 
 /* CBE-init includes */
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
 
-/* CBE external trust anchor */
-#include <cbe/external_ta.h>
+/* repo includes */
+#include <util/trust_anchor_vfs.h>
 
 
 using namespace Genode;
@@ -30,6 +34,9 @@ class Main
 
 		Env                  &_env;
 		Heap                  _heap        { _env.ram(), _env.rm() };
+
+		Attached_rom_dataspace _config_rom { _env, "config" };
+
 		Allocator_avl         _blk_alloc   { &_heap };
 		Block::Connection<>   _blk         { _env, &_blk_alloc, TX_BUF_SIZE };
 		Signal_handler<Main>  _blk_handler { _env.ep(), *this, &Main::_execute };
@@ -37,10 +44,30 @@ class Main
 		Cbe::Io_buffer        _blk_buf     { };
 		Cbe_init::Library     _cbe_init    { };
 
-		External::Trust_anchor _trust_anchor { };
-
 		Genode::size_t        _blk_ratio   {
 			Cbe::BLOCK_SIZE / _blk.info().block_size };
+
+		Vfs::Simple_env   _vfs_env { _env, _heap, _config_rom.xml().sub_node("vfs") };
+		Vfs::File_system &_vfs     { _vfs_env.root_dir() };
+
+		static Util::Trust_anchor_vfs::Path _config_ta_dir(Xml_node const &node)
+		{
+			using String_path = Genode::String<1024>;
+			String_path const path =
+				node.attribute_value("trust_anchor_dir", String_path());
+
+			if (!path.valid()) {
+				error("missing mandatory 'trust_anchor_dir' config attribute");
+				struct Missing_config_attribute { };
+				throw Missing_config_attribute();
+			}
+
+			return Util::Trust_anchor_vfs::Path { path.string() };
+		}
+
+		Util::Trust_anchor_vfs _trust_anchor {
+			_vfs, _vfs_env.alloc(), _config_ta_dir(_config_rom.xml()),
+			_blk_handler };
 
 		bool _execute_trust_anchor()
 		{
@@ -82,6 +109,8 @@ class Main
 					_trust_anchor.submit_decrypt_key_request(request, ck);
 					break;
 				}
+				case Op::LAST_SB_HASH:
+					break;
 				case Op::INVALID:
 					/* never reached */
 					break;
@@ -127,6 +156,8 @@ class Main
 					_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
 					break;
 				}
+				case Op::LAST_SB_HASH:
+					break;
 				case Op::INVALID:
 					/* never reached */
 					break;
@@ -155,6 +186,7 @@ class Main
 				if (req.valid()) {
 					_cbe_init.drop_completed_client_request(req);
 					if (req.success()) {
+						log("CBE initialization finished");
 						_env.parent().exit(0);
 					} else {
 						error("request was not successful");;
@@ -267,7 +299,7 @@ class Main
 
 		Main(Env &env)
 		:
-			_env { env }
+			_env          { env }
 		{
 			if (_blk_ratio == 0) {
 				error("backend block size not supported");
@@ -275,8 +307,7 @@ class Main
 				return;
 			}
 
-			Attached_rom_dataspace  config_rom { _env, "config" };
-			Xml_node         const &config     { config_rom.xml() };
+			Xml_node const &config { _config_rom.xml() };
 			try {
 				Cbe_init::Configuration const cfg { config };
 				if (!_cbe_init.client_request_acceptable()) {

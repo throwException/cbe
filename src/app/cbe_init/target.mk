@@ -4,6 +4,6 @@ TARGET  := cbe_init
 
 SRC_CC  += main.cc
 INC_DIR += $(PRG_DIR)
-LIBS    += base cbe_init_cxx external_trust_anchor_cxx
+LIBS    += base vfs cbe_init_cxx
 
 CONFIG_XSD = config.xsd
