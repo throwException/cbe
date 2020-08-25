@@ -15,7 +15,9 @@
 
 /* cbe includes */
 #include <cbe/library.h>
-#include <cbe/external_ta.h>
+
+/* repo includes */
+#include <util/trust_anchor_vfs.h>
 
 /* local includes */
 #include "io_job.h"
@@ -147,7 +149,7 @@ class Vfs_cbe::Wrapper
 		Cbe::Crypto_cipher_buffer _cipher_data { };
 		Cbe::Crypto_plain_buffer  _plain_data { };
 
-		External::Trust_anchor _trust_anchor { };
+		Constructible<Util::Trust_anchor_vfs> _trust_anchor { };
 
 		Constructible<Cbe::Library> _cbe;
 
@@ -230,6 +232,9 @@ class Vfs_cbe::Wrapper
 		using Crypto_device_path = Genode::String<32>;
 		Crypto_device_path _crypto_device { "/dev/cbe_crypto" };
 
+		using Trust_anchor_device_path = Genode::String<64>;
+		Trust_anchor_device_path _trust_anchor_device { "/dev/cbe_trust_anchor" };
+
 		void _read_config(Xml_node config)
 		{
 			_verbose      = config.attribute_value("verbose", _verbose);
@@ -237,6 +242,9 @@ class Vfs_cbe::Wrapper
 			_block_device = config.attribute_value("block",   _block_device);
 
 			_crypto_device = config.attribute_value("crypto", _crypto_device);
+
+			_trust_anchor_device =
+				config.attribute_value("trust_anchor", _trust_anchor_device);
 		}
 
 		struct Could_not_open_block_backend : Genode::Exception { };
@@ -284,6 +292,10 @@ class Vfs_cbe::Wrapper
 					throw Could_not_open_block_backend();
 				}
 			}
+
+			_trust_anchor.construct(_env.root_dir(), _env.alloc(),
+			                        _trust_anchor_device.string(),
+			                        _io_handler);
 
 			_cbe.construct();
 		}
@@ -840,7 +852,9 @@ class Vfs_cbe::Wrapper
 		{
 			bool progress = false;
 
-			progress |= _trust_anchor.execute();
+			Util::Trust_anchor_vfs &ta = *_trust_anchor;
+
+			progress |= ta.execute();
 
 			using Op = Cbe::Trust_anchor_request::Operation;
 
@@ -850,16 +864,16 @@ class Vfs_cbe::Wrapper
 					_cbe->peek_generated_ta_request();
 
 				if (!request.valid()) { break; }
-				if (!_trust_anchor.request_acceptable()) { break; }
+				if (!ta.request_acceptable()) { break; }
 
 				switch (request.operation()) {
 				case Op::CREATE_KEY:
-					_trust_anchor.submit_create_key_request(request);
+					ta.submit_create_key_request(request);
 					break;
 				case Op::SECURE_SUPERBLOCK:
 				{
 					Cbe::Hash const sb_hash = _cbe->peek_generated_ta_sb_hash(request);
-					_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+					ta.submit_secure_superblock_request(request, sb_hash);
 					break;
 				}
 				case Op::ENCRYPT_KEY:
@@ -867,7 +881,7 @@ class Vfs_cbe::Wrapper
 					Cbe::Key_plaintext_value const pk =
 						_cbe->peek_generated_ta_key_value_plaintext(request);
 
-					_trust_anchor.submit_encrypt_key_request(request, pk);
+					ta.submit_encrypt_key_request(request, pk);
 					break;
 				}
 				case Op::DECRYPT_KEY:
@@ -875,9 +889,12 @@ class Vfs_cbe::Wrapper
 					Cbe::Key_ciphertext_value const ck =
 						_cbe->peek_generated_ta_key_value_ciphertext(request);
 
-					_trust_anchor.submit_decrypt_key_request(request, ck);
+					ta.submit_decrypt_key_request(request, ck);
 					break;
 				}
+				case Op::LAST_SB_HASH:
+					ta.submit_superblock_hash_request(request);
+					break;
 				case Op::INVALID:
 					/* never reached */
 					break;
@@ -889,7 +906,7 @@ class Vfs_cbe::Wrapper
 			while (true) {
 
 				Cbe::Trust_anchor_request const request =
-					_trust_anchor.peek_completed_request();
+					ta.peek_completed_request();
 
 				if (!request.valid()) { break; }
 
@@ -897,7 +914,7 @@ class Vfs_cbe::Wrapper
 				case Op::CREATE_KEY:
 				{
 					Cbe::Key_plaintext_value const pk =
-						_trust_anchor.peek_completed_key_value_plaintext(request);
+						ta.peek_completed_key_value_plaintext(request);
 
 					_cbe->mark_generated_ta_create_key_request_complete(request, pk);
 					break;
@@ -910,7 +927,7 @@ class Vfs_cbe::Wrapper
 				case Op::ENCRYPT_KEY:
 				{
 					Cbe::Key_ciphertext_value const ck =
-						_trust_anchor.peek_completed_key_value_ciphertext(request);
+						ta.peek_completed_key_value_ciphertext(request);
 
 					_cbe->mark_generated_ta_encrypt_key_request_complete(request, ck);
 					break;
@@ -918,16 +935,24 @@ class Vfs_cbe::Wrapper
 				case Op::DECRYPT_KEY:
 				{
 					Cbe::Key_plaintext_value const pk =
-						_trust_anchor.peek_completed_key_value_plaintext(request);
+						ta.peek_completed_key_value_plaintext(request);
 
 					_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
+					break;
+				}
+				case Op::LAST_SB_HASH:
+				{
+					Cbe::Hash const hash =
+						ta.peek_completed_superblock_hash(request);
+
+					_cbe->mark_generated_ta_last_sb_hash_request_complete(request, hash);
 					break;
 				}
 				case Op::INVALID:
 					/* never reached */
 					break;
 				}
-				_trust_anchor.drop_completed_request(request);
+				ta.drop_completed_request(request);
 				progress |= true;
 			}
 
@@ -3065,10 +3090,8 @@ extern "C" Vfs::File_system_factory *vfs_file_system_factory(void)
 	Genode::Thread::myself()->stack_size(64*1024);
 
 	Cbe::assert_valid_object_size<Cbe::Library>();
-	Cbe::assert_valid_object_size<External::Trust_anchor>();
 
 	cbe_cxx_init();
-	external_trust_anchor_cxx_init();
 
 	static Factory factory;
 	return &factory;
