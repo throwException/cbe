@@ -9,12 +9,72 @@
 pragma Ada_2012;
 
 with CBE.Debug;
+with SHA256_4K;
 
 pragma Unreferenced (CBE.Debug);
 
 package body CBE.Superblock_Initializer
 with SPARK_Mode
 is
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type);
+
+   procedure CBE_Hash_From_SHA256_4K_Hash (
+      CBE_Hash : out Hash_Type;
+      SHA_Hash :     SHA256_4K.Hash_Type)
+   is
+      SHA_Idx : SHA256_4K.Hash_Index_Type := SHA256_4K.Hash_Index_Type'First;
+   begin
+      for CBE_Idx in CBE_Hash'Range loop
+         CBE_Hash (CBE_Idx) := Byte_Type (SHA_Hash (SHA_Idx));
+         if CBE_Idx < CBE_Hash'Last then
+            SHA_Idx := SHA_Idx + 1;
+         end if;
+      end loop;
+   end CBE_Hash_From_SHA256_4K_Hash;
+
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type);
+
+   procedure SHA256_4K_Data_From_CBE_Data (
+      SHA_Data : out SHA256_4K.Data_Type;
+      CBE_Data :     Block_Data_Type)
+   is
+      CBE_Idx : Block_Data_Index_Type := Block_Data_Index_Type'First;
+   begin
+      for SHA_Idx in SHA_Data'Range loop
+         SHA_Data (SHA_Idx) := SHA256_4K.Byte (CBE_Data (CBE_Idx));
+         if SHA_Idx < SHA_Data'Last then
+            CBE_Idx := CBE_Idx + 1;
+         end if;
+      end loop;
+   end SHA256_4K_Data_From_CBE_Data;
+
+   function Hash_Of_Superblock (SB : Superblock_Ciphertext_Type)
+   return Hash_Type;
+
+   function Hash_Of_Superblock (SB : Superblock_Ciphertext_Type)
+   return Hash_Type
+   is
+   begin
+      Declare_Hash_Data :
+      declare
+         SHA_Hash : SHA256_4K.Hash_Type;
+         SHA_Data : SHA256_4K.Data_Type;
+         CBE_Data : Block_Data_Type;
+         CBE_Hash : Hash_Type;
+      begin
+         Block_Data_From_Superblock_Ciphertext (CBE_Data, SB);
+         SHA256_4K_Data_From_CBE_Data (SHA_Data, CBE_Data);
+         SHA256_4K.Hash (SHA_Data, SHA_Hash);
+         CBE_Hash_From_SHA256_4K_Hash (CBE_Hash, SHA_Hash);
+         return CBE_Hash;
+      end Declare_Hash_Data;
+
+   end Hash_Of_Superblock;
+
    function Valid_Snap_Slot (Obj : Object_Type)
    return Snapshot_Type
    is
@@ -292,6 +352,7 @@ is
       when TA_Request_Encrypt_Key_Done =>
 
          Obj.SB_Slot := Valid_SB_Slot (Obj, First_PBA, Nr_Of_PBAs);
+         Obj.SB_Hash := Hash_Of_Superblock (Obj.SB_Slot);
          Obj.Generated_Prim :=
             Primitive.Valid_Object_No_Pool_Idx (
                Write, False, Primitive.Tag_SB_Init_Blk_IO,
@@ -324,7 +385,19 @@ is
 
       when Sync_Request_Done =>
 
-         Obj.SB_Slot_State := Done;
+         if Obj.SB_Slot_Idx = Superblocks_Index_Type'First then
+
+            Obj.Generated_Prim :=
+               Primitive.Valid_Object_No_Pool_Idx (
+                  Primitive_Operation_Type'First, False,
+                  Primitive.Tag_SB_Init_TA_Secure_SB,
+                  Block_Number_Type'First, 0);
+
+            Obj.SB_Slot_State := TA_Request_Secure_SB_Started;
+         else
+            Obj.SB_Slot_State := Done;
+         end if;
+
          Obj.Execute_Progress := True;
 
          pragma Debug (
@@ -332,6 +405,17 @@ is
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", sync done"));
+
+      when TA_Request_Secure_SB_Done =>
+
+         Obj.SB_Slot_State := Done;
+         Obj.Execute_Progress := True;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta secure sb done"));
 
       when Done =>
 
@@ -372,6 +456,7 @@ is
       when MT_Request_Started => Obj.Generated_Prim,
       when TA_Request_Create_Key_Started => Obj.Generated_Prim,
       when TA_Request_Encrypt_Key_Started => Obj.Generated_Prim,
+      when TA_Request_Secure_SB_Started => Obj.Generated_Prim,
       when others => Primitive.Invalid_Object);
 
    function Peek_Generated_Data (
@@ -524,6 +609,28 @@ is
       end case;
    end Peek_Generated_Key_Value_Plaintext;
 
+   function Peek_Generated_SB_Hash (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Hash_Type
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when TA_Request_Secure_SB_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+
+         return Obj.SB_Hash;
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Peek_Generated_SB_Hash;
+
    procedure Drop_Generated_Primitive (
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type)
@@ -620,6 +727,19 @@ is
                "[sb_init] slot " &
                Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
                ", ta encrypt key dropped"));
+
+      when TA_Request_Secure_SB_Started =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := TA_Request_Secure_SB_Dropped;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta secure sb dropped"));
 
       when others =>
 
@@ -820,5 +940,31 @@ is
 
       end case;
    end Mark_Generated_TA_EK_Primitive_Complete;
+
+   procedure Mark_Generated_TA_Secure_SB_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type)
+   is
+   begin
+      case Obj.SB_Slot_State is
+      when TA_Request_Secure_SB_Dropped =>
+
+         if not Primitive.Equal (Obj.Generated_Prim, Prim) then
+            raise Program_Error;
+         end if;
+         Obj.SB_Slot_State := TA_Request_Secure_SB_Done;
+
+         pragma Debug (
+            Debug.Print_String (
+               "[sb_init] slot " &
+               Debug.To_String (Debug.Uint64_Type (Obj.SB_Slot_Idx)) &
+               ", ta secure sb done"));
+
+      when others =>
+
+         raise Program_Error;
+
+      end case;
+   end Mark_Generated_TA_Secure_SB_Primitive_Complete;
 
 end CBE.Superblock_Initializer;

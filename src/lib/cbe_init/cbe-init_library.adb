@@ -240,6 +240,22 @@ is
 
                end if;
 
+            when Primitive.Tag_SB_Init_TA_Secure_SB =>
+
+               if Trust_Anchor.Primitive_Acceptable (Obj.TA) then
+
+                  Trust_Anchor.Submit_Primitive_Hash (
+                     Obj.TA, Prim,
+                     Superblock_Initializer.Peek_Generated_SB_Hash
+                        (Obj.SB_Init, Prim));
+
+                  Superblock_Initializer.Drop_Generated_Primitive (
+                     Obj.SB_Init, Prim);
+
+                  Obj.Execute_Progress := True;
+
+               end if;
+
             when others =>
                raise Program_Error;
             end case;
@@ -605,6 +621,12 @@ is
                   (Obj.SB_Init, Prim,
                    Trust_Anchor.Peek_Completed_Key_Value_Ciphertext (
                       Obj.TA, Prim));
+
+            when Primitive.Tag_SB_Init_TA_Secure_SB =>
+
+               Superblock_Initializer.
+                  Mark_Generated_TA_Secure_SB_Primitive_Complete (Obj.SB_Init,
+                     Prim);
 
             when others =>
 
