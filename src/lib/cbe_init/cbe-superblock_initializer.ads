@@ -82,6 +82,11 @@ is
       Prim : Primitive.Object_Type)
    return Key_Value_Plaintext_Type;
 
+   function Peek_Generated_SB_Hash (
+      Obj  : Object_Type;
+      Prim : Primitive.Object_Type)
+   return Hash_Type;
+
    procedure Mark_Generated_Blk_IO_Primitive_Complete (
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type);
@@ -110,6 +115,10 @@ is
       Obj  : in out Object_Type;
       Prim :        Primitive.Object_Type;
       Key  :        Key_Value_Ciphertext_Type);
+
+   procedure Mark_Generated_TA_Secure_SB_Primitive_Complete (
+      Obj  : in out Object_Type;
+      Prim :        Primitive.Object_Type);
 
 private
 
@@ -145,6 +154,9 @@ private
       Sync_Request_Started,
       Sync_Request_Dropped,
       Sync_Request_Done,
+      TA_Request_Secure_SB_Started,
+      TA_Request_Secure_SB_Dropped,
+      TA_Request_Secure_SB_Done,
       Done);
 
    type Object_Type is record
@@ -154,6 +166,7 @@ private
       SB_Slot          : Superblock_Ciphertext_Type;
       Key_Plain        : Key_Value_Plaintext_Type;
       Key_Cipher       : Key_Value_Ciphertext_Type;
+      SB_Hash          : Hash_Type;
       VBD              : Type_1_Node_Type;
       VBD_Max_Lvl_Idx  : Tree_Level_Index_Type;
       VBD_Degree       : Tree_Degree_Type;

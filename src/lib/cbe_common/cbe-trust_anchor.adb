@@ -89,7 +89,10 @@ is
       for Idx in Anchor.Jobs'Range loop
          if Anchor.Jobs (Idx).Operation = Invalid then
             case Primitive.Tag (Prim) is
-            when Primitive.Tag_SB_Ctrl_TA_Secure_SB =>
+            when
+               Primitive.Tag_SB_Ctrl_TA_Secure_SB |
+               Primitive.Tag_SB_Init_TA_Secure_SB
+            =>
 
                Anchor.Jobs (Idx).Operation := Secure_Superblock;
                Anchor.Jobs (Idx).State := Submitted;
