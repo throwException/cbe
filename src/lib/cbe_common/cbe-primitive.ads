@@ -24,6 +24,7 @@ is
       Tag_SB_Init_Blk_IO,
       Tag_SB_Init_TA_Create_Key,
       Tag_SB_Init_TA_Encrypt_Key,
+      Tag_SB_Init_TA_Secure_SB,
       Tag_VBD_Init_Blk_Alloc,
       Tag_VBD_Init_Blk_IO,
       Tag_FT_Init_Blk_Alloc,
