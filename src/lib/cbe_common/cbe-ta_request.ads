@@ -19,7 +19,8 @@ is
       Create_Key,
       Secure_Superblock,
       Encrypt_Key,
-      Decrypt_Key);
+      Decrypt_Key,
+      Last_SB_Hash);
 
    subtype Success_Type is Boolean;
 

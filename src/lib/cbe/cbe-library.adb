@@ -799,6 +799,19 @@ is
    end Mark_Generated_TA_Encrypt_Key_Request_Complete;
 
    --
+   --  Mark_Generated_TA_Last_SB_Hash_Request_Complete
+   --
+   procedure Mark_Generated_TA_Last_SB_Hash_Request_Complete (
+      Obj  : in out Object_Type;
+      Req  :        TA_Request.Object_Type;
+      Hash :        Hash_Type)
+   is
+   begin
+      Trust_Anchor.Mark_Generated_Last_SB_Hash_Request_Complete (
+         Obj.TA, Req, Hash);
+   end Mark_Generated_TA_Last_SB_Hash_Request_Complete;
+
+   --
    --  Idx_Of_Any_Invalid_Snap
    --
    function Idx_Of_Any_Invalid_Snap (Snapshots : Snapshots_Type)
@@ -2095,6 +2108,10 @@ is
                   Superblock_Control.Peek_Generated_Hash (
                      Obj.SB_Ctrl, Prim));
 
+            when Primitive.Tag_SB_Ctrl_TA_Last_SB_Hash =>
+
+               Trust_Anchor.Submit_Primitive (Obj.TA, Prim);
+
             when others =>
 
                raise Program_Error;
@@ -2358,6 +2375,16 @@ is
 
                Superblock_Control.Mark_Generated_Prim_Complete (
                   Obj.SB_Ctrl, Prim);
+
+               Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
+               Progress := True;
+
+            when Primitive.Tag_SB_Ctrl_TA_Last_SB_Hash =>
+
+               Superblock_Control.Mark_Generated_Prim_Complete_SB_Hash (
+                  Obj.SB_Ctrl, Prim,
+                  Trust_Anchor.Peek_Completed_SB_Hash (
+                     Obj.TA, Prim));
 
                Trust_Anchor.Drop_Completed_Primitive (Obj.TA, Prim);
                Progress := True;

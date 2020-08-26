@@ -63,6 +63,7 @@ is
       Tag_SB_Ctrl_TA_Secure_SB,
       Tag_SB_Ctrl_TA_Encrypt_Key,
       Tag_SB_Ctrl_TA_Decrypt_Key,
+      Tag_SB_Ctrl_TA_Last_SB_Hash,
       Tag_SB_Ctrl_Cache,
       Tag_SB_Ctrl_VBD_Rkg_Read_VBA,
       Tag_SB_Ctrl_VBD_Rkg_Write_VBA,

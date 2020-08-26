@@ -453,4 +453,16 @@ is
          "46mark_generated_ta_encrypt_key_request_completeERKNS_" &
          "20Trust_anchor_requestERKNS_20Key_ciphertext_valueE";
 
+   procedure Mark_Generated_TA_Last_SB_Hash_Request_Complete (
+      Obj  : in out Library.Object_Type;
+      Req  :        CXX_TA_Request_Type;
+      Hash :        CXX_Hash_Type)
+   with
+      Export,
+      Convention    => C,
+      External_Name =>
+         "_ZN3Cbe7Library" &
+         "47mark_generated_ta_last_sb_hash_request_completeERKNS_" &
+         "20Trust_anchor_requestERKNS_4HashE";
+
 end CBE.CXX.CXX_Library;

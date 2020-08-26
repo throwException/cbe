@@ -306,6 +306,14 @@ is
       Key_Value :        Key_Value_Ciphertext_Type);
 
    --
+   --  Mark_Generated_TA_Last_SB_Hash_Request_Complete
+   --
+   procedure Mark_Generated_TA_Last_SB_Hash_Request_Complete (
+      Obj  : in out Object_Type;
+      Req  :        TA_Request.Object_Type;
+      Hash :        Hash_Type);
+
+   --
    --  Execute
    --
    procedure Execute (

@@ -128,6 +128,14 @@ is
       Key_Value : out Key_Value_Plaintext_Type);
 
    --
+   --  Peek_Completed_SB_Hash
+   --
+   function Peek_Completed_SB_Hash (
+      Anchor : Anchor_Type;
+      Prim   : Primitive.Object_Type)
+   return Hash_Type;
+
+   --
    --  Mark generated TA create key request complete
    --
    procedure Mark_Generated_Create_Key_Request_Complete (
@@ -158,6 +166,14 @@ is
       Req       :        TA_Request.Object_Type;
       Key_Value :        Key_Value_Ciphertext_Type);
 
+   --
+   --  Mark generated TA last superblock hash request complete
+   --
+   procedure Mark_Generated_Last_SB_Hash_Request_Complete (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type;
+      Hash   :        Hash_Type);
+
 private
 
    Nr_Of_Jobs : constant := 2;
@@ -169,7 +185,8 @@ private
       Create_Key,
       Secure_Superblock,
       Encrypt_Key,
-      Decrypt_Key);
+      Decrypt_Key,
+      Last_SB_Hash);
 
    type Job_State_Type is (
       Submitted,

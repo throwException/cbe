@@ -31,9 +31,9 @@ is
       CBE_Data :     Block_Data_Type);
 
    --
-   --  Hash_Of_Superblock
+   --  Hash_Of_Superblock_Cipher
    --
-   function Hash_Of_Superblock (SB : Superblock_Type)
+   function Hash_Of_Superblock_Ciphertext (SB : Superblock_Ciphertext_Type)
    return Hash_Type;
 
    --
@@ -71,9 +71,9 @@ is
    end SHA256_4K_Data_From_CBE_Data;
 
    --
-   --  Hash_Of_Superblock
+   --  Hash_Of_Superblock_Ciphertext
    --
-   function Hash_Of_Superblock (SB : Superblock_Type)
+   function Hash_Of_Superblock_Ciphertext (SB : Superblock_Ciphertext_Type)
    return Hash_Type
    is
    begin
@@ -84,14 +84,14 @@ is
          CBE_Data : Block_Data_Type;
          CBE_Hash : Hash_Type;
       begin
-         Block_Data_From_Superblock (CBE_Data, SB);
+         Block_Data_From_Superblock_Ciphertext (CBE_Data, SB);
          SHA256_4K_Data_From_CBE_Data (SHA_Data, CBE_Data);
          SHA256_4K.Hash (SHA_Data, SHA_Hash);
          CBE_Hash_From_SHA256_4K_Hash (CBE_Hash, SHA_Hash);
          return CBE_Hash;
       end Declare_Hash_Data;
 
-   end Hash_Of_Superblock;
+   end Hash_Of_Superblock_Ciphertext;
 
    --
    --  Info
@@ -910,7 +910,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1244,7 +1244,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1362,18 +1362,31 @@ is
    --  Execute_Initialize
    --
    procedure Execute_Initialize (
-      Job      : in out Job_Type;
-      Job_Idx  :        Jobs_Index_Type;
-      SB       : in out Superblock_Type;
-      SB_Idx   : in out Superblocks_Index_Type;
-      Curr_Gen : in out Generation_Type;
-      Progress : in out Boolean)
+      Job          : in out Job_Type;
+      Job_Idx      :        Jobs_Index_Type;
+      SB           : in out Superblock_Type;
+      SB_Idx       : in out Superblocks_Index_Type;
+      Curr_Gen     : in out Generation_Type;
+      Progress     : in out Boolean)
    is
    begin
       case Job.State is
       when Submitted =>
 
          Job.SB_Found := False;
+
+         Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
+            Op     => Read,
+            Succ   => False,
+            Tg     => Primitive.Tag_SB_Ctrl_TA_Last_SB_Hash,
+            Blk_Nr => Block_Number_Type'First,
+            Idx    => Primitive.Index_Type (Job_Idx));
+
+         Job.State := Last_SB_Hash_Pending;
+         Progress := True;
+
+      when Last_SB_Hash_Completed =>
+
          Job.Read_SB_Idx := 0;
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Read,
@@ -1398,22 +1411,11 @@ is
                SB_Generation : constant Generation_Type :=
                   Job.SB_Ciphertext.Snapshots (
                      Newest_Snapshot_Idx (Job.SB_Ciphertext.Snapshots)).Gen;
+               SB_Hash : constant Hash_Type :=
+                  Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
             begin
 
-               if Job.SB_Found then
-
-                  if Job.Generation > SB_Generation then
-
-                     Job.Generation := SB_Generation;
-                     Job.SB_Idx := Job.Read_SB_Idx;
-
-                  elsif Job.Generation = SB_Generation then
-
-                     raise Program_Error;
-
-                  end if;
-
-               else
+               if Job.Hash = SB_Hash then
 
                   Job.Generation := SB_Generation;
                   Job.SB_Idx := Job.Read_SB_Idx;
@@ -1715,7 +1717,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -1863,7 +1865,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -2168,7 +2170,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -2343,7 +2345,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -2589,7 +2591,7 @@ is
             raise Program_Error;
          end if;
 
-         Job.Hash := Hash_Of_Superblock (SB);
+         Job.Hash := Hash_Of_Superblock_Ciphertext (Job.SB_Ciphertext);
          Job.Generated_Prim := Primitive.Valid_Object_No_Pool_Idx (
             Op     => Primitive_Operation_Type'First,
             Succ   => False,
@@ -2725,7 +2727,8 @@ is
                  Encrypt_Previous_Key_Pending |
                  Decrypt_Current_Key_Pending |
                  Decrypt_Previous_Key_Pending |
-                 Secure_SB_Pending
+                 Secure_SB_Pending |
+                 Last_SB_Hash_Pending
             =>
 
                return Ctrl.Jobs (Idx).Generated_Prim;
@@ -3953,6 +3956,14 @@ is
             end if;
             raise Program_Error;
 
+         when Last_SB_Hash_Pending =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+               Ctrl.Jobs (Idx).State := Last_SB_Hash_In_Progress;
+               return;
+            end if;
+            raise Program_Error;
+
          when others =>
 
             raise Program_Error;
@@ -4419,5 +4430,43 @@ is
       raise Program_Error;
 
    end Mark_Generated_Prim_Complete_Snap;
+
+   --
+   --  Mark_Generated_Prim_Complete_SB_Hash
+   --
+   procedure Mark_Generated_Prim_Complete_SB_Hash (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Hash :        Hash_Type)
+   is
+      Idx : constant Jobs_Index_Type :=
+         Jobs_Index_Type (Primitive.Index (Prim));
+   begin
+      if Ctrl.Jobs (Idx).Operation /= Invalid then
+
+         case Ctrl.Jobs (Idx).State is
+         when Last_SB_Hash_In_Progress =>
+
+            if Primitive.Equal (Prim, Ctrl.Jobs (Idx).Generated_Prim) then
+
+               Ctrl.Jobs (Idx).State := Last_SB_Hash_Completed;
+               Ctrl.Jobs (Idx).Hash := Hash;
+
+               Ctrl.Jobs (Idx).Generated_Prim := Prim;
+               return;
+
+            end if;
+            raise Program_Error;
+
+         when others =>
+
+            raise Program_Error;
+
+         end case;
+
+      end if;
+      raise Program_Error;
+
+   end Mark_Generated_Prim_Complete_SB_Hash;
 
 end CBE.Superblock_Control;

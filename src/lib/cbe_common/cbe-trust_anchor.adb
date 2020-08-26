@@ -65,6 +65,17 @@ is
                   Tg   => 0);
                return;
 
+            when Primitive.Tag_SB_Ctrl_TA_Last_SB_Hash =>
+
+               Anchor.Jobs (Idx).Operation := Last_SB_Hash;
+               Anchor.Jobs (Idx).State := Submitted;
+               Anchor.Jobs (Idx).Submitted_Prim := Prim;
+               Anchor.Jobs (Idx).Request := TA_Request.Valid_Object (
+                  Op   => TA_Request.Last_SB_Hash,
+                  Succ => False,
+                  Tg   => 0);
+               return;
+
             when others =>
 
                raise Program_Error;
@@ -261,6 +272,30 @@ is
       raise Program_Error;
 
    end Peek_Completed_Key_Value_Ciphertext;
+
+   --
+   --  Peek_Completed_Hash
+   --
+   function Peek_Completed_SB_Hash (
+      Anchor : Anchor_Type;
+      Prim   : Primitive.Object_Type)
+   return Hash_Type
+   is
+   begin
+      Find_Corresponding_Job :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Last_SB_Hash and then
+            Anchor.Jobs (Idx).State = Completed and then
+            Primitive.Equal (Prim, Anchor.Jobs (Idx).Submitted_Prim)
+         then
+            return Anchor.Jobs (Idx).Hash;
+         end if;
+
+      end loop Find_Corresponding_Job;
+      raise Program_Error;
+
+   end Peek_Completed_SB_Hash;
 
    --
    --  Drop_Completed_Primitive
@@ -516,5 +551,33 @@ is
       raise Program_Error;
 
    end Mark_Generated_Encrypt_Key_Request_Complete;
+
+   --
+   --  Mark generated TA last superblock hash request complete
+   --
+   procedure Mark_Generated_Last_SB_Hash_Request_Complete (
+      Anchor : in out Anchor_Type;
+      Req    :        TA_Request.Object_Type;
+      Hash   :        Hash_Type)
+   is
+   begin
+      Find_Dropped_Generated_Last_SB_Hash_Request :
+      for Idx in Anchor.Jobs'Range loop
+
+         if Anchor.Jobs (Idx).Operation = Last_SB_Hash and then
+            Anchor.Jobs (Idx).State = Dropped and then
+            TA_Request.Equal (Anchor.Jobs (Idx).Request, Req)
+         then
+            Anchor.Jobs (Idx).Hash := Hash;
+            Anchor.Jobs (Idx).State := Completed;
+            Primitive.Success (Anchor.Jobs (Idx).Submitted_Prim,
+               TA_Request.Success (Req));
+            return;
+         end if;
+      end loop Find_Dropped_Generated_Last_SB_Hash_Request;
+
+      raise Program_Error;
+
+   end Mark_Generated_Last_SB_Hash_Request_Complete;
 
 end CBE.Trust_Anchor;
