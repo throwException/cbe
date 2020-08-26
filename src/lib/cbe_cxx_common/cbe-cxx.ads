@@ -228,7 +228,8 @@ is
       when TA_Request.Create_Key        => 1,
       when TA_Request.Secure_Superblock => 2,
       when TA_Request.Encrypt_Key       => 3,
-      when TA_Request.Decrypt_Key       => 4);
+      when TA_Request.Decrypt_Key       => 4,
+      when TA_Request.Last_SB_Hash      => 5);
 
    function CXX_TA_Request_Valid_To_SPARK (
       Input : CXX_TA_Request_Type;

@@ -459,4 +459,15 @@ is
          CXX_Key_Value_Ciphertext_To_SPARK (Key));
    end Mark_Generated_TA_Encrypt_Key_Request_Complete;
 
+   procedure Mark_Generated_TA_Last_SB_Hash_Request_Complete (
+      Obj  : in out Library.Object_Type;
+      Req  :        CXX_TA_Request_Type;
+      Hash :        CXX_Hash_Type)
+   is
+   begin
+      Library.Mark_Generated_TA_Last_SB_Hash_Request_Complete (Obj,
+         CXX_TA_Request_To_SPARK (Req),
+         CXX_Hash_To_SPARK (Hash));
+   end Mark_Generated_TA_Last_SB_Hash_Request_Complete;
+
 end CBE.CXX.CXX_Library;

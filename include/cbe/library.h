@@ -388,6 +388,15 @@ class Cbe::Library : public Cbe::Spark_object<353944>
 	 */
 	void mark_generated_ta_encrypt_key_request_complete(Trust_anchor_request const &request,
 	                                                    Key_ciphertext_value const &key);
+
+	/**
+	 * Mark generated TA last superblock hash request complete
+	 *
+	 * \param  request  reference to the request completed by the TA
+	 * \param  hash     reference to the superblock hash stored in the TA
+	 */
+	void mark_generated_ta_last_sb_hash_request_complete(Trust_anchor_request const &request,
+	                                                     Hash                 const &hash);
 };
 
 #endif /* _CBE_LIBRARY_H_ */

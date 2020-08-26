@@ -137,6 +137,7 @@ namespace Cbe {
 				SECURE_SUPERBLOCK = 2,
 				ENCRYPT_KEY       = 3,
 				DECRYPT_KEY       = 4,
+				LAST_SB_HASH      = 5,
 			};
 
 		private:
@@ -172,6 +173,7 @@ namespace Cbe {
 				case Operation::SECURE_SUPERBLOCK: return true;
 				case Operation::ENCRYPT_KEY:       return true;
 				case Operation::DECRYPT_KEY:       return true;
+				case Operation::LAST_SB_HASH:      return true;
 				case Operation::INVALID:           return false;
 				}
 				return false;
@@ -181,6 +183,7 @@ namespace Cbe {
 			bool secure_superblock() const { return _operation == Operation::SECURE_SUPERBLOCK; }
 			bool encrypt_key()       const { return _operation == Operation::ENCRYPT_KEY; }
 			bool decrypt_key()       const { return _operation == Operation::DECRYPT_KEY; }
+			bool last_sb_hash()      const { return _operation == Operation::LAST_SB_HASH; }
 
 			Operation operation() const { return _operation; }
 			bool      success()   const { return _success; }
@@ -412,6 +415,7 @@ char const *to_string(Cbe::Trust_anchor_request::Operation op)
 	case Cbe::Trust_anchor_request::Operation::SECURE_SUPERBLOCK: return "secure_superblock";
 	case Cbe::Trust_anchor_request::Operation::ENCRYPT_KEY: return "encrypt_key";
 	case Cbe::Trust_anchor_request::Operation::DECRYPT_KEY: return "decrypt_key";
+	case Cbe::Trust_anchor_request::Operation::LAST_SB_HASH: return "last_sb_hash";
 	}
 	throw Unknown_operation_type();
 }

@@ -109,6 +109,9 @@ is
       when 4 =>
          return CXX_TA_Request_Valid_To_SPARK (Input,
             TA_Request.Decrypt_Key);
+      when 5 =>
+         return CXX_TA_Request_Valid_To_SPARK (Input,
+            TA_Request.Last_SB_Hash);
       when others => raise Program_Error;
       end case;
    end CXX_TA_Request_To_SPARK;
