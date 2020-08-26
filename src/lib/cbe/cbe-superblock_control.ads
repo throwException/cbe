@@ -426,6 +426,14 @@ is
       Ctrl : in out Control_Type;
       Prim :        Primitive.Object_Type);
 
+   --
+   --  Mark_Generated_Prim_Complete_SB_Hash
+   --
+   procedure Mark_Generated_Prim_Complete_SB_Hash (
+      Ctrl : in out Control_Type;
+      Prim :        Primitive.Object_Type;
+      Hash :        Hash_Type);
+
 private
 
    type Job_Operation_Type is (
@@ -507,6 +515,9 @@ private
       Secure_SB_Pending,
       Secure_SB_In_Progress,
       Secure_SB_Completed,
+      Last_SB_Hash_Pending,
+      Last_SB_Hash_In_Progress,
+      Last_SB_Hash_Completed,
       Completed);
 
    type Job_Type is record
