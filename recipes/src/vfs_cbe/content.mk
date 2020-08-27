@@ -1,4 +1,7 @@
-MIRROR_FROM_REP_DIR := lib/mk/vfs_cbe.mk src/lib/vfs/cbe
+MIRROR_FROM_REP_DIR := \
+	lib/mk/vfs_cbe.mk \
+	include/util \
+	src/lib/vfs/cbe
 
 content: $(MIRROR_FROM_REP_DIR) LICENSE
 

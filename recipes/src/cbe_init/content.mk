@@ -1,4 +1,6 @@
-MIRROR_FROM_REP_DIR := src/app/cbe_init
+MIRROR_FROM_REP_DIR := \
+	include/util \
+	src/app/cbe_init \
 
 content: $(MIRROR_FROM_REP_DIR) LICENSE
 
