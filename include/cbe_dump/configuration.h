@@ -74,6 +74,22 @@ class Cbe_dump::Configuration
 		bool             meta_tree()              const { return _meta_tree; }
 		bool             hashes()                 const { return _hashes; }
 
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out,
+				"unused_nodes=",            _unused_nodes          ,
+				" max_superblocks=",        _max_superblocks       ,
+				" max_snapshots=",          _max_snapshots         ,
+				" vbd=",                    _vbd                   ,
+				" vbd_pba_filter_enabled=", _vbd_pba_filter_enabled,
+				" vbd_pba_filter=",         _vbd_pba_filter        ,
+				" vbd_vba_filter_enabled=", _vbd_vba_filter_enabled,
+				" vbd_vba_filter=",         _vbd_vba_filter        ,
+				" free_tree=",              _free_tree             ,
+				" meta_tree=",              _meta_tree             ,
+				" hashes=",                 _hashes                );
+		}
+
 } __attribute__((packed));
 
 #endif /* _CBE_DUMP__CONFIGURATION_H_ */

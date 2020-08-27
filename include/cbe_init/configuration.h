@@ -78,6 +78,17 @@ class Cbe_init::Configuration
 		Genode::uint64_t ft_nr_of_lvls      () const { return _ft_nr_of_lvls     ; }
 		Genode::uint64_t ft_nr_of_children  () const { return _ft_nr_of_children ; }
 		Genode::uint64_t ft_nr_of_leafs     () const { return _ft_nr_of_leafs    ; }
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out,
+				"vbd=(lvls=", _vbd_nr_of_lvls,
+				" children=", _vbd_nr_of_children,
+				" leafs=",    _vbd_nr_of_leafs, ")",
+				" ft=(lvls=", _ft_nr_of_lvls,
+				" children=", _ft_nr_of_children,
+				" leafs=",    _ft_nr_of_leafs, ")");
+		}
 };
 
 #endif /* _CBE_INIT__CONFIGURATION_H_ */

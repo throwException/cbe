@@ -1,20 +1,20 @@
 
 assert_spec linux
 
-exec rm -rf var/libcache/cbe
-exec rm -rf var/libcache/cbe_cxx
-exec rm -rf var/libcache/cbe_common
-exec rm -rf var/libcache/cbe_common_cxx
-exec rm -rf var/libcache/cbe_init
-exec rm -rf var/libcache/cbe_init_cxx
-exec rm -rf var/libcache/cbe_check
-exec rm -rf var/libcache/cbe_check_cxx
-exec rm -rf var/libcache/cbe_dump
-exec rm -rf var/libcache/cbe_dump_cxx
-exec rm -rf var/libcache/external_crypto
-exec rm -rf var/libcache/external_crypto_cxx
-exec rm -rf var/libcache/external_trust_anchor
-exec rm -rf var/libcache/external_trust_anchor_cxx
+#exec rm -rf var/libcache/cbe
+#exec rm -rf var/libcache/cbe_cxx
+#exec rm -rf var/libcache/cbe_common
+#exec rm -rf var/libcache/cbe_common_cxx
+#exec rm -rf var/libcache/cbe_init
+#exec rm -rf var/libcache/cbe_init_cxx
+#exec rm -rf var/libcache/cbe_check
+#exec rm -rf var/libcache/cbe_check_cxx
+#exec rm -rf var/libcache/cbe_dump
+#exec rm -rf var/libcache/cbe_dump_cxx
+#exec rm -rf var/libcache/external_crypto
+#exec rm -rf var/libcache/external_crypto_cxx
+#exec rm -rf var/libcache/external_trust_anchor
+#exec rm -rf var/libcache/external_trust_anchor_cxx
 
 set dd [installed_command dd]
 
@@ -93,56 +93,91 @@ append config {
 		<config file="} [cbe_image_file] {" block_size="4K" writeable="yes"/>
 	</start>
 
-	<start name="cbe_tester" caps="200">
+	<start name="test" caps="200">
+		<binary name="cbe_tester"/>
 		<resource name="RAM" quantum="80M"/>
-		<config show_progress="no" sync_interval="1" verbose="yes" report="no" log="yes" stop_on_error="yes">
+		<config
+			verbose_cmd_pool_cmd_pending="no"
+			verbose_cmd_pool_cmd_in_progress="yes"
+			verbose_cmd_pool_cmd_completed="yes"
+			verbose_blk_pkt_in_progress="no"
+			verbose_blk_pkt_completed="no"
+			verbose_ta_req_in_progress="no"
+			verbose_ta_req_completed="no"
+			verbose_crypto_req_completed="no"
+			verbose_crypto_req_in_progress="no"
+			verbose_client_data_mismatch="no"
+			verbose_client_data_transferred="no">
 
-			<tests>
+			<initialize>
 
-				<initialize>
-					<virtual-block-device
-						nr_of_levels="3"
-						nr_of_children="16"
-						nr_of_leafs="256" />
+				<virtual-block-device
+					nr_of_levels="3"
+					nr_of_children="16"
+					nr_of_leafs="256" />
 
-					<free-tree
-						nr_of_levels="3"
-						nr_of_children="16"
-						nr_of_leafs="256" />
-				</initialize>
+				<free-tree
+					nr_of_levels="3"
+					nr_of_children="16"
+					nr_of_leafs="256" />
 
-				<replay verbose="yes" bulk="no">
+			</initialize>
 
-					<request type="write" lba="10" count="100"/>
-					<request type="read" lba="150" count="20"/>
-					<create-snapshot id="1" quarantine="yes"/>
-					<extend-ft nr_of_phys_blocks="1" />
-					<request type="write" lba="20" count="10"/>
-					<request type="read" lba="140" count="10"/>
-					<extend-ft nr_of_phys_blocks="100" />
-					<extend-vbd nr_of_phys_blocks="1" />
-					<request type="write" lba="30" count="40"/>
-					<create-snapshot id="2" quarantine="yes"/>
-					<request type="read" lba="130" count="30"/>
-					<rekey />
-					<request type="write" lba="40" count="1"/>
-					<request type="read" lba="120" count="5"/>
-					<extend-vbd nr_of_phys_blocks="100" />
-					<request type="write" lba="50" count="50"/>
-					<request type="read" lba="110" count="70"/>
-					<extend-ft nr_of_phys_blocks="100" />
-					<rekey />
-					<request type="write" lba="60" count="10"/>
-					<create-snapshot id="3" quarantine="yes"/>
-					<request type="read" lba="100" count="10"/>
+			<construct/>
+			<request op="write" vba="20" count="10" sync="no" salt="4321"/>
+			<request op="read" vba="20" count="10" sync="no" salt="4321"/>
+			<request op="write" vba="50" count="2" sync="no"/>
+			<request op="write" vba="20" count="10" sync="no"/>
+			<request op="create_snapshot" sync="no"/>
 
-				</replay>
+			<check/>
 
-				<check/>
+			<benchmark op="start" label="First Benchmark"/>
+			<request op="write" vba="50" count="100" sync="no"/>
+			<request op="write" vba="30" count="100" sync="no"/>
+			<request op="write" vba="10" count="100" sync="no"/>
+			<request op="read" vba="50" count="100" sync="no"/>
+			<request op="read" vba="30" count="100" sync="no"/>
+			<request op="read" vba="10" count="100" sync="no"/>
+			<request op="create_snapshot" sync="no"/>
+			<request op="write" vba="50" count="100" sync="no"/>
+			<request op="write" vba="30" count="100" sync="no"/>
+			<request op="write" vba="10" count="100" sync="no"/>
+			<benchmark op="stop"/>
 
-			</tests>
+			<request op="create_snapshot" sync="no"/>
+			<request op="rekey" sync="no"/>
+			<request op="read" vba="20" count="10" sync="no"/>
+			<request op="sync" vba="0" count="100" sync="no"/>
+
+			<dump
+				max_superblocks="1"
+				vbd="yes"
+				vbd_vba_filter_enabled="yes"
+				vbd_vba_filter="50"
+				free_tree="no"
+				meta_tree="no"
+				hashes="yes"/>
+
+			<request op="extend_ft" count="12" sync="no"/>
+			<request op="sync" vba="20" count="10" sync="no"/>
+
+			<benchmark op="start" label="Second Benchmark"/>
+			<request op="write" vba="20" count="10" sync="yes" salt="1234"/>
+			<list-snapshots/>
+			<request op="write" vba="30" count="10" sync="no" salt="20"/>
+			<benchmark op="stop"/>
+
+			<benchmark op="start"/>
+			<request op="extend_vbd" count="23" sync="no"/>
+			<request op="read" vba="20" count="10" sync="no" salt="1234"/>
+			<request op="read" vba="20" count="10" sync="no" salt="1234"/>
+			<request op="deinitialize" sync="no"/>
+			<destruct/>
+			<benchmark op="stop"/>
 
 		</config>
+
 		<route>
 			<service name="Block"> <child name="lx_block"/> </service>
 			<service name="Terminal"> <child name="log_terminal"/> </service>
@@ -172,4 +207,6 @@ build_boot_image $boot_modules
 
 append qemu_args " -nographic -m 1280 "
 
-run_genode_until {.*child "cbe_tester" exited with exit value 0.*\n} 240
+run_genode_until "child \"test\" exited with exit value.*\n" 60
+grep_output {\[init\] child "test" exited with exit value}
+compare_output_to {[init] child "test" exited with exit value 0}

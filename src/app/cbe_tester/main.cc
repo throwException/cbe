@@ -1,1326 +1,1034 @@
 /*
- * Copyright (C) 2019 Genode Labs GmbH, Componolit GmbH, secunet AG
+ * \brief  Tool for running tests and benchmarks on the CBE
+ * \author Martin Stein
+ * \date   2020-08-26
+ */
+
+/*
+ * Copyright (C) 2020 Genode Labs GmbH
  *
- * This file is part of the Consistent Block Encrypter project, which is
- * distributed under the terms of the GNU Affero General Public License
- * version 3.
+ * This file is part of the Genode OS framework, which is distributed
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
-#include <base/allocator_avl.h>
-#include <base/attached_ram_dataspace.h>
 #include <base/attached_rom_dataspace.h>
 #include <base/component.h>
 #include <base/heap.h>
-#include <base/thread.h>
-#include <block/request_stream.h>
-#include <root/root.h>
-#include <util/bit_allocator.h>
+#include <timer_session/connection.h>
 
-/* cbe includes */
+/* CBE includes */
 #include <cbe/library.h>
 #include <cbe/external_crypto.h>
-
-/* cbe-check includes */
 #include <cbe_check/library.h>
-
-/* cbe-dump includes */
 #include <cbe_dump/library.h>
 #include <cbe_dump/configuration.h>
-
-/* cbe-init includes */
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
-
-/* local includes */
+#include <cbe/external_ta.h>
 #include <util.h>
 
-/* CBE external trust anchor */
-#include <cbe/external_ta.h>
-
 using namespace Genode;
-
-namespace Cbe {
-
-	struct Block_session_component;
-	struct Main;
-
-	static inline Block::Request convert_from(Cbe::Request const &r)
-	{
-		struct Operation_type_not_convertable : Genode::Exception { };
-		auto convert_op = [&] (Cbe::Request::Operation o) {
-			switch (o) {
-			case Cbe::Request::Operation::INVALID:          return Block::Operation::Type::INVALID;
-			case Cbe::Request::Operation::READ:             return Block::Operation::Type::READ;
-			case Cbe::Request::Operation::WRITE:            return Block::Operation::Type::WRITE;
-			case Cbe::Request::Operation::SYNC:             return Block::Operation::Type::SYNC;
-			case Cbe::Request::Operation::CREATE_SNAPSHOT:  throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::DISCARD_SNAPSHOT: throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::REKEY:            throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::EXTEND_VBD:       throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::EXTEND_FT:        throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::RESUME_REKEYING:  throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::DEINITIALIZE:     throw Operation_type_not_convertable();
-			case Cbe::Request::Operation::INITIALIZE:       throw Operation_type_not_convertable();
-			}
-			return Block::Operation::Type::INVALID;
-		};
-		return Block::Request {
-			.operation = {
-				.type         = convert_op(r.operation()),
-				.block_number = r.block_number(),
-				.count        = r.count(),
-			},
-			.success   = r.success(),
-			.offset    = (Block::off_t)r.offset(),
-			.tag       = { .value = r.tag() },
-		};
-	}
-
-	static inline Cbe::Request convert_to(Block::Request const &r)
-	{
-		auto convert_op = [&] (Block::Operation::Type t) {
-			switch (t) {
-			case Block::Operation::Type::INVALID: return Cbe::Request::Operation::INVALID;
-			case Block::Operation::Type::READ:    return Cbe::Request::Operation::READ;
-			case Block::Operation::Type::WRITE:   return Cbe::Request::Operation::WRITE;
-			case Block::Operation::Type::SYNC:    return Cbe::Request::Operation::SYNC;
-			case Block::Operation::Type::TRIM:    return Cbe::Request::Operation::INVALID;
-			}
-			return Cbe::Request::Operation::INVALID;
-		};
-		return Cbe::Request(
-			convert_op(r.operation.type),
-			r.success,
-			r.operation.block_number,
-			(Genode::uint64_t)r.offset,
-			(Number_of_blocks)r.operation.count,
-			0,
-			(Genode::uint32_t)r.tag.value);
-	}
-} /* namespace Cbe */
+using namespace Cbe;
 
 
-char const *to_string(Block::Operation::Type type)
+enum class Module_type : uint8_t
 {
-	struct Unknown_operation_type : Genode::Exception { };
-	switch (type) {
-	case Block::Operation::Type::INVALID: return "invalid";
-	case Block::Operation::Type::READ: return "read";
-	case Block::Operation::Type::WRITE: return "write";
-	case Block::Operation::Type::SYNC: return "sync";
-	case Block::Operation::Type::TRIM: return "trim";
+	CBE_INIT,
+	CBE_DUMP,
+	CBE_CHECK,
+	CBE,
+};
+
+
+template <typename T>
+T read_attribute(Xml_node const &node,
+                 char     const *attr)
+{
+	T value { };
+
+	if (!node.has_attribute(attr)) {
+
+		error("<", node.type(), "> node misses attribute '", attr, "'");
+		class Attribute_missing { };
+		throw Attribute_missing();
 	}
-	throw Unknown_operation_type();
+	if (!node.attribute(attr).value(value)) {
+
+		error("<", node.type(), "> node has malformed '", attr, "' attribute");
+		class Malformed_attribute { };
+		throw Malformed_attribute();
+	}
+	return value;
 }
 
 
-struct Create_snapshot_id
+static char const *blk_pkt_op_to_string(Block::Packet_descriptor::Opcode op)
 {
-	uint64_t value;
+	switch (op) {
+	case Block::Packet_descriptor::READ: return "read";
+	case Block::Packet_descriptor::WRITE: return "write";
+	case Block::Packet_descriptor::SYNC: return "sync";
+	case Block::Packet_descriptor::TRIM: return "trim";
+	case Block::Packet_descriptor::END: return "end";
+	};
+	return "?";
+}
 
-	Create_snapshot_id (uint64_t value) : value { value } { }
-};
 
-
-struct Create_snapshot
+static void print_blk_data(Block_data const &blk_data)
 {
-	Create_snapshot_id id;
+	for(unsigned long idx = 0; idx < Cbe::BLOCK_SIZE; idx += 64) {
+		log(
+			"  ", idx, ": ",
+			Hex(blk_data.values[idx + 0], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 1], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 2], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 3], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 4], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 5], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 6], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 7], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 8], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 9], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 10], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 11], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 12], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 13], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 14], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 15], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 16], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 17], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 18], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 19], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 20], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 21], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 22], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 23], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 24], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 25], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 26], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 27], Hex::OMIT_PREFIX, Hex::PAD), " ",
+			Hex(blk_data.values[idx + 28], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 29], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 30], Hex::OMIT_PREFIX, Hex::PAD),
+			Hex(blk_data.values[idx + 31], Hex::OMIT_PREFIX, Hex::PAD));
+	}
+}
 
-	Create_snapshot(Create_snapshot_id id) : id { id } { }
-};
+
+static String<128> blk_pkt_to_string(Block::Packet_descriptor const &packet)
+{
+	return
+		String<128>(
+			"op=", blk_pkt_op_to_string(packet.operation()),
+			" vba=", packet.block_number(),
+			" cnt=", packet.block_count(),
+			" succ=", packet.succeeded(),
+			" tag=", Hex(packet.tag().value));
+}
 
 
-struct Failed_to_find_created_snapshot : Genode::Exception { };
-
-
-class Created_snapshot : public Avl_node<Created_snapshot>
+class Config_node
 {
 	private:
 
-		Create_snapshot_id _id;
-		Cbe::Generation    _generation;
+		bool const _verbose_cmd_pool_cmd_pending    ;
+		bool const _verbose_cmd_pool_cmd_in_progress;
+		bool const _verbose_cmd_pool_cmd_completed  ;
+		bool const _verbose_blk_pkt_in_progress     ;
+		bool const _verbose_blk_pkt_completed       ;
+		bool const _verbose_ta_req_in_progress      ;
+		bool const _verbose_ta_req_completed        ;
+		bool const _verbose_crypto_req_completed    ;
+		bool const _verbose_crypto_req_in_progress  ;
+		bool const _verbose_client_data_mismatch    ;
+		bool const _verbose_client_data_transferred ;
 
 	public:
 
-		Created_snapshot(Create_snapshot_id id,
-		                 Cbe::Generation    generation)
+		Config_node(Xml_node const &node)
 		:
-			_id         { id },
-			_generation { generation }
+			_verbose_cmd_pool_cmd_pending     { node.attribute_value("verbose_cmd_pool_cmd_pending"    , false) },
+			_verbose_cmd_pool_cmd_in_progress { node.attribute_value("verbose_cmd_pool_cmd_in_progress", false) },
+			_verbose_cmd_pool_cmd_completed   { node.attribute_value("verbose_cmd_pool_cmd_completed"  , false) },
+			_verbose_blk_pkt_in_progress      { node.attribute_value("verbose_blk_pkt_in_progress"     , false) },
+			_verbose_blk_pkt_completed        { node.attribute_value("verbose_blk_pkt_completed"       , false) },
+			_verbose_ta_req_in_progress       { node.attribute_value("verbose_ta_req_in_progress"      , false) },
+			_verbose_ta_req_completed         { node.attribute_value("verbose_ta_req_completed"        , false) },
+			_verbose_crypto_req_completed     { node.attribute_value("verbose_crypto_req_completed"    , false) },
+			_verbose_crypto_req_in_progress   { node.attribute_value("verbose_crypto_req_in_progress"  , false) },
+			_verbose_client_data_mismatch     { node.attribute_value("verbose_client_data_mismatch"    , false) },
+			_verbose_client_data_transferred  { node.attribute_value("verbose_client_data_transferred" , false) }
 		{ }
 
-		Created_snapshot &find_by_id(Create_snapshot_id const &id)
-		{
-			if (id.value == _id.value) {
-				return *this;
-			}
-			bool const side =  _id.value > id.value;
-			Created_snapshot *const snap = child(side);
-			if (!snap) {
-				throw Failed_to_find_created_snapshot();
-			}
-			return snap->find_by_id(id);
-		}
-
-		Cbe::Generation generation() const { return _generation; }
-
-
-		/**************
-		 ** Avl_node **
-		 **************/
-
-		bool higher(Created_snapshot *other)
-		{
-			return _id.value > other->_id.value;
-		}
+		bool verbose_cmd_pool_cmd_pending    () const { return _verbose_cmd_pool_cmd_pending    ; }
+		bool verbose_cmd_pool_cmd_in_progress() const { return _verbose_cmd_pool_cmd_in_progress; }
+		bool verbose_cmd_pool_cmd_completed  () const { return _verbose_cmd_pool_cmd_completed  ; }
+		bool verbose_blk_pkt_in_progress     () const { return _verbose_blk_pkt_in_progress     ; }
+		bool verbose_blk_pkt_completed       () const { return _verbose_blk_pkt_completed       ; }
+		bool verbose_ta_req_in_progress      () const { return _verbose_ta_req_in_progress      ; }
+		bool verbose_ta_req_completed        () const { return _verbose_ta_req_completed        ; }
+		bool verbose_crypto_req_completed    () const { return _verbose_crypto_req_completed    ; }
+		bool verbose_crypto_req_in_progress  () const { return _verbose_crypto_req_in_progress  ; }
+		bool verbose_client_data_mismatch    () const { return _verbose_client_data_mismatch    ; }
+		bool verbose_client_data_transferred () const { return _verbose_client_data_transferred ; }
 };
 
 
-class Created_snapshots_tree : public Avl_tree<Created_snapshot>
+class Benchmark_node
 {
 	public:
 
-		Created_snapshot &find_by_id(Create_snapshot_id const &id)
+		using Label = String<128>;
+
+		enum Operation { START, STOP };
+
+	private:
+
+		Operation const _op;
+		bool      const _label_avail;
+		Label     const _label;
+
+		Operation _read_op_attr(Xml_node const &node)
 		{
-			if (!first()) {
-				throw Failed_to_find_created_snapshot();
+			class Attribute_missing { };
+			if (!node.has_attribute("op")) {
+				throw Attribute_missing();
 			}
-			return first()->find_by_id(id);
+			if (node.attribute("op").has_value("start")) {
+				return Operation::START;
+			}
+			if (node.attribute("op").has_value("stop")) {
+				return Operation::STOP;
+			}
+			class Malformed_attribute { };
+			throw Malformed_attribute();
+		}
+
+		static char const *_op_to_string(Operation op)
+		{
+			switch (op) {
+			case START: return "start";
+			case STOP: return "stop";
+			}
+			return "?";
+		}
+
+	public:
+
+		bool has_attr_label() const
+		{
+			return _op == Operation::START;
+		}
+
+		Benchmark_node(Xml_node const &node)
+		:
+			_op          { _read_op_attr(node) },
+			_label_avail { has_attr_label() && node.has_attribute("label") },
+			_label       { _label_avail ?
+			               node.attribute_value("label", Label { }) :
+			               Label { } }
+		{ }
+
+		Operation op() const { return _op; }
+		bool label_avail() const { return _label_avail; }
+		Label const &label() const { return _label; }
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "op=", _op_to_string(_op));
 		}
 };
 
 
-struct Discard_snapshot
+class Benchmark
 {
-	Create_snapshot_id id;
+	private:
 
-	Discard_snapshot(Create_snapshot_id id) : id { id } { }
-};
+		enum State { STARTED, STOPPED };
 
+		Env                           &_env;
+		Timer::Connection              _timer                   { _env };
+		State                          _state                   { STOPPED };
+		Microseconds                   _start_time              { 0 };
+		uint64_t                       _nr_of_virt_blks_read    { 0 };
+		uint64_t                       _nr_of_virt_blks_written { 0 };
+		Constructible<Benchmark_node>  _start_node              { };
+		uint64_t                       _id                      { 0 };
 
-struct Extend_vbd
-{
-	uint32_t nr_of_phys_blocks;
+	public:
 
-	Extend_vbd(uint32_t nr_of_phys_blocks)
-	:
-		nr_of_phys_blocks { nr_of_phys_blocks }
-	{ }
-};
+		Benchmark(Env &env) : _env { env } { }
 
+		void submit_request(Benchmark_node const &node)
+		{
+			class Bad_state { };
+			switch (node.op()) {
+			case Benchmark_node::START:
 
-struct Extend_ft
-{
-	uint32_t nr_of_phys_blocks;
+				if (_state != STOPPED) {
+					throw Bad_state { };
+				}
+				_id++;
+				_nr_of_virt_blks_read = 0;
+				_nr_of_virt_blks_written = 0;
+				_state = STARTED;
+				_start_node.construct(node);
+				_start_time = _timer.curr_time().trunc_to_plain_us();
+				break;
 
-	Extend_ft(uint32_t nr_of_phys_blocks)
-	:
-		nr_of_phys_blocks { nr_of_phys_blocks }
-	{ }
-};
+			case Benchmark_node::STOP:
 
+				if (_state != STARTED) {
+					throw Bad_state { };
+				}
+				uint64_t const stop_time_us {
+					_timer.curr_time().trunc_to_plain_us().value };
 
-struct Cbe::Block_session_component
-{
-	enum class Response { ACCEPTED, REJECTED, RETRY };
+				double const passed_time_sec {
+					(double)(stop_time_us - _start_time.value) /
+					(double)(1000 * 1000) };
 
-	class Payload : Noncopyable
-	{
-		private:
+				double const bytes_per_sec_read {
+					((double)(_nr_of_virt_blks_read * Cbe::BLOCK_SIZE)) /
+					passed_time_sec };
 
-			friend class Block_session_component;
+				double const bytes_per_sec_written {
+					((double)(_nr_of_virt_blks_written * Cbe::BLOCK_SIZE)) /
+					passed_time_sec };
 
-			Genode::addr_t const _base;
+				log("benchmark completed: id=", _id,
+				    _start_node->label_avail() ? " label=(" : "",
+				    _start_node->label_avail() ? _start_node->label() : "",
+				    _start_node->label_avail() ? ")" : "",
+				    " duration=(", passed_time_sec, " sec)",
+				    " read=(", bytes_per_sec_read / (double)(1024 * 1024), " MiB/s)",
+				    " write=(", bytes_per_sec_written / (double)(1024 * 1024), " MiB/s)");
 
-			Payload(Genode::addr_t base)
-			:
-				_base(base)
-			{ }
-
-		public:
-
-			template <typename FN>
-			void with_content(Block::Request , FN const &fn) const
-			{
-				fn((void *)_base, BLOCK_SIZE);
+				_state = STOPPED;
+				break;
 			}
-	};
+		}
 
-	struct Test : Fifo<Test>::Element
-	{
+		void raise_nr_of_virt_blks_read()    { _nr_of_virt_blks_read++;    }
+		void raise_nr_of_virt_blks_written() { _nr_of_virt_blks_written++; }
+};
+
+
+class Request_node
+{
+	private:
+
+		using Operation = Cbe::Request::Operation;
+
+		Operation             const _op;
+		Virtual_block_address const _vba;
+		Number_of_blocks      const _count;
+		bool                  const _sync;
+		bool                  const _salt_avail;
+		uint64_t              const _salt;
+
+		Operation _read_op_attr(Xml_node const &node)
+		{
+			class Attribute_missing { };
+			if (!node.has_attribute("op")) {
+				throw Attribute_missing();
+			}
+			if (node.attribute("op").has_value("read")) {
+				return Operation::READ;
+			}
+			if (node.attribute("op").has_value("write")) {
+				return Operation::WRITE;
+			}
+			if (node.attribute("op").has_value("sync")) {
+				return Operation::SYNC;
+			}
+			if (node.attribute("op").has_value("create_snapshot")) {
+				return Operation::CREATE_SNAPSHOT;
+			}
+			if (node.attribute("op").has_value("extend_ft")) {
+				return Operation::EXTEND_FT;
+			}
+			if (node.attribute("op").has_value("extend_vbd")) {
+				return Operation::EXTEND_VBD;
+			}
+			if (node.attribute("op").has_value("rekey")) {
+				return Operation::REKEY;
+			}
+			if (node.attribute("op").has_value("deinitialize")) {
+				return Operation::DEINITIALIZE;
+			}
+			class Malformed_attribute { };
+			throw Malformed_attribute();
+		}
+
+	public:
+
+		Request_node(Xml_node const &node)
+		:
+			_op         { _read_op_attr(node) },
+			_vba        { has_attr_vba() ?
+			              read_attribute<uint64_t>(node, "vba") : 0 },
+			_count      { has_attr_count() ?
+			              read_attribute<uint64_t>(node, "count") : 0 },
+			_sync       { read_attribute<bool>(node, "sync") },
+			_salt_avail { has_attr_salt() ?
+			              node.has_attribute("salt") : false },
+			_salt       { has_attr_salt() && _salt_avail ?
+			              read_attribute<uint64_t>(node, "salt") : 0 }
+		{ }
+
+		Operation               op()         const { return _op; }
+		Virtual_block_address   vba()        const { return _vba; }
+		Number_of_blocks        count()      const { return _count; }
+		bool                    sync()       const { return _sync; }
+		bool                    salt_avail() const { return _salt_avail; }
+		uint64_t                salt()       const { return _salt; }
+
+		bool has_attr_vba() const
+		{
+			return _op == Operation::READ ||
+			       _op == Operation::WRITE ||
+			       _op == Operation::SYNC;
+		}
+
+		bool has_attr_salt() const
+		{
+			return _op == Operation::READ ||
+			       _op == Operation::WRITE;
+		}
+
+		bool has_attr_count() const
+		{
+			return _op == Operation::READ ||
+			       _op == Operation::WRITE ||
+			       _op == Operation::SYNC ||
+			       _op == Operation::EXTEND_FT ||
+			       _op == Operation::EXTEND_VBD;
+		}
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "op=", to_string(_op));
+			if (has_attr_vba()) {
+				Genode::print(out, " vba=", _vba);
+			}
+			if (has_attr_count()) {
+				Genode::print(out, " count=", _count);
+			}
+			Genode::print(out, " sync=", _sync);
+			if (_salt_avail) {
+				Genode::print(out, " salt=", _salt);
+			}
+		}
+};
+
+
+class Command : public Fifo<Command>::Element
+{
+	public:
+
 		enum Type
 		{
 			INVALID,
 			REQUEST,
-			CREATE_SNAPSHOT,
-			DISCARD_SNAPSHOT,
-			REKEY,
-			DEINITIALIZE,
-			EXTEND_VBD,
-			EXTEND_FT,
+			BENCHMARK,
+			CONSTRUCT,
+			DESTRUCT,
 			INITIALIZE,
 			CHECK,
 			DUMP,
 			LIST_SNAPSHOTS
 		};
 
-		Type                                   type             { INVALID };
-		Constructible<Block::Request>          request          { };
-		Constructible<Create_snapshot>         create_snapshot  { };
-		Constructible<Discard_snapshot>        discard_snapshot { };
-		Constructible<Extend_vbd>              extend_vbd       { };
-		Constructible<Extend_ft>               extend_ft        { };
-		Constructible<Cbe_init::Configuration> initialize       { };
-		Constructible<Cbe_dump::Configuration> dump             { };
+		enum State
+		{
+			PENDING,
+			IN_PROGRESS,
+			COMPLETED
+		};
 
-		Test () { }
+	private:
 
-		Test (Test &other)
+		Type                                   _type           { INVALID };
+		unsigned long                          _id             { 0 };
+		State                                  _state          { PENDING };
+		bool                                   _success        { false };
+		bool                                   _data_mismatch  { false };
+		Constructible<Request_node>            _request_node   { };
+		Constructible<Benchmark_node>          _benchmark_node { };
+		Constructible<Cbe_init::Configuration> _initialize     { };
+		Constructible<Cbe_dump::Configuration> _dump           { };
+
+		char const *_state_to_string() const
+		{
+			switch (_state) {
+			case PENDING: return "pending";
+			case IN_PROGRESS: return "in_progress";
+			case COMPLETED: return "completed";
+			}
+			return "?";
+		}
+
+		char const *_type_to_string() const
+		{
+			switch (_type) {
+			case INITIALIZE: return "initialize";
+			case INVALID: return "invalid";
+			case DUMP: return "dump";
+			case REQUEST: return "request";
+			case BENCHMARK: return "benchmark";
+			case CONSTRUCT: return "construct";
+			case DESTRUCT: return "destruct";
+			case CHECK: return "check";
+			case LIST_SNAPSHOTS: return "list_snapshots";
+			}
+			return "?";
+		}
+
+	public:
+
+		Command() { }
+
+		Command(Type            type,
+		        Xml_node const &node,
+		        unsigned long   id)
 		:
-			type { other.type }
+			_type { type },
+			_id   { id }
 		{
-			if (other.request.constructed()) {
-				request.construct(*other.request);
-			}
-			if (other.create_snapshot.constructed()) {
-				create_snapshot.construct(*other.create_snapshot);
-			}
-			if (other.discard_snapshot.constructed()) {
-				discard_snapshot.construct(*other.discard_snapshot);
-			}
-			if (other.extend_vbd.constructed()) {
-				extend_vbd.construct(*other.extend_vbd);
-			}
-			if (other.extend_ft.constructed()) {
-				extend_ft.construct(*other.extend_ft);
-			}
-			if (other.initialize.constructed()) {
-				initialize.construct(*other.initialize);
-			}
-			if (other.dump.constructed()) {
-				dump.construct(*other.dump);
+			switch (_type) {
+			case INITIALIZE: _initialize.construct(node);     break;
+			case DUMP:       _dump.construct(node);           break;
+			case REQUEST:    _request_node.construct(node);   break;
+			case BENCHMARK:  _benchmark_node.construct(node); break;
+			default:                                          break;
 			}
 		}
-	};
 
-	class Ack : Noncopyable
-	{
-		private:
-
-			Block_session_component &_component;
-
-		public:
-
-			void submit(Block::Request request)
-			{
-				_component.submit_ack(request);
-			}
-
-			Ack(Block_session_component &component)
-			:
-				_component { component }
-			{ }
-	};
-
-	Env                    &_env;
-	Attached_rom_dataspace &_config_rom;
-	Allocator              &_alloc;
-	Fifo<Test>              _test_queue { };
-	Constructible<Test>     _test_in_progress { };
-	unsigned long           _nr_of_failed_tests { 0 };
-	Block_data              _blk_data { };
-	unsigned long           _with_payload_cnt { 0 };
-	Created_snapshots_tree  _created_snapshots { };
-
-	void _read_request_node (Xml_node const &node)
-	{
-		struct Bad_request_node : Exception { };
-		try {
-			Block::Operation op;
-			if (node.attribute("type").has_value("read")) {
-				op.type = Block::Operation::Type::READ;
-			} else if (node.attribute("type").has_value("write")) {
-				op.type = Block::Operation::Type::WRITE;
-			} else if (node.attribute("type").has_value("sync")) {
-				op.type = Block::Operation::Type::SYNC;
-			} else {
-				error("request node has bad type attribute");
-				throw Bad_request_node();
-			}
-			if (!node.attribute("lba").value(op.block_number)) {
-				error("request node has bad lba attribute");
-				throw Bad_request_node();
-			}
-			if (!node.attribute("count").value(op.count)) {
-				error("request node has bad count attribute");
-				throw Bad_request_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::REQUEST;
-			test.request.construct();
-			test.request->operation = op;
-			test.request->success = false;
-			test.request->offset = 0;
-			test.request->tag.value = 0;
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("request node misses attribute");
-			throw Bad_request_node();
-		}
-	}
-
-	void _read_create_snapshot_node(Xml_node const &node)
-	{
-		struct Bad_create_snapshot_node : Exception { };
-		try {
-			Create_snapshot_id id { 0 };
-			if (!node.attribute("id").value(id.value)) {
-				error("create-snapshot node has bad id attribute");
-				throw Bad_create_snapshot_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::CREATE_SNAPSHOT;
-			test.create_snapshot.construct(id);
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("create-snapshot node misses attribute");
-			throw Bad_create_snapshot_node();
-		}
-	}
-
-	void _read_discard_snapshot_node(Xml_node const &node)
-	{
-		struct Bad_discard_snapshot_node : Exception { };
-		try {
-			Create_snapshot_id id { 0 };
-			if (!node.attribute("id").value(id.value)) {
-				error("discard-snapshot node has bad id attribute");
-				throw Bad_discard_snapshot_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::DISCARD_SNAPSHOT;
-			test.discard_snapshot.construct(id);
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("discard-snapshot node misses attribute");
-			throw Bad_discard_snapshot_node();
-		}
-	}
-
-	void _read_rekey_node()
-	{
-		Test &test = *new (_alloc) Test;
-		test.type = Test::REKEY;
-		_test_queue.enqueue(test);
-	}
-
-	void _read_deinitialize_node()
-	{
-		Test &test = *new (_alloc) Test;
-		test.type = Test::DEINITIALIZE;
-		_test_queue.enqueue(test);
-	}
-
-	void _read_list_snapshots_node()
-	{
-		Test &test = *new (_alloc) Test;
-		test.type = Test::LIST_SNAPSHOTS;
-		_test_queue.enqueue(test);
-	}
-
-	void _read_extend_vbd_node(Xml_node const &node)
-	{
-		struct Bad_extend_vbd_node : Exception { };
-		try {
-			uint32_t nr_of_phys_blocks { 0 };
-			if (!node.attribute("nr_of_phys_blocks").value(nr_of_phys_blocks)) {
-				error("extend-vbd node has bad nr_of_phys_blocks attribute");
-				throw Bad_extend_vbd_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::EXTEND_VBD;
-			test.extend_vbd.construct(nr_of_phys_blocks);
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("extend-vbd node misses attribute");
-			throw Bad_extend_vbd_node();
-		}
-	}
-
-	void _read_extend_ft_node(Xml_node const &node)
-	{
-		struct Bad_extend_ft_node : Exception { };
-		try {
-			uint32_t nr_of_phys_blocks { 0 };
-			if (!node.attribute("nr_of_phys_blocks").value(nr_of_phys_blocks)) {
-				error("extend-ft node has bad nr_of_phys_blocks attribute");
-				throw Bad_extend_ft_node();
-			}
-			Test &test = *new (_alloc) Test;
-			test.type = Test::EXTEND_FT;
-			test.extend_ft.construct(nr_of_phys_blocks);
-			_test_queue.enqueue(test);
-		} catch (Xml_node::Nonexistent_attribute) {
-			error("extend-ft node misses attribute");
-			throw Bad_extend_ft_node();
-		}
-	}
-
-	void _read_replay_node (Xml_node const &node)
-	{
-		struct Bad_replay_sub_node : Exception { };
-		try {
-			Xml_node sub_node = node.sub_node();
-			while (1) {
-				if (sub_node.has_type("request")) {
-					_read_request_node(sub_node);
-				} else if (sub_node.has_type("create-snapshot")) {
-					_read_create_snapshot_node(sub_node);
-				} else if (sub_node.has_type("discard-snapshot")) {
-					_read_discard_snapshot_node(sub_node);
-				} else if (sub_node.has_type("rekey")) {
-					_read_rekey_node();
-				} else if (sub_node.has_type("deinitialize")) {
-					_read_deinitialize_node();
-				} else if (sub_node.has_type("list-snapshots")) {
-					_read_list_snapshots_node();
-				} else if (sub_node.has_type("extend-vbd")) {
-					_read_extend_vbd_node(sub_node);
-				} else if (sub_node.has_type("extend-ft")) {
-					_read_extend_ft_node(sub_node);
-				} else {
-					error("replay sub-node has bad type");
-					throw Bad_replay_sub_node();
-				}
-				sub_node = sub_node.next();
-			}
-		} catch (Xml_node::Nonexistent_sub_node) { }
-	}
-
-	void _read_check_node ()
-	{
-		Test &test = *new (_alloc) Test;
-		test.type = Test::CHECK;
-		_test_queue.enqueue(test);
-	}
-
-	void _read_dump_node (Xml_node const &node)
-	{
-		Test &test = *new (_alloc) Test;
-		test.type = Test::DUMP;
-		test.dump.construct(node);
-		_test_queue.enqueue(test);
-	}
-
-	void _read_initialize_node (Xml_node const &node)
-	{
-		try {
-			Test &test = *new (_alloc) Test;
-			test.type = Test::INITIALIZE;
-			test.initialize.construct(node);
-			_test_queue.enqueue(test);
-		} catch (Cbe_init::Configuration::Invalid) {
-			error("bad initialize node");
-			throw;
-		}
-	}
-
-	void _read_tests_node (Xml_node const &node)
-	{
-		try {
-			Xml_node sub_node = node.sub_node();
-			while (1) {
-				if (sub_node.has_type("replay")) {
-					_read_replay_node(sub_node);
-				}
-				else if (sub_node.has_type("initialize")) {
-					_read_initialize_node(sub_node);
-				}
-				else if (sub_node.has_type("check")) {
-					_read_check_node();
-				}
-				else if (sub_node.has_type("dump")) {
-					_read_dump_node(sub_node);
-				}
-				sub_node = sub_node.next();
-			}
-		} catch (Xml_node::Nonexistent_sub_node) { }
-	}
-
-	void submit_ack(Block::Request request)
-	{
-		if (!request.success) {
-			_nr_of_failed_tests++;
-			log("request failed: op ",
-				to_string(request.operation.type), ", vba ",
-				request.operation.block_number, ", cnt ",
-				request.operation.count);
-		} else {
-			log("request succeeded: op ",
-				to_string(request.operation.type), ", vba ",
-				request.operation.block_number, ", cnt ",
-				request.operation.count);
-		}
-		_test_in_progress.destruct();
-	}
-
-	Block_session_component(Env                    &env,
-	                        Attached_rom_dataspace &config_rom,
-	                        Allocator              &alloc)
-	:
-		_env        { env },
-		_config_rom { config_rom },
-		_alloc      { alloc }
-	{
-		for (unsigned idx = 0;
-		     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
-		     idx++)
+		Command(Command &other)
+		:
+			_type    { other._type },
+			_id      { other._id },
+			_state   { other._state },
+			_success { other._success }
 		{
-			_blk_data.values[idx] = _with_payload_cnt + idx + 1;
-		}
-		_config_rom.xml().with_sub_node("tests", [&] (Xml_node const &node) {
-			_read_tests_node(node);
-		});
-	}
-
-	~Block_session_component() { }
-
-	template <typename FN>
-	void with_requests(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_is_request { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::REQUEST) {
-				head_is_request = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
+			switch (_type) {
+			case INITIALIZE: _initialize.construct(*other._initialize);         break;
+			case DUMP:       _dump.construct(*other._dump);                     break;
+			case REQUEST:    _request_node.construct(*other._request_node);     break;
+			case BENCHMARK:  _benchmark_node.construct(*other._benchmark_node); break;
+			default:                                                            break;
 			}
 		}
-		if (!head_is_request) {
-			return;
+
+		bool has_attr_data_mismatch() const
+		{
+			return
+				_type == REQUEST &&
+				_request_node->op() == Cbe::Request::Operation::READ &&
+				_request_node->salt_avail();
 		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
 
-		log("request started: op ",
-			to_string(_test_in_progress->request->operation.type), ", vba ",
-			_test_in_progress->request->operation.block_number, ", cnt ",
-			_test_in_progress->request->operation.count);
-
-		fn(*_test_in_progress->request);
-	}
-
-	template <typename FN>
-	void try_acknowledge(FN const &fn)
-	{
-		Ack ack { *this };
-		fn(ack);
-	}
-
-	template <typename FN>
-	void with_payload(FN const &fn)
-	{
-		Payload payload { (addr_t)&_blk_data };
-		if  (fn(payload)) {
-
-			_with_payload_cnt++;
-			for (unsigned idx = 0;
-			     idx < sizeof(_blk_data.values)/sizeof(_blk_data.values[0]);
-			     idx++)
-			{
-				_blk_data.values[idx] = _with_payload_cnt + idx + 1;
+		bool synchronize() const
+		{
+			class Bad_type { };
+			switch (_type) {
+			case INITIALIZE:     return true;
+			case BENCHMARK:      return true;
+			case CONSTRUCT:      return true;
+			case DESTRUCT:       return true;
+			case DUMP:           return true;
+			case CHECK:          return true;
+			case LIST_SNAPSHOTS: return true;
+			case REQUEST:        return _request_node->sync();
+			case INVALID:        throw Bad_type();
 			}
+			throw Bad_type();
 		}
-	}
 
-	void wakeup_client_if_needed() { }
-
-	template <typename FN>
-	void with_create_snapshot(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
+		static Type type_from_string(String<64> str)
+		{
+			if (str == "initialize")     { return INITIALIZE; }
+			if (str == "request")        { return REQUEST; }
+			if (str == "benchmark")      { return BENCHMARK; }
+			if (str == "construct")      { return CONSTRUCT; }
+			if (str == "destruct")       { return DESTRUCT; }
+			if (str == "check")          { return CHECK; }
+			if (str == "dump")           { return DUMP; }
+			if (str == "list-snapshots") { return LIST_SNAPSHOTS; }
+			class Bad_string { };
+			throw Bad_string();
 		}
-		bool head_available { false };
-		bool head_is_snap_creation { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::CREATE_SNAPSHOT) {
-				head_is_snap_creation = true;
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "id=", _id, " type=", _type_to_string());
+			class Bad_type { };
+			switch (_type) {
+			case INITIALIZE:     Genode::print(out, " cfg=(", *_initialize, ")"); break;
+			case REQUEST:        Genode::print(out, " cfg=(", *_request_node, ")"); break;
+			case BENCHMARK:      Genode::print(out, " cfg=(", *_benchmark_node, ")"); break;
+			case DUMP:           Genode::print(out, " cfg=(", *_dump, ")"); break;
+			case INVALID:        break;
+			case CHECK:          break;
+			case CONSTRUCT:      break;
+			case DESTRUCT:       break;
+			case LIST_SNAPSHOTS: break;
 			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
+			Genode::print(out, ") succ=", _success);
+			if (has_attr_data_mismatch()) {
+				Genode::print(out, " bad_data=", _data_mismatch);
 			}
-		}
-		if (!head_is_snap_creation) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("create snapshot started: id ",
-		    _test_in_progress->create_snapshot->id.value);
-
-		fn(*_test_in_progress->create_snapshot);
-	}
-
-	void create_snapshot_done(Cbe::Request const &req,
-	                          Genode::Allocator  &alloc)
-	{
-		if (req.success()) {
-
-			log("create snapshot succeeded:",
-			    " id ", _test_in_progress->create_snapshot->id.value,
-			    " generation ", (Generation)req.offset());
-
-			_created_snapshots.insert(
-				new (alloc)
-					Created_snapshot(
-						_test_in_progress->create_snapshot->id,
-						(Generation)req.offset()));
-
-		} else {
-			_nr_of_failed_tests++;
-			log("create snapshot failed:"
-			    " id ",
-			    _test_in_progress->create_snapshot->id.value);
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_discard_snapshot(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_is_snap_discard { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::DISCARD_SNAPSHOT) {
-				head_is_snap_discard = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_is_snap_discard) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-
-		try {
-			Created_snapshot const &snap {
-				_created_snapshots.find_by_id(
-					_test_in_progress->discard_snapshot->id) };
-
-			log("discard snapshot started: id ",
-				_test_in_progress->discard_snapshot->id.value,
-				" generation ",
-				snap.generation());
-
-			fn(snap.generation());
-		}
-		catch (Failed_to_find_created_snapshot) {
-			_nr_of_failed_tests++;
-			log("discard snapshot failed (unknown snapshot): id ",
-			    _test_in_progress->discard_snapshot->id.value);
-			_test_in_progress.destruct();
-		}
-	}
-
-	void discard_snapshot_done(Cbe::Request const &req,
-	                           Genode::Allocator &alloc)
-	{
-		if (req.success()) {
-
-			Created_snapshot &snap {
-				_created_snapshots.find_by_id(
-					_test_in_progress->discard_snapshot->id) };
-
-			_created_snapshots.remove(&snap);
-			destroy(alloc, &snap);
-
-			log("discard snapshot succeeded: id ",
-			    _test_in_progress->discard_snapshot->id.value);
-
-		} else {
-			_nr_of_failed_tests++;
-			log("discard snapshot failed: id ",
-			    _test_in_progress->discard_snapshot->id.value);
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_deinitialize(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_has_correct_type { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::DEINITIALIZE) {
-				head_has_correct_type = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_has_correct_type) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("deinitialize started");
-
-		fn();
-	}
-
-	template <typename FN>
-	void with_list_snapshots(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_has_correct_type { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::LIST_SNAPSHOTS) {
-				head_has_correct_type = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_has_correct_type) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("list snapshots:");
-
-		fn();
-		_test_in_progress.destruct();
-	}
-
-	void deinitialize_done(bool success)
-	{
-		if (success) {
-			log("deinitialize succeeded");
-		} else {
-			_nr_of_failed_tests++;
-			log("deinitialize failed");
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_rekey(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_has_correct_type { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::REKEY) {
-				head_has_correct_type = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_has_correct_type) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("rekey started");
-
-		fn();
-	}
-
-	void rekey_done(bool success)
-	{
-		if (success) {
-			log("rekey succeeded");
-		} else {
-			_nr_of_failed_tests++;
-			log("rekey failed");
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_extend_vbd(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_has_correct_type { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::EXTEND_VBD) {
-				head_has_correct_type = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_has_correct_type) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("extend-vbd started: nr_of_phys_blocks ",
-		    _test_in_progress->extend_vbd->nr_of_phys_blocks);
-
-		fn(*_test_in_progress->extend_vbd);
-	}
-
-	void extend_vbd_done(bool success)
-	{
-		if (success) {
-			log("extend_vbd succeeded: nr_of_phys_blocks ",
-			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
-		} else {
-			_nr_of_failed_tests++;
-			log("extend_vbd failed: nr_of_phys_blocks ",
-			    _test_in_progress->extend_vbd->nr_of_phys_blocks);
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_extend_ft(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_has_correct_type { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::EXTEND_FT) {
-				head_has_correct_type = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_has_correct_type) {
-			return;
-		}
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-		log("extend-ft started: nr_of_phys_blocks ",
-		    _test_in_progress->extend_ft->nr_of_phys_blocks);
-
-		fn(*_test_in_progress->extend_ft);
-	}
-
-	void extend_ft_done(bool success)
-	{
-		if (success) {
-			log("extend_ft succeeded: nr_of_phys_blocks ",
-			    _test_in_progress->extend_ft->nr_of_phys_blocks);
-		} else {
-			_nr_of_failed_tests++;
-			log("extend_ft failed: nr_of_phys_blocks ",
-			    _test_in_progress->extend_ft->nr_of_phys_blocks);
-		}
-		_test_in_progress.destruct();
-	}
-
-	bool cbe_request_next() const
-	{
-		bool result = false;
-		_test_queue.head([&] (Test &test) {
-			result |= test.type == Test::REQUEST;
-			result |= test.type == Test::CREATE_SNAPSHOT;
-			result |= test.type == Test::DISCARD_SNAPSHOT;
-			result |= test.type == Test::REKEY;
-			result |= test.type == Test::DEINITIALIZE;
-			result |= test.type == Test::EXTEND_VBD;
-			result |= test.type == Test::EXTEND_FT;
-		});
-		return result;
-	}
-
-	template <typename FN>
-	void with_check(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_type_fits { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::CHECK) {
-				head_type_fits = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_type_fits) {
-			return;
+			Genode::print(out, " state=", _state_to_string());
 		}
 
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
+		Type                           type          () const { return _type           ; }
+		State                          state         () const { return _state          ; }
+		unsigned long                  id            () const { return _id             ; }
+		bool                           success       () const { return _success        ; }
+		bool                           data_mismatch () const { return _data_mismatch  ; }
+		Request_node            const &request_node  () const { return *_request_node  ; }
+		Benchmark_node          const &benchmark_node() const { return *_benchmark_node; }
+		Cbe_init::Configuration const &initialize    () const { return *_initialize    ; }
+		Cbe_dump::Configuration const &dump          () const { return *_dump          ; }
 
-		log("check started");
-		fn();
-	}
+		void state         (State state)        { _state = state; }
+		void success       (bool success)       { _success = success; }
+		void data_mismatch (bool data_mismatch) { _data_mismatch = data_mismatch; }
 
-	void check_done(bool success)
-	{
-		if (success) {
-			log("check succeeded");
-		} else {
-			_nr_of_failed_tests++;
-			log("check failed");
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_dump(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_type_fits { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::DUMP) {
-				head_type_fits = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_type_fits) {
-			return;
-		}
-
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-
-		log("dump started",
-		    ": unused_nodes ",           _test_in_progress->dump->unused_nodes(),
-		    ", max_superblocks ",        _test_in_progress->dump->max_superblocks(),
-		    ", max_snapshots ",          _test_in_progress->dump->max_snapshots(),
-		    ", vbd ",                    _test_in_progress->dump->vbd(),
-		    ", vbd_pba_filter_enabled ", _test_in_progress->dump->vbd_pba_filter_enabled(),
-		    ", vbd_pba_filter ",         _test_in_progress->dump->vbd_pba_filter(),
-		    ", vbd_vba_filter_enabled ", _test_in_progress->dump->vbd_vba_filter_enabled(),
-		    ", vbd_vba_filter ",         _test_in_progress->dump->vbd_vba_filter(),
-		    ", free_tree ",              _test_in_progress->dump->free_tree(),
-		    ", hashes ",                 _test_in_progress->dump->hashes());
-
-		fn(*_test_in_progress->dump);
-	}
-
-	void dump_done(bool success)
-	{
-		if (success) {
-			log("dump succeeded");
-		} else {
-			_nr_of_failed_tests++;
-			log("dump failed");
-		}
-		_test_in_progress.destruct();
-	}
-
-	template <typename FN>
-	void with_initialize(FN const &fn)
-	{
-		if (_test_in_progress.constructed()) {
-			return;
-		}
-		bool head_available { false };
-		bool head_type_fits { false };
-		_test_queue.head([&] (Test &test) {
-			head_available = true;
-			if (test.type == Test::INITIALIZE) {
-				head_type_fits = true;
-			}
-		});
-		if (!head_available) {
-			log("all tests finished (", _nr_of_failed_tests, " tests failed)");
-			if (_nr_of_failed_tests > 0) {
-				_env.parent().exit(-1);
-			} else {
-				_env.parent().exit(0);
-			}
-		}
-		if (!head_type_fits) {
-			return;
-		}
-
-		_test_queue.dequeue([&] (Test &test) {
-			_test_in_progress.construct(test);
-			destroy(_alloc, &test);
-		});
-
-		log("initialize started:  vbd:",
-		    ", lvls ", _test_in_progress->initialize->vbd_nr_of_lvls(),
-		    ", degr ", _test_in_progress->initialize->vbd_nr_of_children(),
-		    ", leafs ", _test_in_progress->initialize->vbd_nr_of_leafs(),
-		    "  ft:",
-		    " lvls ", _test_in_progress->initialize->ft_nr_of_lvls(),
-		    ", degr ", _test_in_progress->initialize->ft_nr_of_children(),
-		    ", leafs ", _test_in_progress->initialize->ft_nr_of_leafs());
-
-		fn(*_test_in_progress->initialize);
-	}
-
-	void initialize_done(bool success)
-	{
-		if (success) {
-			log("initialize succeeded");
-		} else {
-			_nr_of_failed_tests++;
-			log("initialize failed");
-		}
-		_test_in_progress.destruct();
-	}
 };
 
 
-class Cbe::Main
+class Command_pool {
+
+	private:
+
+		Allocator         &_alloc;
+		Config_node const &_config_node;
+		Fifo<Command>      _cmd_queue              { };
+		unsigned long      _next_command_id        { 0 };
+		unsigned long      _nr_of_uncompleted_cmds { 0 };
+		unsigned long      _nr_of_errors           { 0 };
+		Block_data         _blk_data               { };
+
+		void _read_cmd_node(Xml_node const &node,
+		                    Command::Type   cmd_type)
+		{
+			Command &cmd {
+				*new (_alloc) Command(cmd_type, node, _next_command_id++) };
+
+			_nr_of_uncompleted_cmds++;
+			_cmd_queue.enqueue(cmd);
+
+			if (_config_node.verbose_cmd_pool_cmd_pending()) {
+				log("cmd pending: ", &cmd, " ", cmd);
+			}
+		}
+
+		static void _generate_blk_data(Block_data            &blk_data,
+		                               Virtual_block_address  vba,
+		                               uint64_t               salt)
+		{
+			for (uint64_t idx { 0 };
+			     idx + sizeof(vba) + sizeof(salt) <=
+			        sizeof(blk_data.values) / sizeof(blk_data.values[0]); )
+			{
+				memcpy(&blk_data.values[idx], &vba, sizeof(vba));
+				idx += sizeof(vba);
+				memcpy(&blk_data.values[idx], &salt, sizeof(salt));
+				idx += sizeof(salt);
+				vba += idx + salt;
+				salt += idx + vba;
+			}
+		}
+
+	public:
+
+		Command_pool(Allocator         &alloc,
+		             Xml_node    const &config_xml,
+		             Config_node const &config_node)
+		:
+			_alloc       { alloc },
+			_config_node { config_node }
+		{
+			config_xml.for_each_sub_node([&] (Xml_node const &node) {
+				_read_cmd_node(node, Command::type_from_string(node.type()));
+			});
+		}
+
+		Command peek_pending_command(Command::Type type) const
+		{
+			Reconstructible<Command> resulting_cmd { };
+			bool first_uncompleted_cmd { true };
+			bool exit_loop { false };
+			_cmd_queue.for_each([&] (Command &curr_cmd)
+			{
+				if (exit_loop) {
+					return;
+				}
+				switch (curr_cmd.state()) {
+				case Command::PENDING:
+
+					/*
+					 * Stop iterating at the first uncompleted command
+					 * that needs to be synchronized.
+					 */
+					if (curr_cmd.synchronize()) {
+						if (curr_cmd.type() == type && first_uncompleted_cmd) {
+							resulting_cmd.construct(curr_cmd);
+						}
+						exit_loop = true;
+						return;
+					}
+					/*
+					 * Select command and stop iterating if the command is of
+					 * the desired type.
+					 */
+					if (curr_cmd.type() == type) {
+						resulting_cmd.construct(curr_cmd);
+						exit_loop = true;
+					}
+					first_uncompleted_cmd = false;
+					return;
+
+				case Command::IN_PROGRESS:
+
+					/*
+					 * Stop iterating at the first uncompleted command
+					 * that needs to be synchronized.
+					 */
+					if (curr_cmd.synchronize()) {
+						exit_loop = true;
+						return;
+					}
+					first_uncompleted_cmd = false;
+					return;
+
+				case Command::COMPLETED:
+
+					return;
+				}
+			});
+			return *resulting_cmd;
+		}
+
+		void mark_command_in_progress(unsigned long cmd_id)
+		{
+			bool exit_loop { false };
+			_cmd_queue.for_each([&] (Command &cmd)
+			{
+				if (exit_loop) {
+					return;
+				}
+				if (cmd.id() == cmd_id) {
+					if (cmd.state() != Command::PENDING) {
+						class Bad_state { };
+						throw Bad_state();
+					}
+					cmd.state(Command::IN_PROGRESS);
+					exit_loop = true;
+
+					if (_config_node.verbose_cmd_pool_cmd_in_progress()) {
+						log("cmd in progress: ", cmd);
+					}
+				}
+			});
+		}
+
+		void mark_command_completed(unsigned long cmd_id,
+		                            bool          success)
+		{
+			bool exit_loop { false };
+			_cmd_queue.for_each([&] (Command &cmd)
+			{
+				if (exit_loop) {
+					return;
+				}
+				if (cmd.id() == cmd_id) {
+					if (cmd.state() != Command::IN_PROGRESS) {
+						class Bad_state { };
+						throw Bad_state();
+					}
+					cmd.state(Command::COMPLETED);
+					_nr_of_uncompleted_cmds--;
+					cmd.success(success);
+					if (!cmd.success()) {
+						_nr_of_errors++;
+					}
+					exit_loop = true;
+
+					if (_config_node.verbose_cmd_pool_cmd_completed()) {
+						log("cmd completed: ", cmd);
+					}
+				}
+			});
+		}
+
+		void generate_blk_data(Cbe::Request           cbe_req,
+		                       Virtual_block_address  vba,
+		                       Block_data            &blk_data) const
+		{
+			bool exit_loop { false };
+			_cmd_queue.for_each([&] (Command &cmd)
+			{
+				if (exit_loop) {
+					return;
+				}
+				if (cmd.id() != cbe_req.tag()) {
+					return;
+				}
+				if (cmd.type() != Command::REQUEST) {
+					class Bad_command_type { };
+					throw Bad_command_type();
+				}
+				Request_node const &req_node { cmd.request_node() };
+				if (req_node.salt_avail()) {
+
+					_generate_blk_data(blk_data, vba, req_node.salt());
+				}
+				exit_loop = true;
+			});
+		}
+
+		void verify_blk_data(Cbe::Request           cbe_req,
+		                     Virtual_block_address  vba,
+		                     Block_data      const &blk_data)
+		{
+			bool exit_loop { false };
+			_cmd_queue.for_each([&] (Command &cmd)
+			{
+				if (exit_loop) {
+					return;
+				}
+				if (cmd.id() != cbe_req.tag()) {
+					return;
+				}
+				if (cmd.type() != Command::REQUEST) {
+					class Bad_command_type { };
+					throw Bad_command_type();
+				}
+				Request_node const &req_node { cmd.request_node() };
+				if (req_node.salt_avail()) {
+
+					Block_data gen_blk_data { };
+					_generate_blk_data(gen_blk_data, vba, req_node.salt());
+
+					if (memcmp(blk_data.values, gen_blk_data.values,
+					           sizeof(blk_data.values) /
+					           sizeof(blk_data.values[0]))) {
+
+						cmd.data_mismatch(true);
+						_nr_of_errors++;
+
+						if (_config_node.verbose_client_data_mismatch()) {
+							log("client data mismatch: vba=", vba,
+							    " req=(", cbe_req, ")");
+							log("client data should be:");
+							print_blk_data(gen_blk_data);
+							log("client data is:");
+							print_blk_data(blk_data);
+							class Client_data_mismatch { };
+							throw Client_data_mismatch();
+						}
+					}
+				}
+				exit_loop = true;
+			});
+		}
+
+		void print_failed_cmds() const
+		{
+			_cmd_queue.for_each([&] (Command &cmd)
+			{
+				if (cmd.state() != Command::COMPLETED) {
+					return;
+				}
+				if (cmd.success() &&
+				    (!cmd.has_attr_data_mismatch() || !cmd.data_mismatch())) {
+
+					return;
+				}
+				log("cmd failed: ", cmd);
+			});
+		}
+
+		unsigned long nr_of_uncompleted_cmds() { return _nr_of_uncompleted_cmds; }
+		unsigned long nr_of_errors()           { return _nr_of_errors; }
+};
+
+
+class Main
 {
 	private:
 
-		enum State { INVALID, CBE, CBE_INIT, CBE_CHECK, CBE_DUMP };
-
 		enum { TX_BUF_SIZE = Block::Session::TX_QUEUE_SIZE * BLOCK_SIZE, };
 
-		Env                                    &_env;
-		Attached_rom_dataspace                  _config_rom              { _env, "config" };
-		bool                                    _verbose_back_end_io     { false };
-		bool                                    _verbose_back_end_crypto { false };
-		Constructible<Block_session_component>  _block_session           { };
-		Heap                                    _heap                    { _env.ram(), _env.rm() };
-		Allocator_avl                           _blk_alloc               { &_heap };
-		Block::Connection<>                     _blk                     { _env, &_blk_alloc, TX_BUF_SIZE };
-		Constructible<Cbe::Library>             _cbe                     { };
-		Cbe_check::Library                      _cbe_check               { };
-		Cbe_dump::Library                       _cbe_dump                { };
-		Cbe_init::Library                       _cbe_init                { };
-		External::Trust_anchor                  _trust_anchor            { };
-		Cbe::Hash                               _last_sb_hash            { };
-		Cbe::Request                            _blk_req                 { };
-		Io_buffer                               _blk_buf                 { };
-		Crypto_plain_buffer                     _crypto_plain_buf        { };
-		Crypto_cipher_buffer                    _crypto_cipher_buf       { };
-		External::Crypto                        _crypto                  { };
-		State                                   _state                   { INVALID };
-		Signal_handler<Main>                    _request_handler         { _env.ep(), *this, &Main::_execute };
-		bool                                    _creating_snapshot       { false };
-		bool                                    _discard_snapshot        { false };
-		bool                                    _rekey                   { false };
-		bool                                    _deinitialize            { false };
-		bool                                    _extend_vbd              { false };
-		Extend_vbd                              _extend_vbd_obj          { 0 };
-		bool                                    _extend_ft               { false };
-		Extend_ft                               _extend_ft_obj           { 0 };
+		Env                         &_env;
+		Attached_rom_dataspace       _config_rom              { _env, "config" };
+		Config_node                  _config_node             { _config_rom.xml() };
+		Heap                         _heap                    { _env.ram(), _env.rm() };
+		Allocator_avl                _blk_alloc               { &_heap };
+		Block::Connection<>          _blk                     { _env, &_blk_alloc, TX_BUF_SIZE };
+		Signal_handler<Main>         _blk_sigh                { _env.ep(), *this, &Main::_execute };
+		Io_buffer                    _blk_buf                 { };
+		Command_pool                 _cmd_pool                { _heap, _config_rom.xml(), _config_node };
+		Constructible<Cbe::Library>  _cbe                     { };
+		Cbe_check::Library           _cbe_check               { };
+		Cbe_dump::Library            _cbe_dump                { };
+		Cbe_init::Library            _cbe_init                { };
+		Benchmark                    _benchmark               { _env };
+		Cbe::Hash                    _trust_anchor_sb_hash    { };
+		External::Trust_anchor       _trust_anchor            { };
+		Crypto_plain_buffer          _crypto_plain_buf        { };
+		Crypto_cipher_buffer         _crypto_cipher_buf       { };
+		External::Crypto             _crypto                  { };
 
-		void _execute_cbe_check (bool &progress)
+		Module_type _packet_module_type(Block::Packet_descriptor const & pkt)
 		{
-			_cbe_check.execute(_blk_buf);
-			if (_cbe_check.execute_progress()) {
-				progress = true;
+			class Bad_tag { };
+			switch (((uint32_t)pkt.tag().value & 0xff000000) >> 24) {
+			case 1: return Module_type::CBE_INIT;
+			case 2: return Module_type::CBE;
+			case 3: return Module_type::CBE_DUMP;
+			case 4: return Module_type::CBE_CHECK;
+			default: throw Bad_tag();
 			}
+		}
 
-			struct Invalid_io_request : Exception { };
+		Cbe::Io_buffer::Index _packet_io_buf_idx(Block::Packet_descriptor const & pkt)
+		{
+			return
+				Cbe::Io_buffer::Index {
+					(uint32_t)pkt.tag().value & 0xffffff };
+		}
 
-			while (_blk.tx()->ready_to_submit()) {
+		uint32_t _module_type_to_uint32(Module_type type)
+		{
+			class Bad_type { };
+			switch (type) {
+			case Module_type::CBE_INIT : return 1;
+			case Module_type::CBE      : return 2;
+			case Module_type::CBE_DUMP : return 3;
+			case Module_type::CBE_CHECK: return 4;
+			}
+			throw Bad_type();
+		}
 
+		Module_type _module_type_from_uint32(uint32_t type)
+		{
+			class Bad_type { };
+			switch (type) {
+			case 1: return Module_type::CBE_INIT ;
+			case 2: return Module_type::CBE      ;
+			case 3: return Module_type::CBE_DUMP ;
+			case 4: return Module_type::CBE_CHECK;
+			default: ;
+			}
+			throw Bad_type();
+		}
+
+		Module_type
+		_ta_request_get_module_type(Trust_anchor_request const &ta_req)
+		{
+			return
+				_module_type_from_uint32(
+					((uint32_t)ta_req.tag() >> 24) & 0xff);
+		}
+
+		void _ta_request_unset_module_type(Trust_anchor_request &ta_req)
+		{
+			ta_req.tag((uint32_t)ta_req.tag() & ~((uint32_t)0xff << 24));
+		}
+
+		void _ta_request_set_module_type(Trust_anchor_request &ta_req,
+		                                 Module_type           type)
+		{
+			class Bad_tag { };
+			if (ta_req.tag() & 0xff000000) {
+				throw Bad_tag();
+			}
+			ta_req.tag((uint32_t)ta_req.tag() |
+			           (_module_type_to_uint32(type) << 24));
+		}
+
+		template <typename MODULE>
+		void _handle_pending_blk_io_requests_of_module(MODULE      &module,
+		                                               Module_type  module_type,
+		                                               bool        &progress)
+		{
+			while (true) {
+
+				if (!_blk.tx()->ready_to_submit()) {
+					break;
+				}
 				Cbe::Io_buffer::Index data_index { 0 };
-				Cbe::Request request { };
-				_cbe_check.has_io_request(request, data_index);
+				Cbe::Request cbe_req { };
+				module.has_io_request(cbe_req, data_index);
 
-				if (!request.valid()) {
+				if (!cbe_req.valid()) {
 					break;
 				}
-				if (_blk_req.valid()) {
+				Block::Packet_descriptor::Opcode blk_op {
+					Block::Packet_descriptor::END };
+
+				if (!_cbe_op_to_block_op(cbe_req.operation(), blk_op)) {
 					break;
+				};
+				Block::Packet_descriptor packet;
+				class Bad_data_index { };
+				if (data_index.value & 0xff000000) {
+					throw Bad_data_index();
 				}
+				
 				try {
-					request.tag(data_index.value);
-					Block::Packet_descriptor::Opcode op;
-					switch (request.operation()) {
-					case Cbe::Request::Operation::READ:
-						op = Block::Packet_descriptor::READ;
-						break;
-					case Cbe::Request::Operation::WRITE:
-						op = Block::Packet_descriptor::WRITE;
-						break;
-					default:
-						throw Invalid_io_request();
-					}
-					Block::Packet_descriptor packet {
-						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number(), request.count() };
-
-					if (request.operation() == Cbe::Request::Operation::WRITE) {
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet)) =
-								_blk_buf.item(data_index);
-					}
-					_blk.tx()->try_submit_packet(packet);
-					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-					}
-					_blk_req = request;
-					_cbe_check.io_request_in_progress(data_index);
-					progress = true;
+					packet = {
+						_blk.alloc_packet(Cbe::BLOCK_SIZE),
+						blk_op,
+						cbe_req.block_number(),
+						cbe_req.count(),
+						Block::Packet_descriptor::Tag {
+							(uint32_t)data_index.value |
+							(_module_type_to_uint32(module_type) << 24)
+						} };
 				}
 				catch (Block::Session::Tx::Source::Packet_alloc_failed) {
 					break;
 				}
-			}
+				if (cbe_req.operation() == Cbe::Request::Operation::WRITE) {
 
-			while (_blk.tx()->ack_avail()) {
-
-				Block::Packet_descriptor packet =
-					_blk.tx()->try_get_acked_packet();
-
-				if (!_blk_req.valid()) {
-					break;
+					*reinterpret_cast<Cbe::Block_data*>(
+						_blk.tx()->packet_content(packet)) =
+					_blk_buf.item(data_index);
 				}
-
-				bool const read  =
-					packet.operation() == Block::Packet_descriptor::READ;
-
-				bool const write =
-					packet.operation() == Block::Packet_descriptor::WRITE;
-
-				bool const op_match =
-					(read && _blk_req.read()) ||
-					(write && _blk_req.write());
-
-				bool const bn_match =
-					packet.block_number() == _blk_req.block_number();
-
-				if (!bn_match || !op_match) {
-					break;
+				if (_config_node.verbose_blk_pkt_in_progress()) {
+					log("blk pkt in progress: ", blk_pkt_to_string(packet));
 				}
+				_blk.tx()->try_submit_packet(packet);
+				module.io_request_in_progress(data_index);
 
-				_blk_req.success(packet.succeeded());
-
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() };
-
-				if (read && success) {
-					_blk_buf.item(data_index) =
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet));
-				}
-				_cbe_check.io_request_completed(data_index, success);
-				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request();
 				progress = true;
 			}
+		}
 
-			if (!_blk_req.valid()) {
-				Cbe::Request const req {
-					_cbe_check.peek_completed_client_request() };
+		template <typename MODULE>
+		void _handle_completed_client_requests_of_module(MODULE &module,
+		                                                 bool   &progress)
+		{
+			while (true) {
 
-				if (req.valid()) {
-					_cbe_check.drop_completed_client_request(req);
-					_block_session->check_done(req.success());
-					_state = INVALID;
+				Cbe::Request const cbe_req {
+					module.peek_completed_client_request() };
+
+				if (!cbe_req.valid()) {
+					break;
 				}
+				_cmd_pool.mark_command_completed(cbe_req.tag(),
+				                                 cbe_req.success());
+
+				module.drop_completed_client_request(cbe_req);
+				progress = true;
 			}
 		}
 
@@ -1330,1002 +1038,217 @@ class Cbe::Main
 			if (_cbe_dump.execute_progress()) {
 				progress = true;
 			}
+			_handle_pending_blk_io_requests_of_module(
+				_cbe_dump, Module_type::CBE_DUMP, progress);
 
-			struct Invalid_io_request : Exception { };
+			_handle_completed_client_requests_of_module(_cbe_dump, progress);
+		}
 
-			while (_blk.tx()->ready_to_submit()) {
-				Cbe::Io_buffer::Index data_index { 0 };
-				Cbe::Request request { };
-				_cbe_dump.has_io_request(request, data_index);
+		bool _cbe_op_to_block_op(Cbe::Request::Operation           cbe_op,
+		                         Block::Packet_descriptor::Opcode &blk_op)
+		{
+			switch (cbe_op) {
+			case Cbe::Request::Operation::READ:
+				blk_op = Block::Packet_descriptor::READ;
+				return true;
+			case Cbe::Request::Operation::WRITE:
+				blk_op = Block::Packet_descriptor::WRITE;
+				return true;
+				break;
+			case Cbe::Request::Operation::SYNC:
+				blk_op = Block::Packet_descriptor::SYNC;
+				return true;
+				break;
+			default:
+				error("failed to convert CBE request operation to block ",
+				      "packet opcode");
+				return true;
+			}
+		}
 
-				if (!request.valid()) {
+		template <typename MODULE>
+		void _handle_pending_ta_requests_of_module(MODULE      &module,
+		                                           Module_type  module_type,
+		                                           bool        &progress)
+		{
+			using Ta_operation = Cbe::Trust_anchor_request::Operation;
+			while (true) {
+
+				if (!_trust_anchor.request_acceptable()) {
 					break;
 				}
-				if (_blk_req.valid()) {
-					break;
-				}
-				try {
-					request.tag(data_index.value);
-					Block::Packet_descriptor::Opcode op;
-					switch (request.operation()) {
-					case Cbe::Request::Operation::READ:
-						op = Block::Packet_descriptor::READ;
-						break;
-					case Cbe::Request::Operation::WRITE:
-						op = Block::Packet_descriptor::WRITE;
-						break;
-					default:
-						throw Invalid_io_request();
-					}
-					Block::Packet_descriptor packet {
-						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number(), request.count() };
+				Cbe::Trust_anchor_request ta_req =
+					module.peek_generated_ta_request();
 
-					if (request.operation() == Cbe::Request::Operation::WRITE) {
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet)) =
-								_blk_buf.item(data_index);
-					}
-					_blk.tx()->try_submit_packet(packet);
-					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-					}
-					_blk_req = request;
-					_cbe_dump.io_request_in_progress(data_index);
+				if (ta_req.operation() == Ta_operation::INVALID) {
+					return;
+				}
+				Cbe::Trust_anchor_request typed_ta_req { ta_req };
+				_ta_request_set_module_type(typed_ta_req, module_type);
+
+				if (_config_node.verbose_ta_req_in_progress()) {
+					log("ta req in progress: ", typed_ta_req);
+				}
+				switch (ta_req.operation()) {
+				case Ta_operation::CREATE_KEY:
+
+					_trust_anchor.submit_create_key_request(typed_ta_req);
+					module.drop_generated_ta_request(ta_req);
 					progress = true;
-				}
-				catch (Block::Session::Tx::Source::Packet_alloc_failed) {
 					break;
-				}
-			}
 
-			while (_blk.tx()->ack_avail()) {
+				case Ta_operation::SECURE_SUPERBLOCK:
 
-				Block::Packet_descriptor packet =
-					_blk.tx()->try_get_acked_packet();
+					_trust_anchor_sb_hash =
+						module.peek_generated_ta_sb_hash(ta_req);
 
-				if (!_blk_req.valid()) {
+					_trust_anchor.submit_secure_superblock_request(
+						typed_ta_req, _trust_anchor_sb_hash);
+
+					module.drop_generated_ta_request(ta_req);
+					progress = true;
 					break;
-				}
 
-				bool const read  =
-					packet.operation() == Block::Packet_descriptor::READ;
+				case Ta_operation::ENCRYPT_KEY:
 
-				bool const write =
-					packet.operation() == Block::Packet_descriptor::WRITE;
+					_trust_anchor.submit_encrypt_key_request(
+						typed_ta_req,
+						module.peek_generated_ta_key_value_plaintext(ta_req));
 
-				bool const op_match =
-					(read && _blk_req.read()) ||
-					(write && _blk_req.write());
-
-				bool const bn_match =
-					packet.block_number() == _blk_req.block_number();
-
-				if (!bn_match || !op_match) {
+					module.drop_generated_ta_request(ta_req);
+					progress = true;
 					break;
-				}
 
-				_blk_req.success(packet.succeeded());
+				case Ta_operation::DECRYPT_KEY:
 
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() };
+					_trust_anchor.submit_decrypt_key_request(
+						typed_ta_req,
+						module.peek_generated_ta_key_value_ciphertext(ta_req));
 
-				if (read && success) {
-					_blk_buf.item(data_index) =
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet));
-				}
-				_cbe_dump.io_request_completed(data_index, success);
-				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request();
-				progress = true;
-			}
+					module.drop_generated_ta_request(ta_req);
+					progress = true;
+					break;
 
-			if (!_blk_req.valid()) {
-				Cbe::Request const req {
-					_cbe_dump.peek_completed_client_request() };
+				case Ta_operation::LAST_SB_HASH:
 
-				if (req.valid()) {
-					_cbe_dump.drop_completed_client_request(req);
-					_block_session->dump_done(req.success());
-					_state = INVALID;
+					module.drop_generated_ta_request(ta_req);
+					module.mark_generated_ta_last_sb_hash_request_complete(
+						ta_req, _trust_anchor_sb_hash);
+
+					progress = true;
+					break;
+
+				case Ta_operation::INVALID:
+
+					return;
 				}
 			}
 		}
 
-		void _execute_cbe_init (bool &progress)
+		void _execute_cbe_init(bool &progress)
 		{
 			_cbe_init.execute(_blk_buf);
 			if (_cbe_init.execute_progress()) {
 				progress = true;
 			}
+			_handle_pending_blk_io_requests_of_module(
+				_cbe_init, Module_type::CBE_INIT, progress);
 
-			struct Invalid_io_request : Exception { };
+			_handle_pending_ta_requests_of_module(
+				_cbe_init, Module_type::CBE_INIT, progress);
 
-			while (_blk.tx()->ready_to_submit()) {
+			_handle_completed_client_requests_of_module(_cbe_init, progress);
+		}
 
-				Cbe::Io_buffer::Index data_index { 0 };
+		void _cbe_transfer_client_data_that_was_read(bool &progress)
+		{
+			while (true) {
+
 				Cbe::Request request { };
-				_cbe_init.has_io_request(request, data_index);
+				uint64_t vba { 0 };
+				Crypto_plain_buffer::Index plain_buf_idx { 0 };
+				_cbe->client_transfer_read_data_required(
+					request, vba, plain_buf_idx);
 
 				if (!request.valid()) {
 					break;
 				}
-				if (_blk_req.valid()) {
-					break;
-				}
-				try {
-					request.tag(data_index.value);
-					Block::Packet_descriptor::Opcode op;
-					switch (request.operation()) {
-					case Cbe::Request::Operation::READ:
-						op = Block::Packet_descriptor::READ;
-						break;
-					case Cbe::Request::Operation::WRITE:
-						op = Block::Packet_descriptor::WRITE;
-						break;
-					case Cbe::Request::Operation::SYNC:
-						op = Block::Packet_descriptor::SYNC;
-						break;
-					default:
-						throw Invalid_io_request();
-					}
-					Block::Packet_descriptor packet {
-						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number(), request.count() };
+				_cmd_pool.verify_blk_data(
+					request, vba, _crypto_plain_buf.item(plain_buf_idx));
 
-					if (request.operation() == Cbe::Request::Operation::WRITE) {
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet)) =
-								_blk_buf.item(data_index);
-					}
-					_blk.tx()->try_submit_packet(packet);
-					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-					}
-					_blk_req = request;
-					_cbe_init.io_request_in_progress(data_index);
-					progress = true;
-				}
-				catch (Block::Session::Tx::Source::Packet_alloc_failed) {
-					break;
-				}
-			}
-
-			while (_blk.tx()->ack_avail()) {
-
-				Block::Packet_descriptor packet =
-					_blk.tx()->try_get_acked_packet();
-
-				if (!_blk_req.valid()) {
-					break;
-				}
-
-				bool const read  =
-					packet.operation() == Block::Packet_descriptor::READ;
-
-				bool const write =
-					packet.operation() == Block::Packet_descriptor::WRITE;
-
-				bool const sync =
-					packet.operation() == Block::Packet_descriptor::SYNC;
-
-				bool const op_match =
-					(read && _blk_req.read()) ||
-					(sync && _blk_req.sync()) ||
-					(write && _blk_req.write());
-
-				bool const bn_match =
-					packet.block_number() == _blk_req.block_number();
-
-				if (!bn_match || !op_match) {
-					break;
-				}
-
-				_blk_req.success(packet.succeeded());
-
-				Cbe::Io_buffer::Index const data_index { _blk_req.tag() };
-				bool                  const success    { _blk_req.success() };
-
-				if (read && success) {
-					_blk_buf.item(data_index) =
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet));
-				}
-				_cbe_init.io_request_completed(data_index, success);
-				_blk.tx()->release_packet(packet);
-				_blk_req = Cbe::Request();
+				_cbe->client_transfer_read_data_in_progress(plain_buf_idx);
+				_cbe->client_transfer_read_data_completed(plain_buf_idx, true);
+				_benchmark.raise_nr_of_virt_blks_read();
 				progress = true;
-			}
 
-			if (!_blk_req.valid()) {
-				Cbe::Request const req {
-					_cbe_init.peek_completed_client_request() };
-
-				if (req.valid()) {
-					_cbe_init.drop_completed_client_request(req);
-					_block_session->initialize_done(req.success());
-					_state = INVALID;
-				}
-			}
-
-			/* handle requests to the trust anchor */
-			{
-				progress |= _trust_anchor.execute();
-
-				using Op = Cbe::Trust_anchor_request::Operation;
-
-				while (true) {
-
-					Cbe::Trust_anchor_request const request =
-						_cbe_init.peek_generated_ta_request();
-
-					if (!request.valid()) { break; }
-					if (!_trust_anchor.request_acceptable()) { break; }
-
-					switch (request.operation()) {
-					case Op::CREATE_KEY:
-						_trust_anchor.submit_create_key_request(request);
-						break;
-					case Op::SECURE_SUPERBLOCK:
-					{
-						_last_sb_hash = _cbe_init.peek_generated_ta_sb_hash(request);
-						_trust_anchor.submit_secure_superblock_request(request, _last_sb_hash);
-						break;
-					}
-					case Op::ENCRYPT_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_cbe_init.peek_generated_ta_key_value_plaintext(request);
-
-						_trust_anchor.submit_encrypt_key_request(request, pk);
-						break;
-					}
-					case Op::DECRYPT_KEY:
-					{
-						Cbe::Key_ciphertext_value const ck =
-							_cbe_init.peek_generated_ta_key_value_ciphertext(request);
-
-						_trust_anchor.submit_decrypt_key_request(request, ck);
-						break;
-					}
-					case Op::LAST_SB_HASH:
-
-						struct Cbe_init_requested_ta_last_sb_hash : Exception { };
-						throw Cbe_init_requested_ta_last_sb_hash();
-
-					case Op::INVALID:
-						/* never reached */
-						break;
-					}
-					_cbe_init.drop_generated_ta_request(request);
-					progress |= true;
-				}
-
-				while (true) {
-
-					Cbe::Trust_anchor_request const request =
-						_trust_anchor.peek_completed_request();
-
-					if (!request.valid()) { break; }
-
-					switch (request.operation()) {
-					case Op::CREATE_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_trust_anchor.peek_completed_key_value_plaintext(request);
-
-						_cbe_init.mark_generated_ta_create_key_request_complete(request, pk);
-						break;
-					}
-					case Op::SECURE_SUPERBLOCK:
-					{
-						_cbe_init.mark_generated_ta_secure_sb_request_complete(request);
-						break;
-					}
-					case Op::ENCRYPT_KEY:
-					{
-						Cbe::Key_ciphertext_value const ck =
-							_trust_anchor.peek_completed_key_value_ciphertext(request);
-
-						_cbe_init.mark_generated_ta_encrypt_key_request_complete(request, ck);
-						break;
-					}
-					case Op::DECRYPT_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_trust_anchor.peek_completed_key_value_plaintext(request);
-
-						_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
-						break;
-					}
-					case Op::LAST_SB_HASH:
-
-						struct Ta_completed_last_sb_hash_request_for_cbe_init : Exception { };
-						throw Ta_completed_last_sb_hash_request_for_cbe_init();
-
-					case Op::INVALID:
-						/* never reached */
-						break;
-					}
-					_trust_anchor.drop_completed_request(request);
-					progress |= true;
+				if (_config_node.verbose_client_data_transferred()) {
+					log("client data: vba=", vba, " req=(", request, ")");
 				}
 			}
 		}
 
-		void _execute_cbe (bool &progress)
+		void _cbe_transfer_client_data_that_will_be_written(bool &progress)
 		{
-			/* handle requests to the trust anchor */
-			{
-				progress |= _trust_anchor.execute();
-
-				using Op = Cbe::Trust_anchor_request::Operation;
-
-				while (true) {
-
-					Cbe::Trust_anchor_request const request =
-						_cbe->peek_generated_ta_request();
-
-					if (!request.valid()) { break; }
-					if (!_trust_anchor.request_acceptable()) { break; }
-
-					switch (request.operation()) {
-					case Op::CREATE_KEY:
-						_trust_anchor.submit_create_key_request(request);
-						_cbe->drop_generated_ta_request(request);
-						break;
-					case Op::SECURE_SUPERBLOCK:
-					{
-						_last_sb_hash = _cbe->peek_generated_ta_sb_hash(request);
-						_trust_anchor.submit_secure_superblock_request(request, _last_sb_hash);
-						_cbe->drop_generated_ta_request(request);
-						break;
-					}
-					case Op::ENCRYPT_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_cbe->peek_generated_ta_key_value_plaintext(request);
-
-						_trust_anchor.submit_encrypt_key_request(request, pk);
-						_cbe->drop_generated_ta_request(request);
-						break;
-					}
-					case Op::DECRYPT_KEY:
-					{
-						Cbe::Key_ciphertext_value const ck =
-							_cbe->peek_generated_ta_key_value_ciphertext(request);
-
-						_trust_anchor.submit_decrypt_key_request(request, ck);
-						_cbe->drop_generated_ta_request(request);
-						break;
-					}
-					case Op::LAST_SB_HASH:
-
-						_cbe->drop_generated_ta_request(request);
-						_cbe->mark_generated_ta_last_sb_hash_request_complete(request, _last_sb_hash);
-						break;
-
-					case Op::INVALID:
-						break;
-					}
-					progress |= true;
-				}
-
-				while (true) {
-
-					Cbe::Trust_anchor_request const request =
-						_trust_anchor.peek_completed_request();
-
-					if (!request.valid()) { break; }
-
-					switch (request.operation()) {
-					case Op::CREATE_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_trust_anchor.peek_completed_key_value_plaintext(request);
-
-						_cbe->mark_generated_ta_create_key_request_complete(request, pk);
-						break;
-					}
-					case Op::SECURE_SUPERBLOCK:
-					{
-						_cbe->mark_generated_ta_secure_sb_request_complete(request);
-						break;
-					}
-					case Op::ENCRYPT_KEY:
-					{
-						Cbe::Key_ciphertext_value const ck =
-							_trust_anchor.peek_completed_key_value_ciphertext(request);
-
-						_cbe->mark_generated_ta_encrypt_key_request_complete(request, ck);
-						break;
-					}
-					case Op::DECRYPT_KEY:
-					{
-						Cbe::Key_plaintext_value const pk =
-							_trust_anchor.peek_completed_key_value_plaintext(request);
-
-						_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
-						break;
-					}
-					case Op::LAST_SB_HASH:
-
-						struct Ta_completed_last_sb_hash_request_for_cbe : Exception { };
-						throw Ta_completed_last_sb_hash_request_for_cbe();
-
-					case Op::INVALID:
-						/* never reached */
-						break;
-					}
-					_trust_anchor.drop_completed_request(request);
-					progress |= true;
-				}
-			}
-
-			_block_session->with_requests([&] (Block::Request request) {
-				using namespace Genode;
-
-				Cbe::Virtual_block_address const vba = request.operation.block_number;
-
-				if (!request.operation.valid()) {
-					warning("reject invalid request for virtual block address ", vba);
-					return Block_session_component::Response::REJECTED;
-				}
-
-				if (!_cbe->client_request_acceptable()) {
-					return Block_session_component::Response::RETRY;
-				}
-
-				Cbe::Request req = convert_to(request);
-				_cbe->submit_client_request(req, 0);
-
-				_state = CBE;
-				progress |= true;
-				return Block_session_component::Response::ACCEPTED;
-			});
-
-			/*
-			 * Acknowledge finished Block session requests.
-			 */
-
-			if (!_rekey && !_deinitialize && !_extend_vbd && !_extend_ft &&
-			    !_creating_snapshot && !_discard_snapshot)
-			{
-
-				_block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
-
-					Cbe::Request const &req = _cbe->peek_completed_client_request();
-					if (!req.valid()) { return; }
-
-					_cbe->drop_completed_client_request(req);
-
-					Block::Request request = convert_from(req);
-
-					ack.submit(request);
-
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-
-					progress |= true;
-				});
-			}
-
-			if (!_creating_snapshot) {
-				_block_session->with_create_snapshot([&] (Create_snapshot const) {
-
-					if (!_cbe->client_request_acceptable()) {
-						return;
-					}
-
-					Cbe::Request req {
-						Cbe::Request::Operation::CREATE_SNAPSHOT,
-						false,
-						0,
-						0,
-						1,
-						0,
-						0 };
-
-					_cbe->submit_client_request(req, 0);
-
-					_creating_snapshot = true;
-					progress |= true;
-				});
-			}
-
-			if (_creating_snapshot) {
-
-				Cbe::Request const &req {
-					_cbe->peek_completed_client_request() };
-
-				if (req.valid() &&
-				    req.operation() == Cbe::Request::Operation::CREATE_SNAPSHOT)
-				{
-					
-					_block_session->create_snapshot_done(req, _heap);
-
-					_creating_snapshot = false;
-
-					_cbe->drop_completed_client_request(req);
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			if (!_discard_snapshot) {
-				_block_session->with_discard_snapshot([&] (Generation gen)
-				{
-					if (!_cbe->client_request_acceptable()) {
-						return;
-					}
-
-					Cbe::Request req {
-						Cbe::Request::Operation::DISCARD_SNAPSHOT,
-						false,
-						0,
-						0,
-						1,
-						0,
-						0 };
-
-					_cbe->submit_client_request(req, gen);
-					_discard_snapshot = true;
-					progress |= true;
-				});
-			}
-
-			if (_discard_snapshot) {
-
-				Cbe::Request const &req {
-					_cbe->peek_completed_client_request() };
-
-				if (req.valid() &&
-				    req.operation() == Cbe::Request::Operation::DISCARD_SNAPSHOT)
-				{
-					_block_session->discard_snapshot_done(req, _heap);
-					_discard_snapshot = false;
-
-					_cbe->drop_completed_client_request(req);
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			if (!_deinitialize) {
-				_block_session->with_deinitialize([&] () {
-
-					struct Deinitialize_request_not_acceptable { };
-					if (!_cbe->client_request_acceptable()) {
-						throw Deinitialize_request_not_acceptable();
-					}
-
-					Cbe::Request req(
-						Cbe::Request::Operation::DEINITIALIZE,
-						false,
-						0,
-						0,
-						0,
-						0,
-						0);
-
-					_cbe->submit_client_request(req, 0);
-					_deinitialize = true;
-					progress |= true;
-				});
-			}
-
-			if (_deinitialize) {
-
-				Cbe::Request const &req = _cbe->peek_completed_client_request();
-				if (req.valid()) {
-
-					struct Unexpected_request : Genode::Exception { };
-					if (req.operation() != Cbe::Request::Operation::DEINITIALIZE)
-					{
-						throw Unexpected_request();
-					}
-					_block_session->deinitialize_done(req.success());
-
-					_deinitialize = false;
-					_cbe->drop_completed_client_request(req);
-
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			_block_session->with_list_snapshots([&] () {
-				Active_snapshot_ids ids;
-				_cbe->active_snapshot_ids(ids);
-				unsigned snap_nr { 0 };
-				for (unsigned idx { 0 }; idx < sizeof(ids.values) / sizeof(ids.values[0]); idx++) {
-					if (ids.values[idx] != 0) {
-						log("   snap ", snap_nr, " generation ", ids.values[idx]);
-						snap_nr++;
-					}
-				}
-			});
-
-			if (!_rekey) {
-				_block_session->with_rekey([&] () {
-
-					struct Rekey_request_not_acceptable { };
-					if (!_cbe->client_request_acceptable()) {
-						throw Rekey_request_not_acceptable();
-					}
-
-					Cbe::Request req(
-						Cbe::Request::Operation::REKEY,
-						false,
-						0,
-						0,
-						0,
-						0,
-						0);
-
-					_cbe->submit_client_request(req, 0);
-					_rekey = true;
-					progress |= true;
-				});
-			}
-
-			if (_rekey) {
-
-				Cbe::Request const &req = _cbe->peek_completed_client_request();
-				if (req.valid()) {
-
-					struct Unexpected_request : Genode::Exception { };
-					if (req.operation() != Cbe::Request::Operation::REKEY)
-					{
-						throw Unexpected_request();
-					}
-					_block_session->rekey_done(req.success());
-
-					_rekey = false;
-					_cbe->drop_completed_client_request(req);
-
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			if (!_extend_vbd) {
-				_block_session->with_extend_vbd([&] (Extend_vbd const extend_vbd) {
-
-					struct Extend_vbd_request_not_acceptable { };
-					if (!_cbe->client_request_acceptable()) {
-						throw Extend_vbd_request_not_acceptable();
-					}
-
-					Cbe::Request req(
-						Cbe::Request::Operation::EXTEND_VBD,
-						false,
-						0,
-						0,
-						extend_vbd.nr_of_phys_blocks,
-						0,
-						0);
-
-					_cbe->submit_client_request(req, 0);
-					_extend_vbd_obj = {
-						extend_vbd.nr_of_phys_blocks
-					};
-					_extend_vbd = true;
-					progress |= true;
-				});
-			}
-
-			if (_extend_vbd) {
-
-				Cbe::Request const &req = _cbe->peek_completed_client_request();
-				if (req.valid()) {
-
-					struct Unexpected_request : Genode::Exception { };
-					if (req.operation() != Cbe::Request::Operation::EXTEND_VBD ||
-					    req.count() != _extend_vbd_obj.nr_of_phys_blocks)
-					{
-						throw Unexpected_request();
-					}
-					_block_session->extend_vbd_done(req.success());
-					_extend_vbd_obj = { 0 };
-					_extend_vbd = false;
-					_cbe->drop_completed_client_request(req);
-
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			if (!_extend_ft) {
-				_block_session->with_extend_ft([&] (Extend_ft const extend_ft) {
-
-					struct Extend_ft_request_not_acceptable { };
-					if (!_cbe->client_request_acceptable()) {
-						throw Extend_ft_request_not_acceptable();
-					}
-
-					Cbe::Request req(
-						Cbe::Request::Operation::EXTEND_FT,
-						false,
-						0,
-						0,
-						extend_ft.nr_of_phys_blocks,
-						0,
-						0);
-
-					_cbe->submit_client_request(req, 0);
-					_extend_ft_obj = {
-						extend_ft.nr_of_phys_blocks
-					};
-					_extend_ft = true;
-					progress |= true;
-				});
-			}
-
-			if (_extend_ft) {
-
-				Cbe::Request const &req = _cbe->peek_completed_client_request();
-				if (req.valid()) {
-
-					struct Unexpected_request : Genode::Exception { };
-					if (req.operation() != Cbe::Request::Operation::EXTEND_FT ||
-					    req.count() != _extend_ft_obj.nr_of_phys_blocks)
-					{
-						throw Unexpected_request();
-					}
-					_block_session->extend_ft_done(req.success());
-
-					_extend_ft_obj = { 0 };
-					_extend_ft = false;
-					_cbe->drop_completed_client_request(req);
-
-					if (_block_session->cbe_request_next()) {
-						_state = CBE;
-					} else {
-						_state = INVALID;
-					}
-					progress |= true;
-				}
-			}
-
-			_cbe->execute(_blk_buf, _crypto_plain_buf, _crypto_cipher_buf);
-			progress |= _cbe->execute_progress();
-
-			using Payload = Block_session_component::Payload;
-
-			/*
-			 * Transfer read data from the CBE to the block buffer
-			 */
-			_block_session->with_payload([&] (Payload const &payload) {
-				{
-					Cbe::Request cbe_req { };
-					uint64_t vba { 0 };
-					Crypto_plain_buffer::Index plain_buf_idx { 0 };
-
-					_cbe->client_transfer_read_data_required(
-						cbe_req, vba, plain_buf_idx);
-
-					if (!cbe_req.valid()) {
-						return false;
-					}
-					Block::Request blk_req { };
-					uint64_t buf_base { cbe_req.offset() };
-					uint64_t blk_off { vba - cbe_req.block_number() };
-					blk_req.offset = buf_base + (blk_off * BLOCK_SIZE);
-					blk_req.operation.count = 1;
-
-					payload.with_content(blk_req, [&] (void *addr, Genode::size_t) {
-
-						Cbe::Block_data &data {
-							*reinterpret_cast<Cbe::Block_data*>(addr) };
-
-						data = _crypto_plain_buf.item(plain_buf_idx);
-					});
-					_cbe->client_transfer_read_data_in_progress(
-						plain_buf_idx);
-
-					_cbe->client_transfer_read_data_completed(
-						plain_buf_idx, true);
-
-					progress |= true;
-					return true;
-				}
-			});
-
-			/*
-			 * Transfer write data from the block buffer to the CBE
-			 */
-			_block_session->with_payload([&] (Payload const &payload) {
-				{
-					Cbe::Request cbe_req { };
-					uint64_t vba { 0 };
-					Crypto_plain_buffer::Index plain_buf_idx { 0 };
-
-					_cbe->client_transfer_write_data_required(
-						cbe_req, vba, plain_buf_idx);
-
-					if (!cbe_req.valid()) {
-						return false;
-					}
-					Block::Request blk_req { };
-					uint64_t buf_base { cbe_req.offset() };
-					uint64_t blk_off { vba - cbe_req.block_number() };
-					blk_req.offset = buf_base + (blk_off * BLOCK_SIZE);
-					blk_req.operation.count = 1;
-
-					payload.with_content(blk_req, [&] (void *addr, Genode::size_t) {
-
-						Cbe::Block_data &data {
-							*reinterpret_cast<Cbe::Block_data*>(addr) };
-
-						_crypto_plain_buf.item(plain_buf_idx) = data;
-					});
-					_cbe->client_transfer_write_data_in_progress(
-						plain_buf_idx);
-
-					_cbe->client_transfer_write_data_completed(
-						plain_buf_idx, true);
-
-					progress |= true;
-					return true;
-				}
-			});
-
-			/*
-			 * Backend I/O
-			 */
-
-			bool io_progress = false;
-			struct Invalid_io_request : Exception { };
-
-			/*
-			 * Handle backend I/O requests
-			 */
-			while (_blk.tx()->ready_to_submit()) {
-
-				Io_buffer::Index data_index { 0 };
-				Cbe::Request request = _cbe->has_io_request(data_index);
+			while (true) {
+
+				Cbe::Request request { };
+				uint64_t vba { 0 };
+				Crypto_plain_buffer::Index plain_buf_idx { 0 };
+				_cbe->client_transfer_write_data_required(
+					request, vba, plain_buf_idx);
 
 				if (!request.valid()) {
-					break;
+					return;
 				}
-				if (_blk_req.valid()) {
-					break;
+				_cmd_pool.generate_blk_data(
+					request, vba, _crypto_plain_buf.item(plain_buf_idx));
+
+				_cbe->client_transfer_write_data_in_progress(plain_buf_idx);
+				_cbe->client_transfer_write_data_completed(
+					plain_buf_idx, true);
+
+				_benchmark.raise_nr_of_virt_blks_written();
+				progress = true;
+
+				if (_config_node.verbose_client_data_transferred()) {
+					log("client data: vba=", vba, " req=(", request, ")");
 				}
-				try {
-					request.tag(data_index.value);
-					Block::Packet_descriptor::Opcode op;
-					switch (request.operation()) {
-					case Request::Operation::READ:
-						op = Block::Packet_descriptor::READ;
-						break;
-					case Request::Operation::WRITE:
-						op = Block::Packet_descriptor::WRITE;
-						break;
-					case Cbe::Request::Operation::SYNC:
-						op = Block::Packet_descriptor::SYNC;
-						break;
-					default:
-						throw Invalid_io_request();
-					}
-					Block::Packet_descriptor packet {
-						_blk.alloc_packet(Cbe::BLOCK_SIZE), op,
-						request.block_number(), request.count() };
-
-					if (request.operation() == Request::Operation::WRITE) {
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet)) =
-								_blk_buf.item(data_index);
-					}
-					_blk.tx()->try_submit_packet(packet);
-					if (_verbose_back_end_io) {
-						log ("   ", to_string(request.operation()), ": pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-					}
-					_blk_req = request;
-
-					_cbe->io_request_in_progress(data_index);
-
-					progress |= true;
-					io_progress |= true;
-				}
-				catch (Block::Session::Tx::Source::Packet_alloc_failed) { break; }
 			}
+		}
 
-			while (_blk.tx()->ack_avail()) {
-				Block::Packet_descriptor packet = _blk.tx()->try_get_acked_packet();
-
-				if (!_blk_req.valid()) { break; }
-
-				bool const read  = packet.operation() == Block::Packet_descriptor::READ;
-				bool const write = packet.operation() == Block::Packet_descriptor::WRITE;
-				bool const sync  = packet.operation() == Block::Packet_descriptor::SYNC;
-
-				bool const op_match =
-					(read && _blk_req.read()) ||
-					(write && _blk_req.write()) ||
-					(sync && _blk_req.sync());
-
-				bool const bn_match = packet.block_number() == _blk_req.block_number();
-				// assert packet descriptor belongs to stored backend request
-				if (!bn_match || !op_match) { break; }
-
-				_blk_req.success(packet.succeeded());
-
-				Io_buffer::Index const data_index { _blk_req.tag() };
-				bool             const success    { _blk_req.success() };
-				if (read && success) {
-					_blk_buf.item(data_index) =
-						*reinterpret_cast<Cbe::Block_data*>(
-							_blk.tx()->packet_content(packet));
-				}
-				_cbe->io_request_completed(data_index, success);
-				progress |= true;
-
-				_blk.tx()->release_packet(packet);
-
-				_blk_req = Cbe::Request();
-				io_progress |= true;
-			}
-
-			progress |= io_progress;
-
-			/*********************
-			 ** Crypto handling **
-			 *********************/
-
-			progress |= _crypto.execute();
-
-			/* add keys */
+		void _cbe_handle_crypto_add_key_requests(bool &progress)
+		{
 			while (true) {
+
 				Key key;
-				Cbe::Request request = _cbe->crypto_add_key_required(key);
+				Cbe::Request request { _cbe->crypto_add_key_required(key) };
 				if (!request.valid()) {
 					break;
 				}
 				_cbe->crypto_add_key_requested(request);
 				External::Crypto::Key_data data { };
-				Genode::memcpy(
+				memcpy(
 					data.value, key.value,
 					sizeof(data.value) / sizeof(data.value[0]));
 
 				_crypto.add_key(key.id, data);
 				request.success (true);
-				if (_verbose_back_end_crypto) {
-					log("    add key: id " , (unsigned)key.id.value);
-				}
 				_cbe->crypto_add_key_completed(request);
-				progress |= true;
-			}
+				progress = true;
 
-			/* remove keys */
+				if (_config_node.verbose_crypto_req_in_progress()) {
+					log("crypto req in progress: ", request);
+				}
+			}
+		}
+
+		void _cbe_handle_crypto_remove_key_requests(bool &progress)
+		{
 			while (true) {
+
 				Key::Id key_id;
-				Cbe::Request request =
-					_cbe->crypto_remove_key_required(key_id);
+				Cbe::Request request {
+					_cbe->crypto_remove_key_required(key_id) };
 
 				if (!request.valid()) {
 					break;
@@ -2333,202 +1256,571 @@ class Cbe::Main
 				_cbe->crypto_remove_key_requested(request);
 				_crypto.remove_key(key_id);
 				request.success (true);
-				if (_verbose_back_end_crypto) {
-					log("    remove key: id " , (unsigned)key_id.value);
-				}
 				_cbe->crypto_remove_key_completed(request);
-				progress |= true;
-			}
+				progress = true;
 
-			/* encrypt */
-			while (true) {
-				Crypto_plain_buffer::Index data_index(0);
-				Cbe::Request request = _cbe->crypto_cipher_data_required(data_index);
-				if (!request.valid()) {
-					break;
+				if (_config_node.verbose_crypto_req_in_progress()) {
+					log("crypto req in progress: ", request);
 				}
+			}
+		}
+
+		void _cbe_handle_crypto_encrypt_requests(bool &progress)
+		{
+			while (true) {
+
 				if (!_crypto.encryption_request_acceptable()) {
 					break;
 				}
-				request.tag(data_index.value);
-				_crypto.submit_encryption_request(request, _crypto_plain_buf.item(data_index), 0);
-				_cbe->crypto_cipher_data_requested(data_index);
-				if (_verbose_back_end_crypto) {
-					log ("   encrypt: pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-				}
-				progress |= true;
-			}
-			while (true) {
-				Cbe::Request const request = _crypto.peek_completed_encryption_request();
-				if (!request.valid()) {
-					break;
-				}
-				Crypto_cipher_buffer::Index const data_index(request.tag());
-				if (!_crypto.supply_cipher_data(request, _crypto_cipher_buf.item(data_index))) {
-					break;
-				}
-				_cbe->supply_crypto_cipher_data(data_index, request.success());
-				progress |= true;
-			}
+				Crypto_plain_buffer::Index data_index { 0 };
+				Cbe::Request request {
+					_cbe->crypto_cipher_data_required(data_index) };
 
-			/* decrypt */
-			while (true) {
-				Crypto_cipher_buffer::Index data_index(0);
-				Cbe::Request request = _cbe->crypto_plain_data_required(data_index);
 				if (!request.valid()) {
 					break;
 				}
+				request.tag(data_index.value);
+				_crypto.submit_encryption_request(
+					request,
+					_crypto_plain_buf.item(data_index),
+					0);
+
+				_cbe->crypto_cipher_data_requested(data_index);
+				progress = true;
+
+				if (_config_node.verbose_crypto_req_in_progress()) {
+					log("crypto req in progress: ", request);
+				}
+			}
+		}
+
+		void _cbe_handle_crypto_decrypt_requests(bool &progress)
+		{
+			while (true) {
+
 				if (!_crypto.decryption_request_acceptable()) {
 					break;
 				}
-				request.tag(data_index.value);
-				_crypto.submit_decryption_request(request, _crypto_cipher_buf.item(data_index), 0);
-				_cbe->crypto_plain_data_requested(data_index);
-				if (_verbose_back_end_crypto) {
-					log ("   decrypt: pba ", (unsigned long)request.block_number(), ", cnt ", (unsigned long)request.count());
-				}
-				progress |= true;
-			}
-			while (true) {
-				Cbe::Request const request = _crypto.peek_completed_decryption_request();
+				Crypto_cipher_buffer::Index data_index { 0 };
+				Cbe::Request request {
+					_cbe->crypto_plain_data_required(data_index) };
+
 				if (!request.valid()) {
 					break;
 				}
-				Crypto_plain_buffer::Index const data_index(request.tag());
-				if (!_crypto.supply_plain_data(request, _crypto_plain_buf.item(data_index))) {
+				request.tag(data_index.value);
+				_crypto.submit_decryption_request(
+					request,
+					_crypto_cipher_buf.item(data_index),
+					0);
+
+				_cbe->crypto_plain_data_requested(data_index);
+				progress = true;
+
+				if (_config_node.verbose_crypto_req_in_progress()) {
+					log("crypto req in progress: ", request);
+				}
+			}
+		}
+
+		void _cbe_handle_crypto_requests(bool &progress)
+		{
+			_cbe_handle_crypto_add_key_requests(progress);
+			_cbe_handle_crypto_remove_key_requests(progress);
+			_cbe_handle_crypto_encrypt_requests(progress);
+			_cbe_handle_crypto_decrypt_requests(progress);
+		}
+
+		void _execute_cbe(bool &progress)
+		{
+			_cbe->execute(_blk_buf, _crypto_plain_buf, _crypto_cipher_buf);
+			if (_cbe->execute_progress()) {
+				progress = true;
+			}
+			_handle_pending_blk_io_requests_of_module(
+				*_cbe, Module_type::CBE, progress);
+
+			_handle_pending_ta_requests_of_module(
+				*_cbe, Module_type::CBE, progress);
+
+			_cbe_handle_crypto_requests(progress);
+			_cbe_transfer_client_data_that_was_read(progress);
+			_cbe_transfer_client_data_that_will_be_written(progress);
+			_handle_completed_client_requests_of_module(*_cbe, progress);
+		}
+
+		void _cmd_pool_handle_pending_cbe_init_cmds(bool &progress)
+		{
+			while (true) {
+
+				if (!_cbe_init.client_request_acceptable()) {
+					break;
+				}
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::INITIALIZE) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				Cbe_init::Configuration const &cfg { cmd.initialize() };
+
+				_cbe_init.submit_client_request(
+					Cbe::Request(
+						Cbe::Request::Operation::READ,
+						false, 0, 0, 0, 0, 0),
+					cfg.vbd_nr_of_lvls() - 1,
+					cfg.vbd_nr_of_children(),
+					cfg.vbd_nr_of_leafs(),
+					cfg.ft_nr_of_lvls() - 1,
+					cfg.ft_nr_of_children(),
+					cfg.ft_nr_of_leafs());
+
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_check_cmds(bool &progress)
+		{
+			while (true) {
+
+				if (!_cbe_check.client_request_acceptable()) {
+					break;
+				}
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::CHECK) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				_cbe_check.submit_client_request(
+					Cbe::Request {
+						Cbe::Request::Operation::READ,
+						false,
+						0,
+						0,
+						0,
+						0,
+						(uint32_t)cmd.id()
+					}
+				);
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_cbe_cmds(bool &progress)
+		{
+			while (true) {
+
+				if (!_cbe->client_request_acceptable()) {
+					break;
+				}
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::REQUEST) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				Request_node const &req_node { cmd.request_node() };
+				Cbe::Request const &cbe_req {
+					cmd.request_node().op(),
+					false,
+					req_node.has_attr_vba() ? req_node.vba() : 0,
+					0,
+					req_node.has_attr_count() ? req_node.count() : 0,
+					0,
+					(uint32_t)cmd.id() };
+
+				_cbe->submit_client_request(cbe_req, 0);
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_dump_cmds(bool &progress)
+		{
+			while (true) {
+
+				if (!_cbe_dump.client_request_acceptable()) {
+					break;
+				}
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::DUMP) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				Cbe_dump::Configuration const &cfg { cmd.dump() };
+				_cbe_dump.submit_client_request(
+					Cbe::Request(
+						Cbe::Request::Operation::READ,
+						false, 0, 0, 0, 0, (uint32_t)cmd.id()),
+					cfg);
+
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_construct_cmds(bool &progress)
+		{
+			while (true) {
+
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::CONSTRUCT) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				_cbe.construct();
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				_cmd_pool.mark_command_completed(cmd.id(), true);
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_destruct_cmds(bool &progress)
+		{
+			while (true) {
+
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::DESTRUCT) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				_cbe.destruct();
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				_cmd_pool.mark_command_completed(cmd.id(), true);
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_list_snapshots_cmds(bool &progress)
+		{
+			while (true) {
+
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::LIST_SNAPSHOTS) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				Active_snapshot_ids ids;
+				_cbe->active_snapshot_ids(ids);
+				unsigned snap_nr { 0 };
+				for (unsigned idx { 0 }; idx < sizeof(ids.values) / sizeof(ids.values[0]); idx++) {
+					if (ids.values[idx] != 0) {
+						log("list snapshots: cmd=", cmd.id(), " snap=", snap_nr, " gen=", ids.values[idx]);
+						snap_nr++;
+					}
+				}
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				_cmd_pool.mark_command_completed(cmd.id(), true);
+				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_benchmark_cmds(bool &progress)
+		{
+			while (true) {
+
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::BENCHMARK) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				_benchmark.submit_request(cmd.benchmark_node());
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				_cmd_pool.mark_command_completed(cmd.id(), true);
+				progress = true;
+			}
+		}
+
+		void _execute_cbe_check (bool &progress)
+		{
+			_cbe_check.execute(_blk_buf);
+			if (_cbe_check.execute_progress()) {
+				progress = true;
+			}
+			_handle_pending_blk_io_requests_of_module(
+				_cbe_check, Module_type::CBE_CHECK, progress);
+
+			_handle_completed_client_requests_of_module(_cbe_check, progress);
+		}
+
+		void _execute_command_pool(bool &progress)
+		{
+			if (_cbe.constructed()) {
+				_cmd_pool_handle_pending_cbe_cmds(progress);
+				_cmd_pool_handle_pending_list_snapshots_cmds(progress);
+			}
+			_cmd_pool_handle_pending_cbe_init_cmds(progress);
+			_cmd_pool_handle_pending_benchmark_cmds(progress);
+			_cmd_pool_handle_pending_construct_cmds(progress);
+			_cmd_pool_handle_pending_destruct_cmds(progress);
+			_cmd_pool_handle_pending_dump_cmds(progress);
+			_cmd_pool_handle_pending_check_cmds(progress);
+
+			if (_cmd_pool.nr_of_uncompleted_cmds() == 0) {
+
+				if (_cmd_pool.nr_of_errors() > 0) {
+
+					_cmd_pool.print_failed_cmds();
+					_env.parent().exit(-1);
+
+				} else {
+
+					_env.parent().exit(0);
+				}
+			}
+		}
+
+		template <typename MODULE>
+		void _trust_anchor_handle_completed_requests_of_module(MODULE                     &module,
+		                                                       Trust_anchor_request const &typed_ta_req,
+		                                                       bool                       &progress)
+		{
+			using Ta_operation = Cbe::Trust_anchor_request::Operation;
+
+			Trust_anchor_request ta_req { typed_ta_req };
+			_ta_request_unset_module_type(ta_req);
+
+			if (_config_node.verbose_ta_req_completed()) {
+				log("ta req completed: ", typed_ta_req);
+			}
+			switch (ta_req.operation()) {
+			case Ta_operation::CREATE_KEY:
+
+				module.mark_generated_ta_create_key_request_complete(
+					ta_req,
+					_trust_anchor.peek_completed_key_value_plaintext(
+						typed_ta_req));
+
+				_trust_anchor.drop_completed_request(typed_ta_req);
+				progress = true;
+				break;
+
+			case Ta_operation::SECURE_SUPERBLOCK:
+
+				module.mark_generated_ta_secure_sb_request_complete(
+					ta_req);
+
+				_trust_anchor.drop_completed_request(typed_ta_req);
+				progress = true;
+				break;
+
+			case Ta_operation::ENCRYPT_KEY:
+
+				module.mark_generated_ta_encrypt_key_request_complete(
+					ta_req,
+					_trust_anchor.peek_completed_key_value_ciphertext(
+						typed_ta_req));
+
+				_trust_anchor.drop_completed_request(typed_ta_req);
+				progress = true;
+				break;
+
+			case Ta_operation::DECRYPT_KEY:
+
+				module.mark_generated_ta_decrypt_key_request_complete(
+					ta_req,
+					_trust_anchor.peek_completed_key_value_plaintext(
+						typed_ta_req));
+
+				_trust_anchor.drop_completed_request(typed_ta_req);
+				progress = true;
+				break;
+
+			default:
+
+				class Bad_ta_operation { };
+				throw Bad_ta_operation();
+			}
+		}
+
+		void _trust_anchor_handle_completed_requests(bool &progress)
+		{
+			while (true) {
+
+				Cbe::Trust_anchor_request const typed_ta_req =
+					_trust_anchor.peek_completed_request();
+
+				if (!typed_ta_req.valid()) {
+					break;
+				}
+				switch (_ta_request_get_module_type(typed_ta_req)) {
+				case Module_type::CBE_INIT:
+
+					_trust_anchor_handle_completed_requests_of_module(
+						_cbe_init, typed_ta_req, progress);
+
+					break;
+
+				case Module_type::CBE:
+
+					_trust_anchor_handle_completed_requests_of_module(
+						*_cbe, typed_ta_req, progress);
+
+					break;
+
+				default:
+
+					class Bad_module_type { };
+					throw Bad_module_type();
+				}
+			}
+		}
+
+		void _execute_block_io(bool &progress)
+		{
+			while (_blk.tx()->ack_avail()) {
+
+				Block::Packet_descriptor packet {
+					_blk.tx()->try_get_acked_packet() };
+
+				Cbe::Io_buffer::Index const data_index {
+					_packet_io_buf_idx(packet) };
+
+				if (packet.operation() == Block::Packet_descriptor::READ &&
+					packet.succeeded())
+				{
+					_blk_buf.item(data_index) =
+						*reinterpret_cast<Cbe::Block_data*>(
+							_blk.tx()->packet_content(packet));
+				}
+				Module_type const type { _packet_module_type(packet) };
+				switch (type) {
+				case Module_type::CBE_INIT:
+
+					_cbe_init.io_request_completed(data_index,
+					                               packet.succeeded());
+					break;
+
+				case Module_type::CBE:
+
+					_cbe->io_request_completed(data_index,
+					                           packet.succeeded());
+					break;
+
+				case Module_type::CBE_DUMP:
+
+					_cbe_dump.io_request_completed(data_index,
+					                               packet.succeeded());
+					break;
+
+				case Module_type::CBE_CHECK:
+
+					_cbe_check.io_request_completed(data_index,
+					                                packet.succeeded());
+					break;
+				}
+				_blk.tx()->release_packet(packet);
+				progress = true;
+
+				if (_config_node.verbose_blk_pkt_completed()) {
+					log("blk pkt completed: ", blk_pkt_to_string(packet));
+				}
+			}
+		}
+
+		void _execute_trust_anchor(bool &progress)
+		{
+			progress |= _trust_anchor.execute();
+			_trust_anchor_handle_completed_requests(progress);
+		}
+
+		void _crypto_handle_completed_encrypt_requests(bool &progress)
+		{
+			while (true) {
+
+				Cbe::Request const request {
+					_crypto.peek_completed_encryption_request() };
+
+				if (!request.valid()) {
+					break;
+				}
+				Crypto_cipher_buffer::Index const data_index { request.tag() };
+				bool const success {
+					_crypto.supply_cipher_data(
+						request, _crypto_cipher_buf.item(data_index)) };
+
+				if (!success) {
+					break;
+				}
+				_cbe->supply_crypto_cipher_data(data_index, request.success());
+				progress = true;
+
+				if (_config_node.verbose_crypto_req_completed()) {
+					log("crypto req completed: ", request);
+				}
+			}
+		}
+
+		void _crypto_handle_completed_decrypt_requests(bool &progress)
+		{
+			while (true) {
+
+				Cbe::Request const request {
+					_crypto.peek_completed_decryption_request() };
+
+				if (!request.valid()) {
+					break;
+				}
+				Crypto_plain_buffer::Index const data_index { request.tag() };
+				bool const success {
+					_crypto.supply_plain_data(
+						request, _crypto_plain_buf.item(data_index)) };
+
+				if (!success) {
 					break;
 				}
 				_cbe->supply_crypto_plain_data(data_index, request.success());
-				progress |= true;
-			}
+				progress = true;
 
-			if (!_blk_req.valid()) {
-				if (_block_session->cbe_request_next()) {
-					_state = CBE;
-				} else {
-					_state = INVALID;
+				if (_config_node.verbose_crypto_req_completed()) {
+					log("crypto req completed: ", request);
 				}
 			}
+		}
+
+		void _execute_crypto(bool &progress)
+		{
+			progress |= _crypto.execute();
+			_crypto_handle_completed_encrypt_requests(progress);
+			_crypto_handle_completed_decrypt_requests(progress);
 		}
 
 		void _execute()
 		{
-			if (!_block_session.constructed()) { return; }
-
-			for (bool progress = true; progress; ) {
+			bool progress { true };
+			while (progress) {
 
 				progress = false;
-
-				if (_state == INVALID)
-				_block_session->with_initialize([&] (Cbe_init::Configuration const &cfg) {
-
-					if (!_cbe_init.client_request_acceptable()) {
-						error("failed to submit request");
-						_env.parent().exit(-1);
-					}
-					_cbe_init.submit_client_request(
-						Cbe::Request(
-							Cbe::Request::Operation::READ,
-							false, 0, 0, 0, 0, 0),
-						cfg.vbd_nr_of_lvls() - 1,
-						cfg.vbd_nr_of_children(),
-						cfg.vbd_nr_of_leafs(),
-						cfg.ft_nr_of_lvls() - 1,
-						cfg.ft_nr_of_children(),
-						cfg.ft_nr_of_leafs());
-
-					_state = CBE_INIT;
-					progress = true;
-				});
-
-				if (_state == INVALID)
-				_block_session->with_check([&] () {
-
-					if (!_cbe_check.client_request_acceptable()) {
-						error("failed to submit request");
-						_env.parent().exit(-1);
-					}
-					_cbe_check.submit_client_request(
-						Cbe::Request(
-							Cbe::Request::Operation::READ,
-							false, 0, 0, 0, 0, 0));
-
-					_state = CBE_CHECK;
-					progress = true;
-				});
-
-				if (_state == INVALID)
-				_block_session->with_dump([&] (Cbe_dump::Configuration const &cfg) {
-
-					if (!_cbe_dump.client_request_acceptable()) {
-						error("failed to submit request");
-						_env.parent().exit(-1);
-					}
-					_cbe_dump.submit_client_request(
-						Cbe::Request(
-							Cbe::Request::Operation::READ,
-							false, 0, 0, 0, 0, 0),
-						cfg);
-
-					_state = CBE_DUMP;
-					progress = true;
-				});
-
-				if (_state == CBE_INIT) {
-					if (_cbe.constructed()) {
-						_cbe.destruct();
-					}
-					_execute_cbe_init(progress);
-				} else if (_state == CBE_CHECK) {
-					if (_cbe.constructed()) {
-						_cbe.destruct();
-					}
-					_execute_cbe_check(progress);
-				} else if (_state == CBE_DUMP) {
-					if (_cbe.constructed()) {
-						_cbe.destruct();
-					}
-					_execute_cbe_dump(progress);
-				} else if (_state == CBE) {
-					if (!_cbe.constructed()) {
-						_cbe.construct();
-					}
-					_execute_cbe(progress);
-				} else if (_state == INVALID) {
-					if (!_cbe.constructed()) {
-						_cbe.construct();
-					}
+				_execute_command_pool(progress);
+				_execute_cbe_init(progress);
+				_execute_block_io(progress);
+				_execute_trust_anchor(progress);
+				_execute_cbe_check(progress);
+				_execute_cbe_dump(progress);
+				_execute_crypto(progress);
+				if (_cbe.constructed()) {
 					_execute_cbe(progress);
 				}
 			}
-			/* notify I/O backend */
 			_blk.tx()->wakeup();
-
-			/* notify client */
-			_block_session->wakeup_client_if_needed();
 		}
 
 	public:
 
-		/*
-		 * Constructor
-		 *
-		 * \param env   reference to Genode environment
-		 */
 		Main(Env &env)
 		:
 			_env { env }
 		{
-			/*
-			 * Install signal handler for the backend Block connection.
-			 *
-			 * (Hopefully outstanding Block requests will not create problems when
-			 *  the frontend session is already gone.)
-			 */
-			_blk.tx_channel()->sigh_ack_avail(_request_handler);
-			_blk.tx_channel()->sigh_ready_to_submit(_request_handler);
-
-			_block_session.construct(_env, _config_rom, _heap);
+			_blk.tx_channel()->sigh_ack_avail(_blk_sigh);
+			_blk.tx_channel()->sigh_ready_to_submit(_blk_sigh);
 			_execute();
 		}
 
@@ -2538,17 +1830,6 @@ class Cbe::Main
 			_blk.tx_channel()->sigh_ready_to_submit(Signal_context_capability());
 		}
 };
-
-
-extern "C" void print_size(Genode::size_t sz) {
-	Genode::log(sz);
-}
-
-
-extern "C" void print_u64(unsigned long long const u) { Genode::log(u); }
-extern "C" void print_u32(unsigned int const u) { Genode::log(u); }
-extern "C" void print_u16(unsigned short const u) { Genode::log(u); }
-extern "C" void print_u8(unsigned char const u) { Genode::log(u); }
 
 void Component::construct(Genode::Env &env)
 {
@@ -2572,7 +1853,7 @@ void Component::construct(Genode::Env &env)
 	Cbe::assert_valid_object_size<External::Crypto>();
 	external_crypto_cxx_init();
 
-	static Cbe::Main inst(env);
+	static Main main(env);
 }
 
 extern "C" int memcmp(const void *p0, const void *p1, Genode::size_t size)

@@ -155,6 +155,10 @@ class Cbe::Library : public Cbe::Spark_object<353944>
 		_has_io_request(result, data_index);
 		return result;
 	}
+	void has_io_request(Request &req, Io_buffer::Index &data_index) const
+	{
+		_has_io_request(req, data_index);
+	}
 
 	/**
 	 * Obtain data for write request for the backend block session

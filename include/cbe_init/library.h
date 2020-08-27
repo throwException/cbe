@@ -106,6 +106,13 @@ struct Cbe_init::Library : Cbe::Spark_object<60960>
 
 	void mark_generated_ta_encrypt_key_request_complete(Cbe::Trust_anchor_request const &request,
 	                                                    Cbe::Key_ciphertext_value const &key);
+
+	void mark_generated_ta_last_sb_hash_request_complete(Cbe::Trust_anchor_request const &,
+	                                                     Cbe::Hash                 const &)
+	{
+		struct Not_supported { };
+		throw Not_supported();
+	}
 };
 
 #endif /* _CBE_INIT__LIBRARY_H_ */
