@@ -633,14 +633,24 @@ class Trust_anchor
 			Path file_path = path;
 			file_path.append_element(hash_file_name.string());
 
+			using Stat_result = Vfs::Directory_service::Stat_result;
+
+			Vfs::Directory_service::Stat out_stat { };
+			Stat_result const stat_res =
+				_vfs_env.root_dir().stat(file_path.string(), out_stat);
+
+			bool const file_exists = stat_res == Stat_result::STAT_OK;
+
 			unsigned const mode =
-				Vfs::Directory_service::OPEN_MODE_WRONLY | Vfs::Directory_service::OPEN_MODE_CREATE;
+				Vfs::Directory_service::OPEN_MODE_WRONLY |
+				(file_exists ? 0 : Vfs::Directory_service::OPEN_MODE_CREATE);
 
 			Result const res =
 				_vfs_env.root_dir().open(file_path.string(), mode,
 				                         (Vfs::Vfs_handle **)&_hash_handle,
 				                         _vfs_env.alloc());
 			if (res != Result::OPEN_OK) {
+				Genode::error("could not open '", file_path.string(), "'");
 				return false;
 			}
 
