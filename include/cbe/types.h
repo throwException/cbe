@@ -189,6 +189,7 @@ namespace Cbe {
 			bool      success()   const { return _success; }
 			uint32_t  tag()       const { return _tag; }
 
+			void tag(uint32_t arg) { _tag = arg; }
 			void success(bool arg) { _success = arg; }
 
 	} __attribute__((packed));
@@ -427,13 +428,13 @@ void Cbe::Request::print(Genode::Output &out) const
 		Genode::print(out, "<invalid>");
 		return;
 	}
-	Genode::print(out, "tag: ", _tag);
-	Genode::print(out, " block_number: ", _block_number);
-	Genode::print(out, " count: ", _count);
-	Genode::print(out, " key_id: ", _key_id);
-	Genode::print(out, " offset: ", _offset);
-	Genode::print(out, " op: ", to_string (_operation));
-	Genode::print(out, " success: ", _success);
+	Genode::print(out, "op=", to_string (_operation));
+	Genode::print(out, " vba=", _block_number);
+	Genode::print(out, " cnt=", _count);
+	Genode::print(out, " tag=", _tag);
+	Genode::print(out, " key=", _key_id);
+	Genode::print(out, " off=", _offset);
+	Genode::print(out, " succ=", _success);
 }
 
 void Cbe::Trust_anchor_request::print(Genode::Output &out) const
@@ -442,8 +443,8 @@ void Cbe::Trust_anchor_request::print(Genode::Output &out) const
 		Genode::print(out, "<invalid>");
 		return;
 	}
-	Genode::print(out, "tag: ", _tag);
-	Genode::print(out, " op: ", to_string (_operation));
-	Genode::print(out, " success: ", _success);
+	Genode::print(out, "op=", to_string (_operation));
+	Genode::print(out, " tag=", _tag);
+	Genode::print(out, " succ=", _success);
 }
 #endif /* _CBE_TYPES_H_ */
