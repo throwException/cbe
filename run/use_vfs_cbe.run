@@ -43,6 +43,7 @@ build {
 	lib/vfs/cbe_crypto/aes_cbc
 	lib/vfs/cbe_crypto/memcopy
 	lib/vfs/cbe_trust_anchor
+	lib/vfs/import
 	lib/vfs/pipe
 	test/vfs_stress
 	test/libc
@@ -153,20 +154,21 @@ append config {
 		<provides><service name="File_system"/></provides>
 		<config>
 			<vfs>
-				<dir name="ta_storage">
-					<fs/>
-				</dir>
+				<ram/>
+				<import>
+					<rom name="keyfile"/>
+					<rom name="secured_superblock"/>
+				</import>
 
 				<dir name="dev">
 					<cbe_trust_anchor name="cbe_trust_anchor"
-					                  storage_dir="/ta_storage"/>
+					                  storage_dir="/"/>
 				</dir>
 			</vfs>
 
 			<default-policy root="/dev/cbe_trust_anchor" writeable="yes"/>
 		</config>
 		<route>
-			<service name="File_system"> <child name="lx_fs"/> </service>
 			<any-service> <parent/> </any-service>
 		</route>
 	</start>
@@ -331,6 +333,7 @@ append boot_modules {
 	vfs_cbe_trust_anchor.lib.so
 	vfs_cbe.sh
 	vfs.lib.so
+	vfs_import.lib.so
 	vfs_pipe.lib.so
 	posix.lib.so
 	libc.lib.so
