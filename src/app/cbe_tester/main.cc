@@ -1588,8 +1588,6 @@ class Cbe::Main
 						_trust_anchor.submit_decrypt_key_request(request, ck);
 						break;
 					}
-					case Op::LAST_SB_HASH:
-						break;
 					case Op::INVALID:
 						/* never reached */
 						break;
@@ -1635,8 +1633,6 @@ class Cbe::Main
 						_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
 						break;
 					}
-					case Op::LAST_SB_HASH:
-						break;
 					case Op::INVALID:
 						/* never reached */
 						break;
@@ -1689,8 +1685,6 @@ class Cbe::Main
 						_trust_anchor.submit_decrypt_key_request(request, ck);
 						break;
 					}
-					case Op::LAST_SB_HASH:
-						break;
 					case Op::INVALID:
 						/* never reached */
 						break;
@@ -1736,8 +1730,6 @@ class Cbe::Main
 						_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
 						break;
 					}
-					case Op::LAST_SB_HASH:
-						break;
 					case Op::INVALID:
 						/* never reached */
 						break;
