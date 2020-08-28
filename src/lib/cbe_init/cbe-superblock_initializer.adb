@@ -394,8 +394,11 @@ is
                   Block_Number_Type'First, 0);
 
             Obj.SB_Slot_State := TA_Request_Secure_SB_Started;
+
          else
+
             Obj.SB_Slot_State := Done;
+
          end if;
 
          Obj.Execute_Progress := True;
