@@ -1197,6 +1197,7 @@ class Cbe::Main
 		Cbe_dump::Library                       _cbe_dump                { };
 		Cbe_init::Library                       _cbe_init                { };
 		External::Trust_anchor                  _trust_anchor            { };
+		Cbe::Hash                               _last_sb_hash            { };
 		Cbe::Request                            _blk_req                 { };
 		Io_buffer                               _blk_buf                 { };
 		Crypto_plain_buffer                     _crypto_plain_buf        { };
@@ -1568,8 +1569,8 @@ class Cbe::Main
 						break;
 					case Op::SECURE_SUPERBLOCK:
 					{
-						Cbe::Hash const sb_hash = _cbe_init.peek_generated_ta_sb_hash(request);
-						_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+						_last_sb_hash = _cbe_init.peek_generated_ta_sb_hash(request);
+						_trust_anchor.submit_secure_superblock_request(request, _last_sb_hash);
 						break;
 					}
 					case Op::ENCRYPT_KEY:
@@ -1588,6 +1589,11 @@ class Cbe::Main
 						_trust_anchor.submit_decrypt_key_request(request, ck);
 						break;
 					}
+					case Op::LAST_SB_HASH:
+
+						struct Cbe_init_requested_ta_last_sb_hash : Exception { };
+						throw Cbe_init_requested_ta_last_sb_hash();
+
 					case Op::INVALID:
 						/* never reached */
 						break;
@@ -1633,6 +1639,11 @@ class Cbe::Main
 						_cbe_init.mark_generated_ta_decrypt_key_request_complete(request, pk);
 						break;
 					}
+					case Op::LAST_SB_HASH:
+
+						struct Ta_completed_last_sb_hash_request_for_cbe_init : Exception { };
+						throw Ta_completed_last_sb_hash_request_for_cbe_init();
+
 					case Op::INVALID:
 						/* never reached */
 						break;
@@ -1662,11 +1673,13 @@ class Cbe::Main
 					switch (request.operation()) {
 					case Op::CREATE_KEY:
 						_trust_anchor.submit_create_key_request(request);
+						_cbe->drop_generated_ta_request(request);
 						break;
 					case Op::SECURE_SUPERBLOCK:
 					{
-						Cbe::Hash const sb_hash = _cbe->peek_generated_ta_sb_hash(request);
-						_trust_anchor.submit_secure_superblock_request(request, sb_hash);
+						_last_sb_hash = _cbe->peek_generated_ta_sb_hash(request);
+						_trust_anchor.submit_secure_superblock_request(request, _last_sb_hash);
+						_cbe->drop_generated_ta_request(request);
 						break;
 					}
 					case Op::ENCRYPT_KEY:
@@ -1675,6 +1688,7 @@ class Cbe::Main
 							_cbe->peek_generated_ta_key_value_plaintext(request);
 
 						_trust_anchor.submit_encrypt_key_request(request, pk);
+						_cbe->drop_generated_ta_request(request);
 						break;
 					}
 					case Op::DECRYPT_KEY:
@@ -1683,13 +1697,18 @@ class Cbe::Main
 							_cbe->peek_generated_ta_key_value_ciphertext(request);
 
 						_trust_anchor.submit_decrypt_key_request(request, ck);
+						_cbe->drop_generated_ta_request(request);
 						break;
 					}
+					case Op::LAST_SB_HASH:
+
+						_cbe->drop_generated_ta_request(request);
+						_cbe->mark_generated_ta_last_sb_hash_request_complete(request, _last_sb_hash);
+						break;
+
 					case Op::INVALID:
-						/* never reached */
 						break;
 					}
-					_cbe->drop_generated_ta_request(request);
 					progress |= true;
 				}
 
@@ -1730,6 +1749,11 @@ class Cbe::Main
 						_cbe->mark_generated_ta_decrypt_key_request_complete(request, pk);
 						break;
 					}
+					case Op::LAST_SB_HASH:
+
+						struct Ta_completed_last_sb_hash_request_for_cbe : Exception { };
+						throw Ta_completed_last_sb_hash_request_for_cbe();
+
 					case Op::INVALID:
 						/* never reached */
 						break;
