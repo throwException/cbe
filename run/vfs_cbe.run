@@ -11,8 +11,6 @@ exec rm -rf var/libcache/cbe_check
 exec rm -rf var/libcache/cbe_check_cxx
 exec rm -rf var/libcache/cbe_dump
 exec rm -rf var/libcache/cbe_dump_cxx
-exec rm -rf var/libcache/external_crypto
-exec rm -rf var/libcache/external_crypto_cxx
 exec rm -rf var/libcache/external_trust_anchor
 exec rm -rf var/libcache/external_trust_anchor_cxx
 }
@@ -248,7 +246,6 @@ append boot_modules {
 	spark.lib.so
 	libsparkcrypto.lib.so
 	external_trust_anchor_cxx.lib.so
-	external_crypto_cxx.lib.so
 	cbe_cxx.lib.so
 	vfs_cbe.lib.so
 	vfs_cbe_crypto_aes_cbc.lib.so
@@ -258,6 +255,7 @@ append boot_modules {
 	vfs_pipe.lib.so
 	posix.lib.so
 	libc.lib.so
+	libcrypto.lib.so
 	log_terminal
 	fs_rom
 	report_rom

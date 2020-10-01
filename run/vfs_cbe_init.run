@@ -11,8 +11,6 @@ exec rm -rf var/libcache/cbe_check
 exec rm -rf var/libcache/cbe_check_cxx
 exec rm -rf var/libcache/cbe_dump
 exec rm -rf var/libcache/cbe_dump_cxx
-exec rm -rf var/libcache/external_crypto
-exec rm -rf var/libcache/external_crypto_cxx
 }
 
 proc cbe_image_file { } {
