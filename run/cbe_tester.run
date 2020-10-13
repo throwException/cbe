@@ -45,6 +45,7 @@ append build_components {
 	app/cbe_tester
 	server/log_terminal
 	server/report_rom
+	server/lx_fs
 	server/lx_block
 }
 
@@ -87,6 +88,14 @@ append config {
 		<provides><service name="Terminal"/></provides>
 	</start>
 
+	<start name="lx_fs" ld="no">
+		<resource name="RAM" quantum="4M"/>
+		<provides> <service name="File_system"/> </provides>
+		<config>
+			<default-policy root="/" writeable="yes"/>
+		</config>
+	</start>
+
 	<start name="lx_block" ld="no">
 		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Block"/> </provides>
@@ -96,89 +105,102 @@ append config {
 	<start name="test" caps="200">
 		<binary name="cbe_tester"/>
 		<resource name="RAM" quantum="80M"/>
-		<config
-			verbose_cmd_pool_cmd_pending="no"
-			verbose_cmd_pool_cmd_in_progress="yes"
-			verbose_cmd_pool_cmd_completed="yes"
-			verbose_blk_pkt_in_progress="no"
-			verbose_blk_pkt_completed="no"
-			verbose_ta_req_in_progress="no"
-			verbose_ta_req_completed="no"
-			verbose_crypto_req_completed="no"
-			verbose_crypto_req_in_progress="no"
-			verbose_client_data_mismatch="no"
-			verbose_client_data_transferred="no">
+		<config>
 
-			<initialize>
+			<verbose
+				cmd_pool_cmd_pending="no"
+				cmd_pool_cmd_in_progress="yes"
+				cmd_pool_cmd_completed="yes"
+				blk_io_req_in_progress="no"
+				blk_io_req_completed="no"
+				ta_req_in_progress="no"
+				ta_req_completed="no"
+				crypto_req_completed="no"
+				crypto_req_in_progress="no"
+				client_data_mismatch="no"
+				client_data_transferred="no"/>
 
-				<virtual-block-device
-					nr_of_levels="3"
-					nr_of_children="16"
-					nr_of_leafs="256" />
+			<block_io type="vfs" path="/} [cbe_image_file] {"/>
 
-				<free-tree
-					nr_of_levels="3"
-					nr_of_children="16"
-					nr_of_leafs="256" />
+			<vfs>
+				<fs buffer_size="1M"/>
+			</vfs>
 
-			</initialize>
+			<commands>
 
-			<construct/>
-			<request op="write" vba="20" count="10" sync="no" salt="4321"/>
-			<request op="read" vba="20" count="10" sync="no" salt="4321"/>
-			<request op="write" vba="50" count="2" sync="no"/>
-			<request op="write" vba="20" count="10" sync="no"/>
-			<request op="create_snapshot" sync="no"/>
+				<initialize>
 
-			<check/>
+					<virtual-block-device
+						nr_of_levels="3"
+						nr_of_children="16"
+						nr_of_leafs="256" />
 
-			<benchmark op="start" label="First Benchmark"/>
-			<request op="write" vba="50" count="100" sync="no"/>
-			<request op="write" vba="30" count="100" sync="no"/>
-			<request op="write" vba="10" count="100" sync="no"/>
-			<request op="read" vba="50" count="100" sync="no"/>
-			<request op="read" vba="30" count="100" sync="no"/>
-			<request op="read" vba="10" count="100" sync="no"/>
-			<request op="create_snapshot" sync="no"/>
-			<request op="write" vba="50" count="100" sync="no"/>
-			<request op="write" vba="30" count="100" sync="no"/>
-			<request op="write" vba="10" count="100" sync="no"/>
-			<benchmark op="stop"/>
+					<free-tree
+						nr_of_levels="3"
+						nr_of_children="16"
+						nr_of_leafs="256" />
 
-			<request op="create_snapshot" sync="no"/>
-			<request op="rekey" sync="no"/>
-			<request op="read" vba="20" count="10" sync="no"/>
-			<request op="sync" vba="0" count="100" sync="no"/>
+				</initialize>
 
-			<dump
-				max_superblocks="1"
-				vbd="yes"
-				vbd_vba_filter_enabled="yes"
-				vbd_vba_filter="50"
-				free_tree="no"
-				meta_tree="no"
-				hashes="yes"/>
+				<construct/>
+				<request op="write" vba="20" count="10" sync="no" salt="4321"/>
+				<request op="read" vba="20" count="10" sync="no" salt="4321"/>
+				<request op="write" vba="50" count="2" sync="no"/>
+				<request op="write" vba="20" count="10" sync="no"/>
+				<request op="create_snapshot" sync="no"/>
 
-			<request op="extend_ft" count="12" sync="no"/>
-			<request op="sync" vba="20" count="10" sync="no"/>
+				<check/>
 
-			<benchmark op="start" label="Second Benchmark"/>
-			<request op="write" vba="20" count="10" sync="yes" salt="1234"/>
-			<list-snapshots/>
-			<request op="write" vba="30" count="10" sync="no" salt="20"/>
-			<benchmark op="stop"/>
+				<benchmark op="start" label="First Benchmark"/>
+				<request op="write" vba="50" count="100" sync="no"/>
+				<request op="write" vba="30" count="100" sync="no"/>
+				<request op="write" vba="10" count="100" sync="no"/>
+				<request op="read" vba="50" count="100" sync="no"/>
+				<request op="read" vba="30" count="100" sync="no"/>
+				<request op="read" vba="10" count="100" sync="no"/>
+				<request op="create_snapshot" sync="no"/>
+				<request op="write" vba="50" count="100" sync="no"/>
+				<request op="write" vba="30" count="100" sync="no"/>
+				<request op="write" vba="10" count="100" sync="no"/>
+				<benchmark op="stop"/>
 
-			<benchmark op="start"/>
-			<request op="extend_vbd" count="23" sync="no"/>
-			<request op="read" vba="20" count="10" sync="no" salt="1234"/>
-			<request op="read" vba="20" count="10" sync="no" salt="1234"/>
-			<request op="deinitialize" sync="no"/>
-			<destruct/>
-			<benchmark op="stop"/>
+				<request op="create_snapshot" sync="no"/>
+				<request op="rekey" sync="no"/>
+				<request op="read" vba="20" count="10" sync="no"/>
+				<request op="sync" vba="0" count="100" sync="no"/>
+
+				<dump
+					max_superblocks="1"
+					vbd="yes"
+					vbd_vba_filter_enabled="yes"
+					vbd_vba_filter="50"
+					free_tree="no"
+					meta_tree="no"
+					hashes="yes"/>
+
+				<request op="extend_ft" count="12" sync="no"/>
+				<request op="sync" vba="20" count="10" sync="no"/>
+
+				<benchmark op="start" label="Second Benchmark"/>
+				<request op="write" vba="20" count="10" sync="yes" salt="1234"/>
+				<list-snapshots/>
+				<request op="write" vba="30" count="10" sync="no" salt="20"/>
+				<benchmark op="stop"/>
+
+				<benchmark op="start"/>
+				<request op="extend_vbd" count="23" sync="no"/>
+				<request op="read" vba="20" count="10" sync="no" salt="1234"/>
+				<request op="read" vba="20" count="10" sync="no" salt="1234"/>
+				<request op="deinitialize" sync="no"/>
+				<destruct/>
+				<benchmark op="stop"/>
+
+			</commands>
 
 		</config>
 
 		<route>
+			<service name="File_system"> <child name="lx_fs"/> </service>
 			<service name="Block"> <child name="lx_block"/> </service>
 			<service name="Terminal"> <child name="log_terminal"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
@@ -198,7 +220,7 @@ append boot_modules {
 	ld.lib.so spark.lib.so libsparkcrypto.lib.so
 	cbe_cxx.lib.so cbe_check_cxx.lib.so cbe_dump_cxx.lib.so cbe_init_cxx.lib.so
 	external_crypto_cxx.lib.so external_trust_anchor_cxx.lib.so
-	log_terminal report_rom lx_block
+	log_terminal report_rom lx_fs vfs.lib.so lx_block
 }
 
 append boot_modules [cbe_image_file]
