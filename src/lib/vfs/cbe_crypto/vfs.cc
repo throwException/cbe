@@ -1116,7 +1116,8 @@ class Vfs_cbe_crypto::File_system : private Local_factory,
 			char buf[Config::capacity()] { };
 
 			Xml_generator xml(buf, sizeof (buf), "dir", [&] () {
-				xml.attribute("name", "cbe_crypto");
+				xml.attribute(
+					"name", node.attribute_value("name", String<64>("")));
 
 				xml.node("add_key",    [&] () { });
 				xml.node("remove_key", [&] () { });
