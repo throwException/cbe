@@ -41,12 +41,15 @@ proc cbe_ft_size_mb { } {
 }
 
 append build_components {
-	core init timer
+	core
+	init
+	timer
 	app/cbe_tester
 	server/log_terminal
 	server/report_rom
 	server/lx_fs
 	server/lx_block
+	lib/vfs/cbe_crypto/aes_cbc
 }
 
 build $build_components
@@ -103,6 +106,7 @@ append config {
 	</start>
 
 	<start name="test" caps="200">
+
 		<binary name="cbe_tester"/>
 		<resource name="RAM" quantum="80M"/>
 		<config>
@@ -121,8 +125,10 @@ append config {
 				client_data_transferred="no"/>
 
 			<block_io type="vfs" path="/} [cbe_image_file] {"/>
+			<crypto path="/crypto"/>
 
 			<vfs>
+				<cbe_crypto_aes_cbc name="crypto"/>
 				<fs buffer_size="1M"/>
 			</vfs>
 
@@ -206,6 +212,7 @@ append config {
 			<service name="Timer"> <child name="timer"/> </service>
 			<any-service> <parent/> </any-service>
 		</route>
+
 	</start>
 
 </config>}
@@ -216,11 +223,25 @@ exec rm -rf bin/[cbe_image_file]
 catch { exec $dd if=/dev/urandom of=bin/[cbe_image_file] bs=1M count=[cbe_image_size_mb] }
 
 append boot_modules {
-	core init timer cbe_tester
-	ld.lib.so spark.lib.so libsparkcrypto.lib.so
-	cbe_cxx.lib.so cbe_check_cxx.lib.so cbe_dump_cxx.lib.so cbe_init_cxx.lib.so
-	external_crypto_cxx.lib.so external_trust_anchor_cxx.lib.so
-	log_terminal report_rom lx_fs vfs.lib.so lx_block
+	core
+	init
+	timer
+	cbe_tester
+	ld.lib.so spark.lib.so
+	libsparkcrypto.lib.so
+	cbe_cxx.lib.so
+	cbe_check_cxx.lib.so
+	cbe_dump_cxx.lib.so
+	cbe_init_cxx.lib.so
+	external_trust_anchor_cxx.lib.so
+	log_terminal
+	report_rom
+	lx_fs
+	vfs.lib.so
+	lx_block
+	vfs_cbe_crypto_aes_cbc.lib.so
+	libc.lib.so
+	libcrypto.lib.so
 }
 
 append boot_modules [cbe_image_file]

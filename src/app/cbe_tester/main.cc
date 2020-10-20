@@ -31,6 +31,466 @@
 
 using namespace Genode;
 using namespace Cbe;
+using namespace Vfs;
+
+
+class Vfs_io_response_handler : public Vfs::Io_response_handler
+{
+	private:
+
+		Signal_context_capability const _sigh;
+
+	public:
+
+		Vfs_io_response_handler(Signal_context_capability sigh)
+		:
+			_sigh(sigh)
+		{ }
+
+
+		/******************************
+		 ** Vfs::Io_response_handler **
+		 ******************************/
+
+		void read_ready_response() override { }
+
+		void io_progress_response() override
+		{
+			Signal_transmitter(_sigh).submit();
+		}
+};
+
+
+class Crypto
+{
+	public:
+
+		enum class Operation
+		{
+			INVALID,
+			DECRYPT_BLOCK,
+			ENCRYPT_BLOCK
+		};
+
+		enum class Result
+		{
+			SUCCEEDED,
+			FAILED,
+			RETRY_LATER
+		};
+
+	private:
+
+		using Read_result = Vfs::File_io_service::Read_result;
+		using Open_result = Vfs::Directory_service::Open_result;
+
+		struct Key_directory
+		{
+			Vfs_handle *encrypt_handle;
+			Vfs_handle *decrypt_handle;
+			uint32_t    key_id;
+		};
+
+		enum class Job_state
+		{
+			SUBMITTED,
+			OP_WRITTEN_TO_VFS_HANDLE,
+			READING_VFS_HANDLE_SUCCEEDED,
+			COMPLETE
+		};
+
+		struct Job
+		{
+			Cbe::Request                 request;
+			Vfs_handle                  *handle;
+			Job_state                    state;
+			Operation                    op;
+			Crypto_cipher_buffer::Index  cipher_buf_idx;
+			Crypto_plain_buffer::Index   plain_buf_idx;
+		};
+
+		Vfs::Env                &_env;
+		String<32>        const  _path;
+		Vfs_handle              &_add_key_handle;
+		Vfs_handle              &_remove_key_handle;
+		Vfs_io_response_handler  _vfs_io_response_handler;
+		Key_directory            _key_dirs[2] {
+
+			{
+				.encrypt_handle = nullptr,
+				.decrypt_handle = nullptr,
+				.key_id = 0
+			}, {
+				.encrypt_handle = nullptr,
+				.decrypt_handle = nullptr,
+				.key_id = 0
+			}
+		};
+		Job _job {
+
+			.request        = Cbe::Request { },
+			.handle         = nullptr,
+			.state          = Job_state::SUBMITTED,
+			.op             = Operation::INVALID,
+			.cipher_buf_idx = Cbe::Crypto_cipher_buffer::Index { 0 },
+			.plain_buf_idx  = Cbe::Crypto_plain_buffer::Index  { 0 }
+		};
+
+		Key_directory &_get_unused_key_dir()
+		{
+			for (Key_directory &key_dir : _key_dirs) {
+				if (key_dir.key_id == 0) {
+					return key_dir;
+				}
+			}
+			class Failed { };
+			throw Failed();
+		}
+
+		Key_directory &_lookup_key_dir(uint32_t key_id)
+		{
+			for (Key_directory &key_dir : _key_dirs) {
+				if (key_dir.key_id == key_id) {
+					return key_dir;
+				}
+			}
+			class Failed { };
+			throw Failed();
+		}
+
+		static Vfs_handle &_open(Vfs::Env                     &vfs_env,
+		                         String<128>                   path,
+		                         Directory_service::Open_mode  mode)
+		{
+			Vfs_handle *handle { nullptr };
+			Directory_service::Open_result const result {
+				vfs_env.root_dir().open(
+					path.string(), mode, &handle, vfs_env.alloc()) };
+
+			if (result != Directory_service::Open_result::OPEN_OK) {
+
+				error("failed to open file ", path.string());
+				class Failed { };
+				throw Failed();
+			}
+			return *handle;
+		}
+
+		static Vfs_handle &_open_wo(Vfs::Env    &vfs_env,
+		                            String<128>  path)
+		{
+			return _open(vfs_env, path, Directory_service::OPEN_MODE_WRONLY);
+		}
+
+		static Vfs_handle &_open_rw(Vfs::Env    &vfs_env,
+		                            String<128>  path)
+		{
+			return _open(vfs_env, path, Directory_service::OPEN_MODE_RDWR);
+		}
+
+
+	public:
+
+		Crypto(Vfs::Env                  &env,
+		       Xml_node            const &crypto,
+		       Signal_context_capability  sigh)
+		:
+			_env                     { env },
+			_path                    { crypto.attribute_value("path", String<32>("")) },
+			_add_key_handle          { _open_wo(env, { _path.string(), "/add_key" }) },
+			_remove_key_handle       { _open_wo(env, { _path.string(), "/remove_key" }) },
+			_vfs_io_response_handler { sigh }
+		{ }
+
+		bool request_acceptable() const
+		{
+			return _job.op == Operation::INVALID;
+		}
+
+		Result add_key(Key const &key)
+		{
+			char buffer[sizeof (key.value) + sizeof (key.id.value)] { };
+			memcpy(buffer, &key.id.value, sizeof (key.id.value));
+			memcpy(buffer + sizeof (key.id.value),
+			       key.value, sizeof (key.value));
+
+			_add_key_handle.seek(0);
+			file_size nr_of_written_bytes { 0 };
+			try {
+				_add_key_handle.fs().write(
+					&_add_key_handle, buffer, sizeof (buffer),
+					nr_of_written_bytes);
+
+			} catch (File_io_service::Insufficient_buffer) {
+
+				return Result::RETRY_LATER;
+			}
+			Key_directory &key_dir { _get_unused_key_dir() };
+
+			key_dir.encrypt_handle = &_open_rw(
+				_env, { _path.string(), "/keys/", key.id.value, "/encrypt" });
+
+			key_dir.decrypt_handle = &_open_rw(
+				_env, { _path.string(), "/keys/", key.id.value, "/decrypt" });
+
+			key_dir.key_id = key.id.value;
+			key_dir.encrypt_handle->handler(&_vfs_io_response_handler);
+			key_dir.decrypt_handle->handler(&_vfs_io_response_handler);
+			return Result::SUCCEEDED;
+		}
+
+		Result remove_key(Cbe::Key::Id key_id)
+		{
+			Vfs::file_size written = 0;
+			_remove_key_handle.seek(0);
+			try {
+				_remove_key_handle.fs().write(&_remove_key_handle,
+				                              (char const*)&key_id.value,
+				                              sizeof (key_id.value),
+				                              written);
+				(void)written;
+
+			} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+				return Result::RETRY_LATER;
+			}
+			Key_directory &key_dir { _lookup_key_dir(key_id.value) };
+			_env.root_dir().close(key_dir.encrypt_handle);
+			key_dir.encrypt_handle = nullptr;
+			_env.root_dir().close(key_dir.decrypt_handle);
+			key_dir.decrypt_handle = nullptr;
+			key_dir.key_id = 0;
+			return Result::SUCCEEDED;
+		}
+
+		void submit_request(Cbe::Request          const &request,
+		                    Operation                    op,
+		                    Crypto_plain_buffer::Index   plain_buf_idx,
+		                    Crypto_cipher_buffer::Index  cipher_buf_idx)
+		{
+			switch (op) {
+			case Operation::ENCRYPT_BLOCK:
+
+				_job.request        = request;
+				_job.state          = Job_state::SUBMITTED;
+				_job.op             = op;
+				_job.cipher_buf_idx = cipher_buf_idx;
+				_job.plain_buf_idx  = plain_buf_idx;
+				_job.handle         =
+					_lookup_key_dir(request.key_id()).encrypt_handle;
+
+				break;
+
+			case Operation::DECRYPT_BLOCK:
+
+				_job.request        = request;
+				_job.state          = Job_state::SUBMITTED;
+				_job.op             = op;
+				_job.cipher_buf_idx = cipher_buf_idx;
+				_job.plain_buf_idx  = plain_buf_idx;
+				_job.handle         =
+					_lookup_key_dir(request.key_id()).decrypt_handle;
+
+				break;
+
+			case Operation::INVALID:
+
+				class Bad_operation { };
+				throw Bad_operation();
+			}
+		}
+
+		Cbe::Request peek_completed_encryption_request() const
+		{
+			if (_job.state != Job_state::COMPLETE ||
+			    _job.op != Operation::ENCRYPT_BLOCK) {
+
+				return Cbe::Request { };
+			}
+			return _job.request;
+		}
+
+		Cbe::Request peek_completed_decryption_request() const
+		{
+			if (_job.state != Job_state::COMPLETE ||
+			    _job.op != Operation::DECRYPT_BLOCK) {
+
+				return Cbe::Request { };
+			}
+			return _job.request;
+		}
+
+		void drop_completed_request()
+		{
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state();
+			}
+			_job.op = Operation::INVALID;
+		}
+
+		void _execute_decrypt_block(Job                  &job,
+		                            Crypto_plain_buffer  &plain_buf,
+		                            Crypto_cipher_buffer &cipher_buf,
+		                            bool                 &progress)
+		{
+			switch (job.state) {
+			case Job_state::SUBMITTED:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				file_size nr_of_written_bytes { 0 };
+				try {
+					job.handle->fs().write(
+						job.handle,
+						reinterpret_cast<char const*>(
+							&cipher_buf.item(job.cipher_buf_idx)),
+						file_size(sizeof (Cbe::Block_data)),
+						nr_of_written_bytes);
+
+					job.state = Job_state::OP_WRITTEN_TO_VFS_HANDLE;
+					progress = true;
+					return;
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+			}
+			case Job_state::OP_WRITTEN_TO_VFS_HANDLE:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				bool const success {
+					job.handle->fs().queue_read(
+						job.handle, sizeof (Cbe::Block_data)) };
+
+				if (!success) {
+					return;
+				}
+				job.state = Job_state::READING_VFS_HANDLE_SUCCEEDED;
+				progress = true;
+				break;
+			}
+			case Job_state::READING_VFS_HANDLE_SUCCEEDED:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result =
+					job.handle->fs().complete_read(
+						job.handle,
+						reinterpret_cast<char *>(
+							&plain_buf.item(job.plain_buf_idx)),
+						sizeof (Cbe::Block_data),
+						nr_of_read_bytes);
+
+				switch (result) {
+				case Read_result::READ_QUEUED:          return;
+				case Read_result::READ_ERR_INTERRUPT:   return;
+				case Read_result::READ_ERR_AGAIN:       return;
+				case Read_result::READ_ERR_WOULD_BLOCK: return;
+				default: break;
+				}
+				job.request.success(result == Read_result::READ_OK);
+				job.state = Job_state::COMPLETE;
+				progress = true;
+				return;
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void _execute_encrypt_block(Job                  &job,
+		                            Crypto_plain_buffer  &plain_buf,
+		                            Crypto_cipher_buffer &cipher_buf,
+		                            bool                 &progress)
+		{
+			switch (job.state) {
+			case Job_state::SUBMITTED:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				file_size nr_of_written_bytes { 0 };
+				try {
+					job.handle->fs().write(
+						job.handle,
+						reinterpret_cast<char const*>(
+							&plain_buf.item(job.plain_buf_idx)),
+						file_size(sizeof (Cbe::Block_data)),
+						nr_of_written_bytes);
+
+					job.state = Job_state::OP_WRITTEN_TO_VFS_HANDLE;
+					progress = true;
+					return;
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+			}
+			case Job_state::OP_WRITTEN_TO_VFS_HANDLE:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				bool success {
+					job.handle->fs().queue_read(
+						job.handle, sizeof (Cbe::Block_data)) };
+
+				if (!success) {
+					return;
+				}
+				job.state = Job_state::READING_VFS_HANDLE_SUCCEEDED;
+				progress = true;
+				return;
+			}
+			case Job_state::READING_VFS_HANDLE_SUCCEEDED:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result {
+					job.handle->fs().complete_read(
+						job.handle,
+						reinterpret_cast<char *>(
+							&cipher_buf.item(job.cipher_buf_idx)),
+						sizeof (Cbe::Block_data),
+						nr_of_read_bytes) };
+
+				switch (result) {
+				case Read_result::READ_QUEUED:          return;
+				case Read_result::READ_ERR_INTERRUPT:   return;
+				case Read_result::READ_ERR_AGAIN:       return;
+				case Read_result::READ_ERR_WOULD_BLOCK: return;
+				default: break;
+				}
+				job.request.success(result == Read_result::READ_OK);
+				job.state = Job_state::COMPLETE;
+				progress = true;
+				return;
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void execute(Crypto_plain_buffer  &plain_buf,
+		             Crypto_cipher_buffer &cipher_buf,
+		             bool                 &progress)
+		{
+			switch (_job.op) {
+			case Operation::ENCRYPT_BLOCK:
+
+				_execute_encrypt_block(_job, plain_buf, cipher_buf, progress);
+				break;
+
+			case Operation::DECRYPT_BLOCK:
+
+				_execute_decrypt_block(_job, plain_buf, cipher_buf, progress);
+				break;
+
+			case Operation::INVALID:
+
+				break;
+			}
+		}
+};
 
 
 enum class Module_type : uint8_t
@@ -617,34 +1077,8 @@ class Vfs_block_io : public Block_io
 {
 	private:
 
-		struct Vfs_io_response_handler : Vfs::Io_response_handler
-		{
-			Genode::Signal_context_capability _sigh;
-
-			Vfs_io_response_handler(Genode::Signal_context_capability sigh)
-			:
-				_sigh(sigh)
-			{ }
-
-
-			/******************************
-			 ** Vfs::Io_response_handler **
-			 ******************************/
-
-			void read_ready_response() override { }
-
-			void io_progress_response() override
-			{
-				if (_sigh.valid()) {
-					Genode::Signal_transmitter(_sigh).submit();
-				}
-			}
-		};
-
-		Env                             &_env;
-		Heap                            &_heap;
 		String<32>                const  _path;
-		Vfs::Simple_env                  _vfs_env;
+		Vfs::Env                        &_vfs_env;
 		Vfs_io_response_handler          _vfs_io_response_handler;
 		Vfs::Vfs_handle                 &_vfs_handle { *_init_vfs_handle(_vfs_env, _path) };
 		Constructible<Vfs_block_io_job>  _job        { };
@@ -653,7 +1087,7 @@ class Vfs_block_io : public Block_io
 
 		const Vfs_block_io& operator=(const Vfs_block_io&);
 
-		static Vfs::Vfs_handle *_init_vfs_handle(Vfs::Simple_env  &vfs_env,
+		static Vfs::Vfs_handle *_init_vfs_handle(Vfs::Env         &vfs_env,
 		                                         String<32> const &path)
 		{
 			using Result = Vfs::Directory_service::Open_result;
@@ -674,18 +1108,14 @@ class Vfs_block_io : public Block_io
 
 	public:
 
-		Vfs_block_io(Env                       &env,
-		             Heap                      &heap,
+		Vfs_block_io(Vfs::Env                  &vfs_env,
 		             Xml_node            const &block_io,
-		             Xml_node            const &vfs,
 		             Signal_context_capability  sigh)
 		:
-			_env                     { env },
-			_heap                    { heap },
 			_path                    { block_io.attribute_value(
 			                              "path", String<32> { "" } ) },
 
-			_vfs_env                 { env, heap, vfs },
+			_vfs_env                 { vfs_env },
 			_vfs_io_response_handler { sigh }
 		{
 			_vfs_handle.handler(&_vfs_io_response_handler);
@@ -735,7 +1165,7 @@ class Block_connection_block_io : public Block_io
 
 		enum { TX_BUF_SIZE = Block::Session::TX_QUEUE_SIZE * BLOCK_SIZE, };
 
-		Env                 &_env;
+		Genode::Env         &_env;
 		Heap                &_heap;
 		Allocator_avl        _blk_alloc { &_heap };
 		Block::Connection<>  _blk       { _env, &_blk_alloc, TX_BUF_SIZE };
@@ -762,7 +1192,7 @@ class Block_connection_block_io : public Block_io
 
 	public:
 
-		Block_connection_block_io(Env                       &env,
+		Block_connection_block_io(Genode::Env               &env,
 		                          Heap                      &heap,
 		                          Signal_context_capability  sigh)
 		:
@@ -941,7 +1371,7 @@ class Benchmark
 
 		enum State { STARTED, STOPPED };
 
-		Env                           &_env;
+		Genode::Env                   &_env;
 		Timer::Connection              _timer                   { _env };
 		State                          _state                   { STOPPED };
 		Microseconds                   _start_time              { 0 };
@@ -952,7 +1382,7 @@ class Benchmark
 
 	public:
 
-		Benchmark(Env &env) : _env { env } { }
+		Benchmark(Genode::Env &env) : _env { env } { }
 
 		void submit_request(Benchmark_node const &node)
 		{
@@ -1558,28 +1988,33 @@ class Main
 {
 	private:
 
-		Env                         &_env;
-		Attached_rom_dataspace       _config_rom              { _env, "config" };
-		Verbose_node                 _verbose_node            { _config_rom.xml() };
-		Heap                         _heap                    { _env.ram(), _env.rm() };
-		Signal_handler<Main>         _sigh                    { _env.ep(), *this, &Main::_execute };
-		Block_io                    &_blk_io                  { _init_blk_io(_config_rom.xml(), _heap, _env, _sigh) };
-		Io_buffer                    _blk_buf                 { };
-		Command_pool                 _cmd_pool                { _heap, _config_rom.xml(), _verbose_node };
-		Constructible<Cbe::Library>  _cbe                     { };
-		Cbe_check::Library           _cbe_check               { };
-		Cbe_dump::Library            _cbe_dump                { };
-		Cbe_init::Library            _cbe_init                { };
-		Benchmark                    _benchmark               { _env };
-		Cbe::Hash                    _trust_anchor_sb_hash    { };
-		External::Trust_anchor       _trust_anchor            { };
-		Crypto_plain_buffer          _crypto_plain_buf        { };
-		Crypto_cipher_buffer         _crypto_cipher_buf       { };
-		External::Crypto             _crypto                  { };
+		Genode::Env                 &_env;
+		Attached_rom_dataspace       _config_rom           { _env, "config" };
+		Verbose_node                 _verbose_node         { _config_rom.xml() };
+		Heap                         _heap                 { _env.ram(), _env.rm() };
+		Vfs::Simple_env              _vfs_env              { _env, _heap, _config_rom.xml().sub_node("vfs") };
+		Signal_handler<Main>         _sigh                 { _env.ep(), *this, &Main::_execute };
+		Block_io                    &_blk_io               { _init_blk_io(_config_rom.xml(), _heap,
+		                                                                  _env, _vfs_env, _sigh) };
+		Io_buffer                    _blk_buf              { };
+		Command_pool                 _cmd_pool             { _heap, _config_rom.xml(), _verbose_node };
+		Constructible<Cbe::Library>  _cbe                  { };
+		Cbe_check::Library           _cbe_check            { };
+		Cbe_dump::Library            _cbe_dump             { };
+		Cbe_init::Library            _cbe_init             { };
+		Benchmark                    _benchmark            { _env };
+		Cbe::Hash                    _trust_anchor_sb_hash { };
+		External::Trust_anchor       _trust_anchor         { };
+		Crypto_plain_buffer          _crypto_plain_buf     { };
+		Crypto_cipher_buffer         _crypto_cipher_buf    { };
+		Crypto                       _crypto               { _vfs_env,
+		                                                     _config_rom.xml().sub_node("crypto"),
+		                                                     _sigh };
 
 		Block_io &_init_blk_io(Xml_node            const &config,
 		                       Heap                      &heap,
-		                       Env                       &env,
+		                       Genode::Env               &env,
+		                       Vfs::Env                  &vfs_env,
 		                       Signal_context_capability  sigh)
 		{
 			Xml_node const &block_io { config.sub_node("block_io") };
@@ -1590,7 +2025,7 @@ class Main
 			if (block_io.attribute("type").has_value("vfs")) {
 				return *new (heap)
 					Vfs_block_io {
-						env, heap, block_io, config.sub_node("vfs"), sigh };
+						vfs_env, block_io, sigh };
 			}
 			class Malformed_attribute { };
 			throw Malformed_attribute();
@@ -1819,21 +2254,32 @@ class Main
 				Key key;
 				Cbe::Request request { _cbe->crypto_add_key_required(key) };
 				if (!request.valid()) {
-					break;
+					return;
 				}
-				_cbe->crypto_add_key_requested(request);
-				External::Crypto::Key_data data { };
-				memcpy(
-					data.value, key.value,
-					sizeof(data.value) / sizeof(data.value[0]));
+				switch (_crypto.add_key(key)) {
+				case Crypto::Result::SUCCEEDED:
 
-				_crypto.add_key(key.id, data);
-				request.success (true);
-				_cbe->crypto_add_key_completed(request);
-				progress = true;
+					if (_verbose_node.crypto_req_in_progress()) {
+						log("crypto req in progress: ", request);
+					}
+					_cbe->crypto_add_key_requested(request);
 
-				if (_verbose_node.crypto_req_in_progress()) {
-					log("crypto req in progress: ", request);
+					if (_verbose_node.crypto_req_completed()) {
+						log("crypto req completed: ", request);
+					}
+					request.success(true);
+					_cbe->crypto_add_key_completed(request);
+					progress = true;
+					break;
+
+				case Crypto::Result::FAILED:
+
+					class Add_key_failed { };
+					throw Add_key_failed();
+
+				case Crypto::Result::RETRY_LATER:
+
+					return;
 				}
 			}
 		}
@@ -1849,14 +2295,30 @@ class Main
 				if (!request.valid()) {
 					break;
 				}
-				_cbe->crypto_remove_key_requested(request);
-				_crypto.remove_key(key_id);
-				request.success (true);
-				_cbe->crypto_remove_key_completed(request);
-				progress = true;
+				switch (_crypto.remove_key(key_id)) {
+				case Crypto::Result::SUCCEEDED:
 
-				if (_verbose_node.crypto_req_in_progress()) {
-					log("crypto req in progress: ", request);
+					if (_verbose_node.crypto_req_in_progress()) {
+						log("crypto req in progress: ", request);
+					}
+					_cbe->crypto_remove_key_requested(request);
+
+					if (_verbose_node.crypto_req_completed()) {
+						log("crypto req completed: ", request);
+					}
+					request.success(true);
+					_cbe->crypto_remove_key_completed(request);
+					progress = true;
+					break;
+
+				case Crypto::Result::FAILED:
+
+					class Remove_key_failed { };
+					throw Remove_key_failed();
+
+				case Crypto::Result::RETRY_LATER:
+
+					return;
 				}
 			}
 		}
@@ -1865,7 +2327,7 @@ class Main
 		{
 			while (true) {
 
-				if (!_crypto.encryption_request_acceptable()) {
+				if (!_crypto.request_acceptable()) {
 					break;
 				}
 				Crypto_plain_buffer::Index data_index { 0 };
@@ -1876,17 +2338,16 @@ class Main
 					break;
 				}
 				request.tag(data_index.value);
-				_crypto.submit_encryption_request(
-					request,
-					_crypto_plain_buf.item(data_index),
-					0);
+				_crypto.submit_request(
+				    request, Crypto::Operation::ENCRYPT_BLOCK,
+				    data_index,
+				    Crypto_cipher_buffer::Index { data_index.value });
 
 				_cbe->crypto_cipher_data_requested(data_index);
-				progress = true;
-
 				if (_verbose_node.crypto_req_in_progress()) {
 					log("crypto req in progress: ", request);
 				}
+				progress = true;
 			}
 		}
 
@@ -1894,7 +2355,7 @@ class Main
 		{
 			while (true) {
 
-				if (!_crypto.decryption_request_acceptable()) {
+				if (!_crypto.request_acceptable()) {
 					break;
 				}
 				Crypto_cipher_buffer::Index data_index { 0 };
@@ -1905,17 +2366,16 @@ class Main
 					break;
 				}
 				request.tag(data_index.value);
-				_crypto.submit_decryption_request(
-					request,
-					_crypto_cipher_buf.item(data_index),
-					0);
+				_crypto.submit_request(
+				    request, Crypto::Operation::DECRYPT_BLOCK,
+				    Crypto_plain_buffer::Index { data_index.value },
+				    data_index);
 
 				_cbe->crypto_plain_data_requested(data_index);
-				progress = true;
-
 				if (_verbose_node.crypto_req_in_progress()) {
 					log("crypto req in progress: ", request);
 				}
+				progress = true;
 			}
 		}
 
@@ -2286,15 +2746,10 @@ class Main
 				if (!request.valid()) {
 					break;
 				}
-				Crypto_cipher_buffer::Index const data_index { request.tag() };
-				bool const success {
-					_crypto.supply_cipher_data(
-						request, _crypto_cipher_buf.item(data_index)) };
+				Crypto_cipher_buffer::Index const data_idx { request.tag() };
+				_cbe->supply_crypto_cipher_data(data_idx, request.success());
 
-				if (!success) {
-					break;
-				}
-				_cbe->supply_crypto_cipher_data(data_index, request.success());
+				_crypto.drop_completed_request();
 				progress = true;
 
 				if (_verbose_node.crypto_req_completed()) {
@@ -2313,15 +2768,10 @@ class Main
 				if (!request.valid()) {
 					break;
 				}
-				Crypto_plain_buffer::Index const data_index { request.tag() };
-				bool const success {
-					_crypto.supply_plain_data(
-						request, _crypto_plain_buf.item(data_index)) };
+				Crypto_plain_buffer::Index const data_idx { request.tag() };
+				_cbe->supply_crypto_plain_data(data_idx, request.success());
 
-				if (!success) {
-					break;
-				}
-				_cbe->supply_crypto_plain_data(data_index, request.success());
+				_crypto.drop_completed_request();
 				progress = true;
 
 				if (_verbose_node.crypto_req_completed()) {
@@ -2332,7 +2782,7 @@ class Main
 
 		void _execute_crypto(bool &progress)
 		{
-			progress |= _crypto.execute();
+			_crypto.execute(_crypto_plain_buf, _crypto_cipher_buf, progress);
 			_crypto_handle_completed_encrypt_requests(progress);
 			_crypto_handle_completed_decrypt_requests(progress);
 		}
@@ -2362,7 +2812,7 @@ class Main
 
 	public:
 
-		Main(Env &env)
+		Main(Genode::Env &env)
 		:
 			_env { env }
 		{
@@ -2388,9 +2838,6 @@ void Component::construct(Genode::Env &env)
 
 	Cbe::assert_valid_object_size<External::Trust_anchor>();
 	external_trust_anchor_cxx_init();
-
-	Cbe::assert_valid_object_size<External::Crypto>();
-	external_crypto_cxx_init();
 
 	static Main main(env);
 }
