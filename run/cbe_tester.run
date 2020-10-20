@@ -44,12 +44,15 @@ append build_components {
 	core
 	init
 	timer
+	server/vfs
 	app/cbe_tester
 	server/log_terminal
 	server/report_rom
 	server/lx_fs
 	server/lx_block
 	lib/vfs/cbe_crypto/aes_cbc
+	lib/vfs/cbe_trust_anchor
+	lib/vfs/import
 }
 
 build $build_components
@@ -105,6 +108,30 @@ append config {
 		<config file="} [cbe_image_file] {" block_size="4K" writeable="yes"/>
 	</start>
 
+	<start name="vfs_trust_anchor" caps="120">
+		<binary name="vfs"/>
+		<resource name="RAM" quantum="16M"/>
+		<provides><service name="File_system"/></provides>
+		<config>
+			<vfs>
+				<dir name="storage">
+					<ram/>
+				</dir>
+
+				<dir name="dev">
+					<cbe_trust_anchor name="cbe_trust_anchor"
+					                  storage_dir="/storage"/>
+				</dir>
+			</vfs>
+
+			<default-policy root="/dev/cbe_trust_anchor" writeable="yes"/>
+		</config>
+		<route>
+			<service name="File_system"> <child name="lx_fs"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
 	<start name="test" caps="200">
 
 		<binary name="cbe_tester"/>
@@ -124,15 +151,21 @@ append config {
 				client_data_mismatch="no"
 				client_data_transferred="no"/>
 
-			<block_io type="vfs" path="/} [cbe_image_file] {"/>
+			<block-io type="vfs" path="/} [cbe_image_file] {"/>
 			<crypto path="/crypto"/>
+			<trust-anchor path="/trust_anchor"/>
 
 			<vfs>
-				<cbe_crypto_aes_cbc name="crypto"/>
 				<fs buffer_size="1M"/>
+				<cbe_crypto_aes_cbc name="crypto"/>
+				<dir name="trust_anchor">
+					<fs label="trust_anchor"/>
+				</dir>
 			</vfs>
 
 			<commands>
+
+				<trust-anchor op="initialize" passphrase="foobar"/>
 
 				<initialize>
 
@@ -154,7 +187,6 @@ append config {
 				<request op="write" vba="50" count="2" sync="no"/>
 				<request op="write" vba="20" count="10" sync="no"/>
 				<request op="create_snapshot" sync="no"/>
-
 				<check/>
 
 				<benchmark op="start" label="First Benchmark"/>
@@ -206,6 +238,9 @@ append config {
 		</config>
 
 		<route>
+			<service name="File_system" label_last="trust_anchor">
+				<child name="vfs_trust_anchor"/>
+			</service>
 			<service name="File_system"> <child name="lx_fs"/> </service>
 			<service name="Block"> <child name="lx_block"/> </service>
 			<service name="Terminal"> <child name="log_terminal"/> </service>
@@ -220,6 +255,7 @@ append config {
 install_config $config
 
 exec rm -rf bin/[cbe_image_file]
+
 catch { exec $dd if=/dev/urandom of=bin/[cbe_image_file] bs=1M count=[cbe_image_size_mb] }
 
 append boot_modules {
@@ -233,15 +269,17 @@ append boot_modules {
 	cbe_check_cxx.lib.so
 	cbe_dump_cxx.lib.so
 	cbe_init_cxx.lib.so
-	external_trust_anchor_cxx.lib.so
 	log_terminal
 	report_rom
 	lx_fs
-	vfs.lib.so
+	vfs
 	lx_block
-	vfs_cbe_crypto_aes_cbc.lib.so
 	libc.lib.so
 	libcrypto.lib.so
+	vfs.lib.so
+	vfs_cbe_trust_anchor.lib.so
+	vfs_cbe_crypto_aes_cbc.lib.so
+	vfs_import.lib.so
 }
 
 append boot_modules [cbe_image_file]

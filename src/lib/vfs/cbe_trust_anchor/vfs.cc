@@ -1689,12 +1689,12 @@ class Vfs_cbe_trust_anchor::File_system : private Local_factory,
 
 		using Config = String<128>;
 
-		static Config _config()
+		static Config _config(Xml_node const &node)
 		{
 			char buf[Config::capacity()] { };
 
 			Xml_generator xml(buf, sizeof (buf), "dir", [&] () {
-				xml.attribute("name", "cbe_trust_anchor");
+				xml.attribute("name", node.attribute_value("name", String<32>("")));
 
 				xml.node("decrypt",      [&] () { });
 				xml.node("encrypt",      [&] () { });
@@ -1711,7 +1711,7 @@ class Vfs_cbe_trust_anchor::File_system : private Local_factory,
 		File_system(Vfs::Env &vfs_env, Genode::Xml_node node)
 		:
 			Local_factory        { vfs_env, node },
-			Vfs::Dir_file_system { vfs_env, Xml_node(_config().string()), *this }
+			Vfs::Dir_file_system { vfs_env, Xml_node(_config(node).string()), *this }
 		{ }
 
 		~File_system() { }

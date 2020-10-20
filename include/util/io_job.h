@@ -92,7 +92,10 @@ namespace Util {
 			switch (_state) {
 			case State::PENDING:
 
+//Genode::error("seek ", &_handle, " ", Genode::Hex(_base_offset + _current_offset));
 				_handle.seek(_base_offset + _current_offset);
+
+//Genode::error("queue read ", &_handle);
 				if (!_handle.fs().queue_read(&_handle, _current_count)) {
 					return progress;
 				}
@@ -107,6 +110,7 @@ namespace Util {
 				bool completed = false;
 				file_size out = 0;
 
+//Genode::error("complete read ", &_handle, " ", Genode::Hex((long unsigned)_data + _current_offset));
 				Result const result =
 					_handle.fs().complete_read(&_handle,
 					                           _data + _current_offset,
@@ -157,6 +161,7 @@ namespace Util {
 			switch (_state) {
 			case State::PENDING:
 
+//Genode::error("seek ", &_handle, " ", Genode::Hex(_base_offset + _current_offset));
 				_handle.seek(_base_offset + _current_offset);
 
 				_state = State::IN_PROGRESS;
@@ -171,6 +176,8 @@ namespace Util {
 
 				Result result = Result::WRITE_ERR_INVALID;
 				try {
+
+//Genode::error("write ", &_handle, " ", Genode::Cstring(_data + _current_offset, _current_count));
 					result = _handle.fs().write(&_handle,
 					                            _data + _current_offset,
 					                            _current_count, out);
@@ -223,6 +230,7 @@ namespace Util {
 			switch (_state) {
 			case State::PENDING:
 
+//Genode::error("queue sync ", &_handle);
 				if (!_handle.fs().queue_sync(&_handle)) {
 					return progress;
 				}
@@ -232,6 +240,7 @@ namespace Util {
 			case State::IN_PROGRESS:
 			{
 				using Result = Vfs::File_io_service::Sync_result;
+//Genode::error("complete sync ", &_handle);
 				Result const result = _handle.fs().complete_sync(&_handle);
 
 				if (result == Result::SYNC_QUEUED) {

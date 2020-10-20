@@ -16,18 +16,18 @@
 #include <base/component.h>
 #include <base/heap.h>
 #include <timer_session/connection.h>
+#include <block_session/connection.h>
 #include <vfs/simple_env.h>
 
 /* CBE includes */
 #include <cbe/library.h>
-#include <cbe/external_crypto.h>
 #include <cbe_check/library.h>
 #include <cbe_dump/library.h>
 #include <cbe_dump/configuration.h>
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
-#include <cbe/external_ta.h>
-#include <util.h>
+
+/* Genode includes */
 
 using namespace Genode;
 using namespace Cbe;
@@ -59,6 +59,39 @@ class Vfs_io_response_handler : public Vfs::Io_response_handler
 			Signal_transmitter(_sigh).submit();
 		}
 };
+
+
+static Vfs_handle &open(Vfs::Env                     &vfs_env,
+                        String<128>                   path,
+                        Directory_service::Open_mode  mode)
+{
+	Vfs_handle *handle { nullptr };
+	Directory_service::Open_result const result {
+		vfs_env.root_dir().open(
+			path.string(), mode, &handle, vfs_env.alloc()) };
+
+	if (result != Directory_service::Open_result::OPEN_OK) {
+
+		error("failed to open file ", path.string());
+		class Failed { };
+		throw Failed { };
+	}
+	return *handle;
+}
+
+
+static Vfs_handle &open_wo(Vfs::Env    &vfs_env,
+                           String<128>  path)
+{
+	return open(vfs_env, path, Directory_service::OPEN_MODE_WRONLY);
+}
+
+
+static Vfs_handle &open_rw(Vfs::Env    &vfs_env,
+                           String<128>  path)
+{
+	return open(vfs_env, path, Directory_service::OPEN_MODE_RDWR);
+}
 
 
 class Crypto
@@ -144,7 +177,7 @@ class Crypto
 				}
 			}
 			class Failed { };
-			throw Failed();
+			throw Failed { };
 		}
 
 		Key_directory &_lookup_key_dir(uint32_t key_id)
@@ -155,37 +188,7 @@ class Crypto
 				}
 			}
 			class Failed { };
-			throw Failed();
-		}
-
-		static Vfs_handle &_open(Vfs::Env                     &vfs_env,
-		                         String<128>                   path,
-		                         Directory_service::Open_mode  mode)
-		{
-			Vfs_handle *handle { nullptr };
-			Directory_service::Open_result const result {
-				vfs_env.root_dir().open(
-					path.string(), mode, &handle, vfs_env.alloc()) };
-
-			if (result != Directory_service::Open_result::OPEN_OK) {
-
-				error("failed to open file ", path.string());
-				class Failed { };
-				throw Failed();
-			}
-			return *handle;
-		}
-
-		static Vfs_handle &_open_wo(Vfs::Env    &vfs_env,
-		                            String<128>  path)
-		{
-			return _open(vfs_env, path, Directory_service::OPEN_MODE_WRONLY);
-		}
-
-		static Vfs_handle &_open_rw(Vfs::Env    &vfs_env,
-		                            String<128>  path)
-		{
-			return _open(vfs_env, path, Directory_service::OPEN_MODE_RDWR);
+			throw Failed { };
 		}
 
 
@@ -196,9 +199,9 @@ class Crypto
 		       Signal_context_capability  sigh)
 		:
 			_env                     { env },
-			_path                    { crypto.attribute_value("path", String<32>("")) },
-			_add_key_handle          { _open_wo(env, { _path.string(), "/add_key" }) },
-			_remove_key_handle       { _open_wo(env, { _path.string(), "/remove_key" }) },
+			_path                    { crypto.attribute_value("path", String<32>()) },
+			_add_key_handle          { open_wo(env, { _path.string(), "/add_key" }) },
+			_remove_key_handle       { open_wo(env, { _path.string(), "/remove_key" }) },
 			_vfs_io_response_handler { sigh }
 		{ }
 
@@ -227,10 +230,10 @@ class Crypto
 			}
 			Key_directory &key_dir { _get_unused_key_dir() };
 
-			key_dir.encrypt_handle = &_open_rw(
+			key_dir.encrypt_handle = &open_rw(
 				_env, { _path.string(), "/keys/", key.id.value, "/encrypt" });
 
-			key_dir.decrypt_handle = &_open_rw(
+			key_dir.decrypt_handle = &open_rw(
 				_env, { _path.string(), "/keys/", key.id.value, "/decrypt" });
 
 			key_dir.key_id = key.id.value;
@@ -296,7 +299,7 @@ class Crypto
 			case Operation::INVALID:
 
 				class Bad_operation { };
-				throw Bad_operation();
+				throw Bad_operation { };
 			}
 		}
 
@@ -325,7 +328,7 @@ class Crypto
 			if (_job.state != Job_state::COMPLETE) {
 
 				class Bad_state { };
-				throw Bad_state();
+				throw Bad_state { };
 			}
 			_job.op = Operation::INVALID;
 		}
@@ -493,12 +496,627 @@ class Crypto
 };
 
 
+class Trust_anchor
+{
+	private:
+
+		using Read_result = File_io_service::Read_result;
+		using Write_result = File_io_service::Write_result;
+		using Operation = Trust_anchor_request::Operation;
+
+		enum Job_state
+		{
+			WRITE_PENDING,
+			WRITE_IN_PROGRESS,
+			READ_PENDING,
+			READ_IN_PROGRESS,
+			COMPLETE
+		};
+
+		struct Job
+		{
+			Trust_anchor_request request              { };
+			Job_state            state                { Job_state::COMPLETE };
+			String<64>           passphrase           { };
+			Hash                 hash                 { };
+			Key_plaintext_value  key_plaintext_value  { };
+			Key_ciphertext_value key_ciphertext_value { };
+			file_offset          fl_offset            { 0 };
+			file_size            fl_size              { 0 };
+		};
+
+		Vfs::Env                &_vfs_env;
+		char                     _read_buf[64];
+		Vfs_io_response_handler  _handler;
+		String<128>       const  _path;
+		String<128>       const  _decrypt_path      { _path, "/decrypt" };
+		Vfs::Vfs_handle         &_decrypt_file      { open_rw(_vfs_env, { _decrypt_path }) };
+		String<128>       const  _encrypt_path      { _path, "/encrypt" };
+		Vfs::Vfs_handle         &_encrypt_file      { open_rw(_vfs_env, { _encrypt_path }) };
+		String<128>       const  _generate_key_path { _path, "/generate_key" };
+		Vfs::Vfs_handle         &_generate_key_file { open_rw(_vfs_env, { _generate_key_path }) };
+		String<128>       const  _initialize_path   { _path, "/initialize" };
+		Vfs::Vfs_handle         &_initialize_file   { open_rw(_vfs_env, { _initialize_path }) };
+		String<128>       const  _hashsum_path      { _path, "/hashsum" };
+		Vfs::Vfs_handle         &_hashsum_file      { open_rw(_vfs_env, { _hashsum_path }) };
+		Job                      _job               { };
+
+		void _execute_write_read_operation(Vfs_handle        &file,
+		                                   String<128> const &file_path,
+		                                   char        const *write_buf,
+		                                   char              *read_buf,
+		                                   file_size          read_size,
+		                                   bool              &progress)
+		{
+			switch (_job.state) {
+			case Job_state::WRITE_PENDING:
+
+				file.seek(_job.fl_offset);
+				_job.state = Job_state::WRITE_IN_PROGRESS;
+				progress = true;
+				return;
+
+			case Job_state::WRITE_IN_PROGRESS:
+			{
+				file_size nr_of_written_bytes { 0 };
+				Write_result result { Write_result::WRITE_ERR_INVALID };
+				try {
+					result =
+						file.fs().write(
+							&file, write_buf + _job.fl_offset,
+							_job.fl_size, nr_of_written_bytes);
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+				switch (result) {
+				case Write_result::WRITE_ERR_AGAIN:
+				case Write_result::WRITE_ERR_INTERRUPT:
+				case Write_result::WRITE_ERR_WOULD_BLOCK:
+
+					return;
+
+				case Write_result::WRITE_OK:
+
+					_job.fl_offset += nr_of_written_bytes;
+					_job.fl_size -= nr_of_written_bytes;
+
+					if (_job.fl_size > 0) {
+
+						_job.state = Job_state::WRITE_PENDING;
+						progress = true;
+						return;
+					}
+					_job.state = Job_state::READ_PENDING;
+					_job.fl_offset = 0;
+					_job.fl_size = read_size;
+					progress = true;
+					return;
+
+				default:
+
+					_job.request.success(false);
+					error("failed to write file ", file_path);
+					_job.state = Job_state::COMPLETE;
+					progress = true;
+					return;
+				}
+			}
+			case Job_state::READ_PENDING:
+
+				file.seek(_job.fl_offset);
+
+				if (!file.fs().queue_read(&file, _job.fl_size)) {
+					return;
+				}
+				_job.state = Job_state::READ_IN_PROGRESS;
+				progress = true;
+				return;
+
+			case Job_state::READ_IN_PROGRESS:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result {
+					file.fs().complete_read(
+						&file, read_buf + _job.fl_offset, _job.fl_size,
+						nr_of_read_bytes) };
+
+				switch (result) {
+				case Read_result::READ_QUEUED:
+				case Read_result::READ_ERR_INTERRUPT:
+				case Read_result::READ_ERR_AGAIN:
+				case Read_result::READ_ERR_WOULD_BLOCK:
+
+					return;
+
+				case Read_result::READ_OK:
+
+					_job.fl_offset += nr_of_read_bytes;
+					_job.fl_size -= nr_of_read_bytes;
+					_job.request.success(true);
+
+					if (_job.fl_size > 0) {
+
+						_job.state = Job_state::READ_PENDING;
+						progress = true;
+						return;
+					}
+					_job.state = Job_state::COMPLETE;
+					progress = true;
+					return;
+
+				default:
+
+					_job.request.success(false);
+					error("failed to read file ", file_path);
+					_job.state = Job_state::COMPLETE;
+					return;
+				}
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void _execute_write_operation(Vfs_handle        &file,
+		                              String<128> const &file_path,
+		                              char        const *write_buf,
+		                              bool              &progress)
+		{
+			switch (_job.state) {
+			case Job_state::WRITE_PENDING:
+
+				file.seek(_job.fl_offset);
+				_job.state = Job_state::WRITE_IN_PROGRESS;
+				progress = true;
+				return;
+
+			case Job_state::WRITE_IN_PROGRESS:
+			{
+				file_size nr_of_written_bytes { 0 };
+				Write_result result { Write_result::WRITE_ERR_INVALID };
+				try {
+					result =
+						file.fs().write(
+							&file, write_buf + _job.fl_offset,
+							_job.fl_size, nr_of_written_bytes);
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+				switch (result) {
+				case Write_result::WRITE_ERR_AGAIN:
+				case Write_result::WRITE_ERR_INTERRUPT:
+				case Write_result::WRITE_ERR_WOULD_BLOCK:
+
+					return;
+
+				case Write_result::WRITE_OK:
+
+					_job.fl_offset += nr_of_written_bytes;
+					_job.fl_size -= nr_of_written_bytes;
+
+					if (_job.fl_size > 0) {
+
+						_job.state = Job_state::WRITE_PENDING;
+						progress = true;
+						return;
+					}
+					_job.state = Job_state::READ_PENDING;
+					_job.fl_offset = 0;
+					_job.fl_size = 0;
+					progress = true;
+					return;
+
+				default:
+
+					_job.request.success(false);
+					error("failed to write file ", file_path);
+					_job.state = Job_state::COMPLETE;
+					progress = true;
+					return;
+				}
+			}
+			case Job_state::READ_PENDING:
+
+				file.seek(_job.fl_offset);
+
+				if (!file.fs().queue_read(&file, _job.fl_size)) {
+					return;
+				}
+				_job.state = Job_state::READ_IN_PROGRESS;
+				progress = true;
+				return;
+
+			case Job_state::READ_IN_PROGRESS:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result {
+					file.fs().complete_read(
+						&file, _read_buf + _job.fl_offset, _job.fl_size,
+						nr_of_read_bytes) };
+
+				switch (result) {
+				case Read_result::READ_QUEUED:
+				case Read_result::READ_ERR_INTERRUPT:
+				case Read_result::READ_ERR_AGAIN:
+				case Read_result::READ_ERR_WOULD_BLOCK:
+
+					return;
+
+				case Read_result::READ_OK:
+
+					_job.fl_offset += nr_of_read_bytes;
+					_job.fl_size -= nr_of_read_bytes;
+					_job.request.success(true);
+
+					if (_job.fl_size > 0) {
+
+						_job.state = Job_state::READ_PENDING;
+						progress = true;
+						return;
+					}
+					_job.state = Job_state::COMPLETE;
+					progress = true;
+					return;
+
+				default:
+
+					_job.request.success(false);
+					error("failed to read file ", file_path);
+					_job.state = Job_state::COMPLETE;
+					return;
+				}
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void _execute_read_operation(Vfs_handle        &file,
+		                             String<128> const &file_path,
+		                             char              *read_buf,
+		                             bool              &progress)
+		{
+			switch (_job.state) {
+			case Job_state::READ_PENDING:
+
+				file.seek(_job.fl_offset);
+
+				if (!file.fs().queue_read(&file, _job.fl_size)) {
+					return;
+				}
+				_job.state = Job_state::READ_IN_PROGRESS;
+				progress = true;
+				return;
+
+			case Job_state::READ_IN_PROGRESS:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result {
+					file.fs().complete_read(
+						&file, read_buf + _job.fl_offset, _job.fl_size,
+						nr_of_read_bytes) };
+
+				switch (result) {
+				case Read_result::READ_QUEUED:
+				case Read_result::READ_ERR_INTERRUPT:
+				case Read_result::READ_ERR_AGAIN:
+				case Read_result::READ_ERR_WOULD_BLOCK:
+
+					return;
+
+				case Read_result::READ_OK:
+
+					_job.fl_offset += nr_of_read_bytes;
+					_job.fl_size -= nr_of_read_bytes;
+					_job.request.success(true);
+
+					if (_job.fl_size > 0) {
+
+						_job.state = Job_state::READ_PENDING;
+						progress = true;
+						return;
+					}
+					_job.state = Job_state::COMPLETE;
+					progress = true;
+					return;
+
+				default:
+
+					_job.request.success(false);
+					error("failed to read file ", file_path);
+					_job.state = Job_state::COMPLETE;
+					return;
+				}
+			}
+			default:
+
+				return;
+			}
+		}
+
+	public:
+
+		Trust_anchor(Vfs::Env                  &vfs_env,
+		             Xml_node            const &xml_node,
+		             Signal_context_capability  sigh)
+		:
+			_vfs_env { vfs_env },
+			_handler { sigh },
+			_path    { xml_node.attribute_value("path", String<128>()) }
+		{
+			_initialize_file.handler(&_handler);
+			_hashsum_file.handler(&_handler);
+			_generate_key_file.handler(&_handler);
+			_encrypt_file.handler(&_handler);
+			_decrypt_file.handler(&_handler);
+		}
+
+		bool request_acceptable() const
+		{
+			return _job.request.operation() == Operation::INVALID;
+		}
+
+		void submit_request_passphrase(Trust_anchor_request const &request,
+		                               String<64>           const &passphrase)
+		{
+			switch (request.operation()) {
+			case Operation::INITIALIZE:
+
+				_job.request    = request;
+				_job.passphrase = passphrase;
+				_job.state      = Job_state::WRITE_PENDING;
+				_job.fl_offset  = 0;
+				_job.fl_size    = _job.passphrase.length();
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		void submit_request_key_plaintext_value(Trust_anchor_request const &request,
+		                                        Key_plaintext_value  const &key_plaintext_value)
+		{
+			switch (request.operation()) {
+			case Operation::ENCRYPT_KEY:
+
+				_job.request             = request;
+				_job.key_plaintext_value = key_plaintext_value;
+				_job.state               = Job_state::WRITE_PENDING;
+				_job.fl_offset           = 0;
+				_job.fl_size             = sizeof(_job.key_plaintext_value.value) /
+				                           sizeof(_job.key_plaintext_value.value[0]);
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		void submit_request_key_ciphertext_value(Trust_anchor_request const &request,
+		                                         Key_ciphertext_value  const &key_ciphertext_value)
+		{
+			switch (request.operation()) {
+			case Operation::DECRYPT_KEY:
+
+				_job.request              = request;
+				_job.key_ciphertext_value = key_ciphertext_value;
+				_job.state                = Job_state::WRITE_PENDING;
+				_job.fl_offset            = 0;
+				_job.fl_size              = sizeof(_job.key_ciphertext_value.value) /
+				                            sizeof(_job.key_ciphertext_value.value[0]);
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		void submit_request_hash(Trust_anchor_request const &request,
+		                         Hash                 const &hash)
+		{
+			switch (request.operation()) {
+			case Operation::SECURE_SUPERBLOCK:
+
+				_job.request   = request;
+				_job.hash      = hash;
+				_job.state     = Job_state::WRITE_PENDING;
+				_job.fl_offset = 0;
+				_job.fl_size   = sizeof(_job.hash.values) /
+				                 sizeof(_job.hash.values[0]);
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		void submit_request(Trust_anchor_request const &request)
+		{
+			switch (request.operation()) {
+			case Operation::LAST_SB_HASH:
+
+				_job.request   = request;
+				_job.state     = Job_state::READ_PENDING;
+				_job.fl_offset = 0;
+				_job.fl_size   = sizeof(_job.hash.values) /
+				                 sizeof(_job.hash.values[0]);
+				break;
+
+			case Operation::CREATE_KEY:
+
+				_job.request   = request;
+				_job.state     = Job_state::READ_PENDING;
+				_job.fl_offset = 0;
+				_job.fl_size   = sizeof(_job.key_plaintext_value.value) /
+				                 sizeof(_job.key_plaintext_value.value[0]);
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		void execute(bool &progress)
+		{
+			switch (_job.request.operation()) {
+			case Operation::INITIALIZE:
+
+				_execute_write_operation(
+					_initialize_file, _initialize_path,
+					_job.passphrase.string(), progress);
+
+				break;
+
+			case Operation::SECURE_SUPERBLOCK:
+
+				_execute_write_operation(
+					_hashsum_file, _hashsum_path,
+					_job.hash.values, progress);
+
+				break;
+
+			case Operation::LAST_SB_HASH:
+
+				_execute_read_operation(
+					_hashsum_file, _hashsum_path,
+					_job.hash.values, progress);
+
+				break;
+
+			case Operation::CREATE_KEY:
+
+				_execute_read_operation(
+					_generate_key_file, _generate_key_path,
+					_job.key_plaintext_value.value, progress);
+
+				break;
+
+			case Operation::ENCRYPT_KEY:
+
+				_execute_write_read_operation(
+					_encrypt_file, _encrypt_path,
+					_job.key_plaintext_value.value,
+					_job.key_ciphertext_value.value,
+					sizeof(_job.key_ciphertext_value.value) /
+						sizeof(_job.key_ciphertext_value.value[0]),
+					progress);
+
+				break;
+
+			case Operation::DECRYPT_KEY:
+
+				_execute_write_read_operation(
+					_decrypt_file, _decrypt_path,
+					_job.key_ciphertext_value.value,
+					_job.key_plaintext_value.value,
+					sizeof(_job.key_plaintext_value.value) /
+						sizeof(_job.key_plaintext_value.value[0]),
+					progress);
+
+				break;
+
+			case Operation::INVALID:
+
+				break;
+
+			default:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		Trust_anchor_request peek_completed_request() const
+		{
+			if (_job.state != Job_state::COMPLETE) {
+
+				return Trust_anchor_request { };
+			}
+			return _job.request;
+		}
+
+		Hash const &peek_completed_hash() const
+		{
+			if (_job.request.operation() != Operation::LAST_SB_HASH) {
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state { };
+			}
+			return _job.hash;
+		}
+
+		Key_plaintext_value const &peek_completed_key_plaintext_value() const
+		{
+			if (_job.request.operation() != Operation::CREATE_KEY &&
+			    _job.request.operation() != Operation::DECRYPT_KEY) {
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state { };
+			}
+			return _job.key_plaintext_value;
+		}
+
+		Key_ciphertext_value const &peek_completed_key_ciphertext_value() const
+		{
+			if (_job.request.operation() != Operation::ENCRYPT_KEY) {
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state { };
+			}
+			return _job.key_ciphertext_value;
+		}
+
+		void drop_completed_request()
+		{
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state { };
+			}
+			_job.request = Trust_anchor_request { };
+		}
+};
+
+
 enum class Module_type : uint8_t
 {
 	CBE_INIT,
 	CBE_DUMP,
 	CBE_CHECK,
 	CBE,
+	CMD_POOL,
 };
 
 
@@ -510,7 +1128,8 @@ static Module_type module_type_from_uint32(uint32_t uint32)
 	case 2: return Module_type::CBE;
 	case 3: return Module_type::CBE_DUMP;
 	case 4: return Module_type::CBE_CHECK;
-	default: throw Bad_tag();
+	case 5: return Module_type::CMD_POOL;
+	default: throw Bad_tag { };
 	}
 }
 
@@ -523,8 +1142,9 @@ static uint32_t module_type_to_uint32(Module_type type)
 	case Module_type::CBE      : return 2;
 	case Module_type::CBE_DUMP : return 3;
 	case Module_type::CBE_CHECK: return 4;
+	case Module_type::CMD_POOL : return 5;
 	}
-	throw Bad_type();
+	throw Bad_type { };
 }
 
 
@@ -540,7 +1160,7 @@ static uint32_t tag_set_module_type(uint32_t    tag,
 	if (tag >> 24) {
 
 		class Bad_tag { };
-		throw Bad_tag();
+		throw Bad_tag { };
 	}
 	return tag | (module_type_to_uint32(type) << 24);
 }
@@ -637,13 +1257,13 @@ T read_attribute(Xml_node const &node,
 
 		error("<", node.type(), "> node misses attribute '", attr, "'");
 		class Attribute_missing { };
-		throw Attribute_missing();
+		throw Attribute_missing { };
 	}
 	if (!node.attribute(attr).value(value)) {
 
 		error("<", node.type(), "> node has malformed '", attr, "' attribute");
 		class Malformed_attribute { };
-		throw Malformed_attribute();
+		throw Malformed_attribute { };
 	}
 	return value;
 }
@@ -762,6 +1382,11 @@ class Vfs_block_io_job
 
 				cbe_check.io_request_completed(data_index, _cbe_req.success());
 				break;
+
+			case Module_type::CMD_POOL:
+
+				class Bad_module_type { };
+				throw Bad_module_type { };
 			}
 			progress = true;
 
@@ -856,7 +1481,7 @@ class Vfs_block_io_job
 				default:
 
 					class Bad_complete_read_result { };
-					throw Bad_complete_read_result();
+					throw Bad_complete_read_result { };
 				}
 			}
 			default: return;
@@ -949,7 +1574,7 @@ class Vfs_block_io_job
 				default:
 
 					class Bad_write_result { };
-					throw Bad_write_result();
+					throw Bad_write_result { };
 				}
 
 			}
@@ -1008,7 +1633,7 @@ class Vfs_block_io_job
 				default:
 
 					class Bad_sync_result { };
-					throw Bad_sync_result();
+					throw Bad_sync_result { };
 				}
 
 			default: return;
@@ -1067,7 +1692,7 @@ class Vfs_block_io_job
 			default:
 
 				class Bad_cbe_operation { };
-				throw Bad_cbe_operation();
+				throw Bad_cbe_operation { };
 			}
 		}
 };
@@ -1101,7 +1726,7 @@ class Vfs_block_io : public Block_io
 			if (result != Result::OPEN_OK) {
 
 				class Open_failed { };
-				throw Open_failed();
+				throw Open_failed { };
 			}
 			return vfs_handle;
 		}
@@ -1186,7 +1811,7 @@ class Block_connection_block_io : public Block_io
 			case Cbe::Request::Operation::SYNC:  return Block::Packet_descriptor::SYNC;
 			default:
 				class Bad_cbe_op { };
-				throw Bad_cbe_op();
+				throw Bad_cbe_op { };
 			}
 		}
 
@@ -1286,6 +1911,11 @@ class Block_connection_block_io : public Block_io
 					cbe_check.io_request_completed(data_index,
 					                               packet.succeeded());
 					break;
+
+				case Module_type::CMD_POOL:
+
+					class Bad_module_type { };
+					throw Bad_module_type { };
 				}
 				_blk.tx()->release_packet(packet);
 				progress = true;
@@ -1317,7 +1947,7 @@ class Benchmark_node
 		{
 			class Attribute_missing { };
 			if (!node.has_attribute("op")) {
-				throw Attribute_missing();
+				throw Attribute_missing { };
 			}
 			if (node.attribute("op").has_value("start")) {
 				return Operation::START;
@@ -1326,7 +1956,7 @@ class Benchmark_node
 				return Operation::STOP;
 			}
 			class Malformed_attribute { };
-			throw Malformed_attribute();
+			throw Malformed_attribute { };
 		}
 
 		static char const *_op_to_string(Operation op)
@@ -1439,6 +2069,56 @@ class Benchmark
 };
 
 
+class Trust_anchor_node
+{
+	private:
+
+		using Operation = Trust_anchor_request::Operation;
+
+		Operation  const _op;
+		String<64> const _passphrase;
+
+		Operation _read_op_attr(Xml_node const &node)
+		{
+			class Attribute_missing { };
+			if (!node.has_attribute("op")) {
+				throw Attribute_missing { };
+			}
+			if (node.attribute("op").has_value("initialize")) {
+				return Operation::INITIALIZE;
+			}
+			class Malformed_attribute { };
+			throw Malformed_attribute { };
+		}
+
+	public:
+
+		Trust_anchor_node(Xml_node const &node)
+		:
+			_op               { _read_op_attr(node) },
+			_passphrase       { has_attr_passphrase() ?
+			                    node.attribute_value("passphrase", String<64>()) :
+			                    String<64>() }
+		{ }
+
+		Operation         op()         const { return _op; }
+		String<64> const &passphrase() const { return _passphrase; }
+
+		bool has_attr_passphrase() const
+		{
+			return _op == Operation::INITIALIZE;
+		}
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "op=", to_string(_op));
+			if (has_attr_passphrase()) {
+				Genode::print(out, " passphrase=", _passphrase);
+			}
+		}
+};
+
+
 class Request_node
 {
 	private:
@@ -1456,7 +2136,7 @@ class Request_node
 		{
 			class Attribute_missing { };
 			if (!node.has_attribute("op")) {
-				throw Attribute_missing();
+				throw Attribute_missing { };
 			}
 			if (node.attribute("op").has_value("read")) {
 				return Operation::READ;
@@ -1483,7 +2163,7 @@ class Request_node
 				return Operation::DEINITIALIZE;
 			}
 			class Malformed_attribute { };
-			throw Malformed_attribute();
+			throw Malformed_attribute { };
 		}
 
 	public:
@@ -1556,6 +2236,7 @@ class Command : public Fifo<Command>::Element
 		{
 			INVALID,
 			REQUEST,
+			TRUST_ANCHOR,
 			BENCHMARK,
 			CONSTRUCT,
 			DESTRUCT,
@@ -1574,15 +2255,16 @@ class Command : public Fifo<Command>::Element
 
 	private:
 
-		Type                                   _type           { INVALID };
-		unsigned long                          _id             { 0 };
-		State                                  _state          { PENDING };
-		bool                                   _success        { false };
-		bool                                   _data_mismatch  { false };
-		Constructible<Request_node>            _request_node   { };
-		Constructible<Benchmark_node>          _benchmark_node { };
-		Constructible<Cbe_init::Configuration> _initialize     { };
-		Constructible<Cbe_dump::Configuration> _dump           { };
+		Type                                   _type              { INVALID };
+		uint32_t                               _id                { 0 };
+		State                                  _state             { PENDING };
+		bool                                   _success           { false };
+		bool                                   _data_mismatch     { false };
+		Constructible<Request_node>            _request_node      { };
+		Constructible<Trust_anchor_node>       _trust_anchor_node { };
+		Constructible<Benchmark_node>          _benchmark_node    { };
+		Constructible<Cbe_init::Configuration> _initialize        { };
+		Constructible<Cbe_dump::Configuration> _dump              { };
 
 		char const *_state_to_string() const
 		{
@@ -1601,6 +2283,7 @@ class Command : public Fifo<Command>::Element
 			case INVALID: return "invalid";
 			case DUMP: return "dump";
 			case REQUEST: return "request";
+			case TRUST_ANCHOR: return "trust_anchor";
 			case BENCHMARK: return "benchmark";
 			case CONSTRUCT: return "construct";
 			case DESTRUCT: return "destruct";
@@ -1616,17 +2299,18 @@ class Command : public Fifo<Command>::Element
 
 		Command(Type            type,
 		        Xml_node const &node,
-		        unsigned long   id)
+		        uint32_t        id)
 		:
 			_type { type },
 			_id   { id }
 		{
 			switch (_type) {
-			case INITIALIZE: _initialize.construct(node);     break;
-			case DUMP:       _dump.construct(node);           break;
-			case REQUEST:    _request_node.construct(node);   break;
-			case BENCHMARK:  _benchmark_node.construct(node); break;
-			default:                                          break;
+			case INITIALIZE:   _initialize.construct(node);        break;
+			case DUMP:         _dump.construct(node);              break;
+			case REQUEST:      _request_node.construct(node);      break;
+			case TRUST_ANCHOR: _trust_anchor_node.construct(node); break;
+			case BENCHMARK:    _benchmark_node.construct(node);    break;
+			default:                                               break;
 			}
 		}
 
@@ -1638,11 +2322,12 @@ class Command : public Fifo<Command>::Element
 			_success { other._success }
 		{
 			switch (_type) {
-			case INITIALIZE: _initialize.construct(*other._initialize);         break;
-			case DUMP:       _dump.construct(*other._dump);                     break;
-			case REQUEST:    _request_node.construct(*other._request_node);     break;
-			case BENCHMARK:  _benchmark_node.construct(*other._benchmark_node); break;
-			default:                                                            break;
+			case INITIALIZE:   _initialize.construct(*other._initialize);               break;
+			case DUMP:         _dump.construct(*other._dump);                           break;
+			case REQUEST:      _request_node.construct(*other._request_node);           break;
+			case TRUST_ANCHOR: _trust_anchor_node.construct(*other._trust_anchor_node); break;
+			case BENCHMARK:    _benchmark_node.construct(*other._benchmark_node);       break;
+			default:                                                                    break;
 			}
 		}
 
@@ -1664,17 +2349,19 @@ class Command : public Fifo<Command>::Element
 			case DESTRUCT:       return true;
 			case DUMP:           return true;
 			case CHECK:          return true;
+			case TRUST_ANCHOR:   return true;
 			case LIST_SNAPSHOTS: return true;
 			case REQUEST:        return _request_node->sync();
-			case INVALID:        throw Bad_type();
+			case INVALID:        throw Bad_type { };
 			}
-			throw Bad_type();
+			throw Bad_type { };
 		}
 
 		static Type type_from_string(String<64> str)
 		{
 			if (str == "initialize")     { return INITIALIZE; }
 			if (str == "request")        { return REQUEST; }
+			if (str == "trust-anchor")   { return TRUST_ANCHOR; }
 			if (str == "benchmark")      { return BENCHMARK; }
 			if (str == "construct")      { return CONSTRUCT; }
 			if (str == "destruct")       { return DESTRUCT; }
@@ -1682,7 +2369,7 @@ class Command : public Fifo<Command>::Element
 			if (str == "dump")           { return DUMP; }
 			if (str == "list-snapshots") { return LIST_SNAPSHOTS; }
 			class Bad_string { };
-			throw Bad_string();
+			throw Bad_string { };
 		}
 
 		void print(Genode::Output &out) const
@@ -1692,6 +2379,7 @@ class Command : public Fifo<Command>::Element
 			switch (_type) {
 			case INITIALIZE:     Genode::print(out, " cfg=(", *_initialize, ")"); break;
 			case REQUEST:        Genode::print(out, " cfg=(", *_request_node, ")"); break;
+			case TRUST_ANCHOR:   Genode::print(out, " cfg=(", *_trust_anchor_node, ")"); break;
 			case BENCHMARK:      Genode::print(out, " cfg=(", *_benchmark_node, ")"); break;
 			case DUMP:           Genode::print(out, " cfg=(", *_dump, ")"); break;
 			case INVALID:        break;
@@ -1700,22 +2388,23 @@ class Command : public Fifo<Command>::Element
 			case DESTRUCT:       break;
 			case LIST_SNAPSHOTS: break;
 			}
-			Genode::print(out, ") succ=", _success);
+			Genode::print(out, " succ=", _success);
 			if (has_attr_data_mismatch()) {
 				Genode::print(out, " bad_data=", _data_mismatch);
 			}
 			Genode::print(out, " state=", _state_to_string());
 		}
 
-		Type                           type          () const { return _type           ; }
-		State                          state         () const { return _state          ; }
-		unsigned long                  id            () const { return _id             ; }
-		bool                           success       () const { return _success        ; }
-		bool                           data_mismatch () const { return _data_mismatch  ; }
-		Request_node            const &request_node  () const { return *_request_node  ; }
-		Benchmark_node          const &benchmark_node() const { return *_benchmark_node; }
-		Cbe_init::Configuration const &initialize    () const { return *_initialize    ; }
-		Cbe_dump::Configuration const &dump          () const { return *_dump          ; }
+		Type                           type              () const { return _type              ; }
+		State                          state             () const { return _state             ; }
+		uint32_t                       id                () const { return _id                ; }
+		bool                           success           () const { return _success           ; }
+		bool                           data_mismatch     () const { return _data_mismatch     ; }
+		Request_node            const &request_node      () const { return *_request_node     ; }
+		Trust_anchor_node       const &trust_anchor_node () const { return *_trust_anchor_node; }
+		Benchmark_node          const &benchmark_node    () const { return *_benchmark_node   ; }
+		Cbe_init::Configuration const &initialize        () const { return *_initialize       ; }
+		Cbe_dump::Configuration const &dump              () const { return *_dump             ; }
 
 		void state         (State state)        { _state = state; }
 		void success       (bool success)       { _success = success; }
@@ -1731,7 +2420,7 @@ class Command_pool {
 		Allocator          &_alloc;
 		Verbose_node const &_verbose_node;
 		Fifo<Command>       _cmd_queue              { };
-		unsigned long       _next_command_id        { 0 };
+		uint32_t            _next_command_id        { 0 };
 		unsigned long       _nr_of_uncompleted_cmds { 0 };
 		unsigned long       _nr_of_errors           { 0 };
 		Block_data          _blk_data               { };
@@ -1746,7 +2435,7 @@ class Command_pool {
 			_cmd_queue.enqueue(cmd);
 
 			if (_verbose_node.cmd_pool_cmd_pending()) {
-				log("cmd pending: ", &cmd, " ", cmd);
+				log("cmd pending: ", cmd);
 			}
 		}
 
@@ -1850,7 +2539,7 @@ class Command_pool {
 				if (cmd.id() == cmd_id) {
 					if (cmd.state() != Command::PENDING) {
 						class Bad_state { };
-						throw Bad_state();
+						throw Bad_state { };
 					}
 					cmd.state(Command::IN_PROGRESS);
 					exit_loop = true;
@@ -1872,9 +2561,11 @@ class Command_pool {
 					return;
 				}
 				if (cmd.id() == cmd_id) {
+
 					if (cmd.state() != Command::IN_PROGRESS) {
+
 						class Bad_state { };
-						throw Bad_state();
+						throw Bad_state { };
 					}
 					cmd.state(Command::COMPLETED);
 					_nr_of_uncompleted_cmds--;
@@ -1906,7 +2597,7 @@ class Command_pool {
 				}
 				if (cmd.type() != Command::REQUEST) {
 					class Bad_command_type { };
-					throw Bad_command_type();
+					throw Bad_command_type { };
 				}
 				Request_node const &req_node { cmd.request_node() };
 				if (req_node.salt_avail()) {
@@ -1932,7 +2623,7 @@ class Command_pool {
 				}
 				if (cmd.type() != Command::REQUEST) {
 					class Bad_command_type { };
-					throw Bad_command_type();
+					throw Bad_command_type { };
 				}
 				Request_node const &req_node { cmd.request_node() };
 				if (req_node.salt_avail()) {
@@ -1955,7 +2646,7 @@ class Command_pool {
 							log("client data is:");
 							print_blk_data(blk_data);
 							class Client_data_mismatch { };
-							throw Client_data_mismatch();
+							throw Client_data_mismatch { };
 						}
 					}
 				}
@@ -1994,8 +2685,7 @@ class Main
 		Heap                         _heap                 { _env.ram(), _env.rm() };
 		Vfs::Simple_env              _vfs_env              { _env, _heap, _config_rom.xml().sub_node("vfs") };
 		Signal_handler<Main>         _sigh                 { _env.ep(), *this, &Main::_execute };
-		Block_io                    &_blk_io               { _init_blk_io(_config_rom.xml(), _heap,
-		                                                                  _env, _vfs_env, _sigh) };
+		Block_io                    &_blk_io               { _init_blk_io(_config_rom.xml(), _heap, _env, _vfs_env, _sigh) };
 		Io_buffer                    _blk_buf              { };
 		Command_pool                 _cmd_pool             { _heap, _config_rom.xml(), _verbose_node };
 		Constructible<Cbe::Library>  _cbe                  { };
@@ -2003,8 +2693,7 @@ class Main
 		Cbe_dump::Library            _cbe_dump             { };
 		Cbe_init::Library            _cbe_init             { };
 		Benchmark                    _benchmark            { _env };
-		Cbe::Hash                    _trust_anchor_sb_hash { };
-		External::Trust_anchor       _trust_anchor         { };
+		Trust_anchor                 _trust_anchor         { _vfs_env, _config_rom.xml().sub_node("trust-anchor"), _sigh };
 		Crypto_plain_buffer          _crypto_plain_buf     { };
 		Crypto_cipher_buffer         _crypto_cipher_buf    { };
 		Crypto                       _crypto               { _vfs_env,
@@ -2017,7 +2706,7 @@ class Main
 		                       Vfs::Env                  &vfs_env,
 		                       Signal_context_capability  sigh)
 		{
-			Xml_node const &block_io { config.sub_node("block_io") };
+			Xml_node const &block_io { config.sub_node("block-io") };
 			if (block_io.attribute("type").has_value("block_connection")) {
 				return *new (heap)
 					Block_connection_block_io { env, heap, sigh };
@@ -2028,7 +2717,7 @@ class Main
 						vfs_env, block_io, sigh };
 			}
 			class Malformed_attribute { };
-			throw Malformed_attribute();
+			throw Malformed_attribute { };
 		}
 
 		template <typename MODULE>
@@ -2049,7 +2738,7 @@ class Main
 				}
 				if (data_index.value & 0xff000000) {
 					class Bad_data_index { };
-					throw Bad_data_index();
+					throw Bad_data_index { };
 				}
 				cbe_req.tag(
 					tag_set_module_type(data_index.value, module_type));
@@ -2123,18 +2812,16 @@ class Main
 				switch (ta_req.operation()) {
 				case Ta_operation::CREATE_KEY:
 
-					_trust_anchor.submit_create_key_request(typed_ta_req);
+					_trust_anchor.submit_request(typed_ta_req);
 					module.drop_generated_ta_request(ta_req);
 					progress = true;
 					break;
 
 				case Ta_operation::SECURE_SUPERBLOCK:
 
-					_trust_anchor_sb_hash =
-						module.peek_generated_ta_sb_hash(ta_req);
-
-					_trust_anchor.submit_secure_superblock_request(
-						typed_ta_req, _trust_anchor_sb_hash);
+					_trust_anchor.submit_request_hash(
+						typed_ta_req,
+						module.peek_generated_ta_sb_hash(ta_req));
 
 					module.drop_generated_ta_request(ta_req);
 					progress = true;
@@ -2142,7 +2829,7 @@ class Main
 
 				case Ta_operation::ENCRYPT_KEY:
 
-					_trust_anchor.submit_encrypt_key_request(
+					_trust_anchor.submit_request_key_plaintext_value(
 						typed_ta_req,
 						module.peek_generated_ta_key_value_plaintext(ta_req));
 
@@ -2152,7 +2839,7 @@ class Main
 
 				case Ta_operation::DECRYPT_KEY:
 
-					_trust_anchor.submit_decrypt_key_request(
+					_trust_anchor.submit_request_key_ciphertext_value(
 						typed_ta_req,
 						module.peek_generated_ta_key_value_ciphertext(ta_req));
 
@@ -2162,16 +2849,15 @@ class Main
 
 				case Ta_operation::LAST_SB_HASH:
 
+					_trust_anchor.submit_request(typed_ta_req);
 					module.drop_generated_ta_request(ta_req);
-					module.mark_generated_ta_last_sb_hash_request_complete(
-						ta_req, _trust_anchor_sb_hash);
-
 					progress = true;
 					break;
 
-				case Ta_operation::INVALID:
+				default:
 
-					return;
+					class Bad_operation { };
+					throw Bad_operation { };
 				}
 			}
 		}
@@ -2275,7 +2961,7 @@ class Main
 				case Crypto::Result::FAILED:
 
 					class Add_key_failed { };
-					throw Add_key_failed();
+					throw Add_key_failed { };
 
 				case Crypto::Result::RETRY_LATER:
 
@@ -2314,7 +3000,7 @@ class Main
 				case Crypto::Result::FAILED:
 
 					class Remove_key_failed { };
-					throw Remove_key_failed();
+					throw Remove_key_failed { };
 
 				case Crypto::Result::RETRY_LATER:
 
@@ -2423,7 +3109,7 @@ class Main
 				_cbe_init.submit_client_request(
 					Cbe::Request(
 						Cbe::Request::Operation::READ,
-						false, 0, 0, 0, 0, 0),
+						false, 0, 0, 0, 0, cmd.id()),
 					cfg.vbd_nr_of_lvls() - 1,
 					cfg.vbd_nr_of_children(),
 					cfg.vbd_nr_of_leafs(),
@@ -2457,7 +3143,7 @@ class Main
 						0,
 						0,
 						0,
-						(uint32_t)cmd.id()
+						cmd.id()
 					}
 				);
 				_cmd_pool.mark_command_in_progress(cmd.id());
@@ -2486,11 +3172,52 @@ class Main
 					0,
 					req_node.has_attr_count() ? req_node.count() : 0,
 					0,
-					(uint32_t)cmd.id() };
+					cmd.id() };
 
 				_cbe->submit_client_request(cbe_req, 0);
 				_cmd_pool.mark_command_in_progress(cmd.id());
 				progress = true;
+			}
+		}
+
+		void _cmd_pool_handle_pending_ta_cmds(bool &progress)
+		{
+			while (true) {
+
+				if (!_trust_anchor.request_acceptable()) {
+					break;
+				}
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::TRUST_ANCHOR) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				Trust_anchor_node const &node { cmd.trust_anchor_node() };
+				Trust_anchor_request const &ta_req {
+					node.op(), false, cmd.id() };
+
+				Trust_anchor_request typed_ta_req { ta_req };
+				typed_ta_req.tag(
+					tag_set_module_type(
+						typed_ta_req.tag(), Module_type::CMD_POOL));
+
+				switch (node.op()) {
+				case Trust_anchor_request::Operation::INITIALIZE:
+
+					_trust_anchor.submit_request_passphrase(
+						typed_ta_req, node.passphrase());
+
+					_cmd_pool.mark_command_in_progress(cmd.id());
+					progress = true;
+
+					break;
+
+				default:
+
+					class Bad_operation { };
+					throw Bad_operation { };
+				}
 			}
 		}
 
@@ -2511,7 +3238,7 @@ class Main
 				_cbe_dump.submit_client_request(
 					Cbe::Request(
 						Cbe::Request::Operation::READ,
-						false, 0, 0, 0, 0, (uint32_t)cmd.id()),
+						false, 0, 0, 0, 0, cmd.id()),
 					cfg);
 
 				_cmd_pool.mark_command_in_progress(cmd.id());
@@ -2613,6 +3340,7 @@ class Main
 				_cmd_pool_handle_pending_cbe_cmds(progress);
 				_cmd_pool_handle_pending_list_snapshots_cmds(progress);
 			}
+			_cmd_pool_handle_pending_ta_cmds(progress);
 			_cmd_pool_handle_pending_cbe_init_cmds(progress);
 			_cmd_pool_handle_pending_benchmark_cmds(progress);
 			_cmd_pool_handle_pending_construct_cmds(progress);
@@ -2635,9 +3363,10 @@ class Main
 		}
 
 		template <typename MODULE>
-		void _trust_anchor_handle_completed_requests_of_module(MODULE                     &module,
-		                                                       Trust_anchor_request const &typed_ta_req,
-		                                                       bool                       &progress)
+		void
+		_trust_anchor_handle_completed_requests_of_module(MODULE                     &module,
+		                                                  Trust_anchor_request const &typed_ta_req,
+		                                                  bool                       &progress)
 		{
 			using Ta_operation = Cbe::Trust_anchor_request::Operation;
 
@@ -2652,10 +3381,9 @@ class Main
 
 				module.mark_generated_ta_create_key_request_complete(
 					ta_req,
-					_trust_anchor.peek_completed_key_value_plaintext(
-						typed_ta_req));
+					_trust_anchor.peek_completed_key_plaintext_value());
 
-				_trust_anchor.drop_completed_request(typed_ta_req);
+				_trust_anchor.drop_completed_request();
 				progress = true;
 				break;
 
@@ -2664,7 +3392,17 @@ class Main
 				module.mark_generated_ta_secure_sb_request_complete(
 					ta_req);
 
-				_trust_anchor.drop_completed_request(typed_ta_req);
+				_trust_anchor.drop_completed_request();
+				progress = true;
+				break;
+
+			case Ta_operation::LAST_SB_HASH:
+
+				module.mark_generated_ta_last_sb_hash_request_complete(
+					ta_req,
+					_trust_anchor.peek_completed_hash());
+
+				_trust_anchor.drop_completed_request();
 				progress = true;
 				break;
 
@@ -2672,10 +3410,9 @@ class Main
 
 				module.mark_generated_ta_encrypt_key_request_complete(
 					ta_req,
-					_trust_anchor.peek_completed_key_value_ciphertext(
-						typed_ta_req));
+					_trust_anchor.peek_completed_key_ciphertext_value());
 
-				_trust_anchor.drop_completed_request(typed_ta_req);
+				_trust_anchor.drop_completed_request();
 				progress = true;
 				break;
 
@@ -2683,17 +3420,16 @@ class Main
 
 				module.mark_generated_ta_decrypt_key_request_complete(
 					ta_req,
-					_trust_anchor.peek_completed_key_value_plaintext(
-						typed_ta_req));
+					_trust_anchor.peek_completed_key_plaintext_value());
 
-				_trust_anchor.drop_completed_request(typed_ta_req);
+				_trust_anchor.drop_completed_request();
 				progress = true;
 				break;
 
 			default:
 
 				class Bad_ta_operation { };
-				throw Bad_ta_operation();
+				throw Bad_ta_operation { };
 			}
 		}
 
@@ -2701,13 +3437,35 @@ class Main
 		{
 			while (true) {
 
-				Cbe::Trust_anchor_request const typed_ta_req =
-					_trust_anchor.peek_completed_request();
+				Trust_anchor_request const typed_ta_req {
+					_trust_anchor.peek_completed_request() };
 
 				if (!typed_ta_req.valid()) {
 					break;
 				}
 				switch (tag_get_module_type(typed_ta_req.tag())) {
+				case Module_type::CMD_POOL:
+				{
+					Trust_anchor_request ta_req { typed_ta_req };
+					ta_req.tag(tag_unset_module_type(ta_req.tag()));
+
+					using Ta_operation = Trust_anchor_request::Operation;
+					if (ta_req.operation() == Ta_operation::INITIALIZE) {
+
+						_cmd_pool.mark_command_completed(ta_req.tag(),
+						                                 ta_req.success());
+
+						_trust_anchor.drop_completed_request();
+						progress = true;
+						continue;
+
+					} else {
+
+						class Bad_operation { };
+						throw Bad_operation { };
+					}
+					break;
+				}
 				case Module_type::CBE_INIT:
 
 					_trust_anchor_handle_completed_requests_of_module(
@@ -2725,14 +3483,14 @@ class Main
 				default:
 
 					class Bad_module_type { };
-					throw Bad_module_type();
+					throw Bad_module_type { };
 				}
 			}
 		}
 
 		void _execute_trust_anchor(bool &progress)
 		{
-			progress |= _trust_anchor.execute();
+			_trust_anchor.execute(progress);
 			_trust_anchor_handle_completed_requests(progress);
 		}
 
@@ -2835,9 +3593,6 @@ void Component::construct(Genode::Env &env)
 
 	Cbe::assert_valid_object_size<Cbe_dump::Library>();
 	cbe_dump_cxx_init();
-
-	Cbe::assert_valid_object_size<External::Trust_anchor>();
-	external_trust_anchor_cxx_init();
 
 	static Main main(env);
 }

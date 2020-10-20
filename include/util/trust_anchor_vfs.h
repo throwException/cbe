@@ -85,6 +85,7 @@ struct Util::Trust_anchor_vfs
 				_vfs.open(file_path.string(),
 				          Vfs::Directory_service::OPEN_MODE_RDWR,
 				          (Vfs::Vfs_handle **)&_vfs_handle, alloc);
+error("open ", file_path.string(), " read write ", _vfs_handle);
 			if (res != Result::OPEN_OK) {
 				error("could not open '", file_path.string(), "'");
 				throw Could_not_open_file();
@@ -95,6 +96,7 @@ struct Util::Trust_anchor_vfs
 
 		~File()
 		{
+error("close ", _vfs_handle);
 			_vfs.close(_vfs_handle);
 		}
 
@@ -136,8 +138,123 @@ struct Util::Trust_anchor_vfs
 		}
 	};
 
-	Util::Io_job::Buffer        _init_io_buffer { };
-	Genode::Constructible<File> _init_file { };
+		struct Init_file
+		{
+			struct Could_not_open_file : Genode::Exception { };
+
+			struct Completed
+			{
+				bool complete;
+				bool success;
+			};
+
+			Init_file(Init_file const &) = delete;
+			Init_file &operator=(Init_file const&) = delete;
+
+			Vfs::File_system &_vfs;
+			Vfs::Vfs_handle  *_vfs_handle;
+
+			Io_response_handler &_io_response_handler;
+
+			Genode::Constructible<Util::Io_job> _io_job { };
+			Util::Io_job::Buffer                _io_buffer { };
+Genode::Path<256> file_path { "" };
+
+		using Passphrase = Genode::String<32 + 1>;
+			Passphrase _passphrase { };
+
+			Init_file(char          const *base_path,
+				 char          const *name,
+				 Vfs::File_system    &vfs,
+				 Genode::Allocator   &alloc,
+				 Io_response_handler &io_response_handler)
+				:
+					_vfs        { vfs },
+					_vfs_handle { nullptr },
+					_io_response_handler { io_response_handler }
+			{
+				using Result = Vfs::Directory_service::Open_result;
+
+				file_path = base_path;
+				file_path.append_element(name);
+
+				Result const res =
+					_vfs.open(file_path.string(),
+					          Vfs::Directory_service::OPEN_MODE_RDWR,
+					          (Vfs::Vfs_handle **)&_vfs_handle, alloc);
+
+error("open ", file_path.string(), " read write ", _vfs_handle);
+				if (res != Result::OPEN_OK) {
+					error("could not open '", file_path.string(), "'");
+					throw Could_not_open_file();
+				}
+
+				_vfs_handle->handler(&io_response_handler);
+			}
+
+			~Init_file()
+			{
+error("close ", file_path.string(), " ", _vfs_handle);
+				_vfs.close(_vfs_handle);
+			}
+
+			void write_passphrase(Passphrase const &passphrase)
+			{
+				/* copy */
+				_passphrase = passphrase;
+
+				_io_buffer = {
+					.base = const_cast<char *>(_passphrase.string()),
+					.size = _passphrase.length()
+				};
+
+				_io_job.construct(*_vfs_handle, Util::Io_job::Operation::WRITE,
+				                  _io_buffer, 0);
+				
+				_io_response_handler.io_progress_response();
+			}
+
+			void queue_read()
+			{
+				_io_buffer = {
+					.base = nullptr,
+					.size = 0,
+				};
+
+				_io_job.construct(*_vfs_handle, Util::Io_job::Operation::READ,
+				                  _io_buffer, 0);
+				
+				_io_response_handler.io_progress_response();
+			}
+
+			void execute()
+			{
+				if (!_io_job.constructed()) {
+					return;
+				}
+
+				_io_job->execute();
+			}
+
+			Completed write_complete()
+			{
+				return { _io_job->completed(), _io_job->succeeded() };
+			}
+
+			Completed read_complete()
+			{
+				return { _io_job->completed(), _io_job->succeeded() };
+			}
+
+			void drop_io_job()
+			{
+				_io_job.destruct();
+			}
+		};
+
+
+	Util::Io_job::Buffer             _init_io_buffer { };
+	Genode::Constructible<Init_file> _init_file { };
 
 	Util::Io_job::Buffer        _encrypt_io_buffer { };
 	Genode::Constructible<File> _encrypt_file { };
@@ -208,6 +325,7 @@ struct Util::Trust_anchor_vfs
 		}
 
 		Cbe::Hash                 hash;
+		Genode::String<64>        passphrase;
 		Cbe::Key_plaintext_value  plain;
 		Cbe::Key_ciphertext_value cipher;
 
@@ -411,14 +529,60 @@ struct Util::Trust_anchor_vfs
 		return progress;
 	}
 
-	bool _execute_init(Job &job, bool write)
+	void _execute_init(Job &job, bool &progress)
 	{
+		_init_file->execute();
+
+		Init_file::Completed result { false, false };
+
+		switch (job.type) {
+		case Job::Type::INIT_WRITE:
+
+			result = _init_file->write_complete();
+			if (result.complete) {
+
+				progress = true;
+				_init_file->drop_io_job();
+
+				job.type = Job::Type::INIT_READ;
+				_init_file->queue_read();
+			}
+			break;
+
+		case Job::Type::INIT_READ:
+
+			result = _init_file->read_complete();
+			if (result.complete) {
+
+				progress = true;
+				_init_file->drop_io_job();
+				_init_file.destruct();
+
+				job.type = Job::Type::NONE;
+				job.state = Job::State::COMPLETE;
+				job.request.success(false);
+
+				Genode::log("Initialization finished successfully");
+
+				return;
+			}
+			break;
+
+		default:
+
+			break;
+		}
+
+
+
+/*
 		bool progress = false;
 		File::Completed_io_job completed_io_job { false, false };
 
 		switch (job.state) {
 		case Job::State::PENDING:
 		{
+log(__func__, " ", __LINE__);
 			using Op = Util::Io_job::Operation;
 
 			Op const op = write ? Op::WRITE : Op::READ;
@@ -427,39 +591,46 @@ struct Util::Trust_anchor_vfs
 			}
 			job.state = Job::State::IN_PROGRESS;
 			progress |= true;
+log(__func__, " ", __LINE__);
 		}
 		[[fallthrough]];
 		case Job::State::IN_PROGRESS:
+log(__func__, " ", __LINE__);
 			if (!_init_file->execute_io_job()) {
+log(__func__, " ", __LINE__);
 				break;
 			}
+log(__func__, " ", __LINE__);
 
 			progress |= true;
 
 			completed_io_job = _init_file->completed_io_job();
+log(__func__, " ", __LINE__);
 			if (!completed_io_job.completed) {
+log(__func__, " ", __LINE__);
 				break;
 			}
+log(__func__, " ", __LINE__);
 			_init_file->drop_io_job();
 
-			/* setup second phase */
+log(__func__, " ", __LINE__);
 			if (write) {
+log(__func__, " ", __LINE__);
 
-				/*
-				 * In case the write request was not successful it
-				 * is not needed to try to read the result.
-				 */
 				if (!completed_io_job.success) {
+log(__func__, " ", __LINE__);
 					job.state = Job::State::COMPLETE;
 					job.request.success(false);
 					break;
 				}
+log(__func__, " ", __LINE__);
 
 				_init_io_buffer = {
-					.base = _job.cipher.value,
-					.size = sizeof (_job.cipher)
+					.base = const_cast<char *>(job.passphrase.string()),
+					.size = job.passphrase.length()
 				};
 
+log(__func__, " ", __LINE__);
 				job.type  = Job::Type::INIT_READ;
 				job.state = Job::State::PENDING;
 				break;
@@ -468,11 +639,13 @@ struct Util::Trust_anchor_vfs
 			job.state   = Job::State::COMPLETE;
 			job.success = completed_io_job.success;
 			job.request.success(job.success);
+log(__func__, " ", __LINE__);
 		[[fallthrough]];
 		case Job::State::COMPLETE: break;
 		case Job::State::NONE:     break;
 		}
 		return progress;
+*/
 	}
 
 	bool _execute_read_hash(Job &job)
@@ -585,7 +758,9 @@ struct Util::Trust_anchor_vfs
 		_io_response_handler { io_sigh },
 		_ta_dir              { path }
 	{
-		_init_file.construct(path, "initialize", _vfs, alloc, _io_response_handler);
+		_init_file.construct(_ta_dir.string(), "initialize",
+			                     _vfs, alloc,
+			                     _io_response_handler);
 		_encrypt_file.construct(path, "encrypt", _vfs, alloc, _io_response_handler);
 		_decrypt_file.construct(path, "decrypt", _vfs, alloc, _io_response_handler);
 		_generate_key_file.construct(path, "generate_key", _vfs, alloc, _io_response_handler);
@@ -597,16 +772,42 @@ struct Util::Trust_anchor_vfs
 		return !_job.valid();
 	}
 
+	void submit_initialize_request(
+
+		Cbe::Trust_anchor_request const &request,
+		Genode::String<64>        const &passphrase)
+	{
+		_job = {
+			.type       = Job::Type::INIT_WRITE,
+			.state      = Job::State::PENDING,
+			.hash       = Cbe::Hash(),
+			.passphrase = passphrase,
+			.plain      = Cbe::Key_plaintext_value(),
+			.cipher     = Cbe::Key_ciphertext_value(),
+			.request    = request,
+			.success    = false,
+		};
+
+		_init_io_buffer = {
+			.base = const_cast<char *>(_job.passphrase.string()),
+			.size = _job.passphrase.length()
+		};
+
+		/* kick-off writing */
+		_init_file->write_passphrase(_job.passphrase.string());
+	}
+
 	void submit_create_key_request(Cbe::Trust_anchor_request const &request)
 	{
 		_job = {
-			.type    = Job::Type::GENERATE,
-			.state   = Job::State::PENDING,
-			.hash    = Cbe::Hash(),
-			.plain   = Cbe::Key_plaintext_value(),
-			.cipher  = Cbe::Key_ciphertext_value(),
-			.request = request,
-			.success = false,
+			.type       = Job::Type::GENERATE,
+			.state      = Job::State::PENDING,
+			.hash       = Cbe::Hash(),
+			.passphrase = String<64>(),
+			.plain      = Cbe::Key_plaintext_value(),
+			.cipher     = Cbe::Key_ciphertext_value(),
+			.request    = request,
+			.success    = false,
 		};
 
 		_generate_key_io_buffer = {
@@ -618,13 +819,14 @@ struct Util::Trust_anchor_vfs
 	void submit_superblock_hash_request(Cbe::Trust_anchor_request const &request)
 	{
 		_job = {
-			.type    = Job::Type::HASH_READ,
-			.state   = Job::State::PENDING,
-			.hash    = Cbe::Hash(),
-			.plain   = Cbe::Key_plaintext_value(),
-			.cipher  = Cbe::Key_ciphertext_value(),
-			.request = request,
-			.success = false,
+			.type       = Job::Type::HASH_READ,
+			.state      = Job::State::PENDING,
+			.hash       = Cbe::Hash(),
+			.passphrase = String<64>(),
+			.plain      = Cbe::Key_plaintext_value(),
+			.cipher     = Cbe::Key_ciphertext_value(),
+			.request    = request,
+			.success    = false,
 		};
 
 		_last_hash_io_buffer = {
@@ -637,13 +839,14 @@ struct Util::Trust_anchor_vfs
 	                                      Cbe::Hash const &hash)
 	{
 		_job = {
-			.type    = Job::Type::HASH_UPDATE_WRITE,
-			.state   = Job::State::PENDING,
-			.hash    = hash,
-			.plain   = Cbe::Key_plaintext_value(),
-			.cipher  = Cbe::Key_ciphertext_value(),
-			.request = request,
-			.success = false,
+			.type       = Job::Type::HASH_UPDATE_WRITE,
+			.state      = Job::State::PENDING,
+			.hash       = hash,
+			.passphrase = String<64>(),
+			.plain      = Cbe::Key_plaintext_value(),
+			.cipher     = Cbe::Key_ciphertext_value(),
+			.request    = request,
+			.success    = false,
 		};
 
 		_last_hash_io_buffer = {
@@ -656,13 +859,14 @@ struct Util::Trust_anchor_vfs
 	                                Cbe::Key_plaintext_value  const &plain)
 	{
 		_job = {
-			.type    = Job::Type::ENCRYPT_WRITE,
-			.state   = Job::State::PENDING,
-			.hash    = Cbe::Hash(),
-			.plain   = plain,
-			.cipher  = Cbe::Key_ciphertext_value(),
-			.request = request,
-			.success = false,
+			.type       = Job::Type::ENCRYPT_WRITE,
+			.state      = Job::State::PENDING,
+			.hash       = Cbe::Hash(),
+			.passphrase = String<64>(),
+			.plain      = plain,
+			.cipher     = Cbe::Key_ciphertext_value(),
+			.request    = request,
+			.success    = false,
 		};
 
 		_encrypt_io_buffer = {
@@ -675,13 +879,14 @@ struct Util::Trust_anchor_vfs
 	                                Cbe::Key_ciphertext_value const &cipher)
 	{
 		_job = {
-			.type    = Job::Type::DECRYPT_WRITE,
-			.state   = Job::State::PENDING,
-			.hash    = Cbe::Hash(),
-			.plain   = Cbe::Key_plaintext_value(),
-			.cipher  = cipher,
-			.request = request,
-			.success = false,
+			.type       = Job::Type::DECRYPT_WRITE,
+			.state      = Job::State::PENDING,
+			.hash       = Cbe::Hash(),
+			.passphrase = String<64>(),
+			.plain      = Cbe::Key_plaintext_value(),
+			.cipher     = cipher,
+			.request    = request,
+			.success    = false,
 		};
 
 		_decrypt_io_buffer = {
@@ -741,8 +946,8 @@ struct Util::Trust_anchor_vfs
 		case Job::Type::ENCRYPT_WRITE: progress |= _execute_encrypt(_job, true);  break;
 		case Job::Type::ENCRYPT_READ:  progress |= _execute_encrypt(_job, false); break;
 		case Job::Type::GENERATE:      progress |= _execute_generate(_job);    break;
-		case Job::Type::INIT_WRITE:    progress |= _execute_init(_job, true);  break;
-		case Job::Type::INIT_READ:     progress |= _execute_init(_job, false); break;
+		case Job::Type::INIT_WRITE:    _execute_init(_job, progress);  break;
+		case Job::Type::INIT_READ:     _execute_init(_job, progress); break;
 		case Job::Type::HASH_READ:     progress |= _execute_read_hash(_job);   break;
 		case Job::Type::HASH_UPDATE_WRITE: progress |= _execute_update_hash(_job, true); break;
 		case Job::Type::HASH_UPDATE_READ:  progress |= _execute_update_hash(_job, false); break;
