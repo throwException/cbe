@@ -111,6 +111,9 @@ class Main
 				}
 				case Op::LAST_SB_HASH:
 					break;
+				case Op::INITIALIZE:
+					class Bad_operation { };
+					throw Bad_operation { };
 				case Op::INVALID:
 					/* never reached */
 					break;
@@ -158,6 +161,9 @@ class Main
 				}
 				case Op::LAST_SB_HASH:
 					break;
+				case Op::INITIALIZE:
+					class Bad_operation { };
+					throw Bad_operation { };
 				case Op::INVALID:
 					/* never reached */
 					break;

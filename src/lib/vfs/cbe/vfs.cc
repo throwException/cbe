@@ -895,6 +895,9 @@ class Vfs_cbe::Wrapper
 				case Op::LAST_SB_HASH:
 					ta.submit_superblock_hash_request(request);
 					break;
+				case Op::INITIALIZE:
+					class Bad_operation { };
+					throw Bad_operation { };
 				case Op::INVALID:
 					/* never reached */
 					break;
@@ -948,6 +951,9 @@ class Vfs_cbe::Wrapper
 					_cbe->mark_generated_ta_last_sb_hash_request_complete(request, hash);
 					break;
 				}
+				case Op::INITIALIZE:
+					class Bad_operation { };
+					throw Bad_operation { };
 				case Op::INVALID:
 					/* never reached */
 					break;
