@@ -27,12 +27,473 @@
 #include <cbe_init/library.h>
 #include <cbe_init/configuration.h>
 
-/* CBE tester includes */
-#include <crypto.h>
+/* Genode includes */
 
 using namespace Genode;
 using namespace Cbe;
 using namespace Vfs;
+
+
+class Vfs_io_response_handler : public Vfs::Io_response_handler
+{
+	private:
+
+		Signal_context_capability const _sigh;
+
+	public:
+
+		Vfs_io_response_handler(Signal_context_capability sigh)
+		:
+			_sigh(sigh)
+		{ }
+
+
+		/******************************
+		 ** Vfs::Io_response_handler **
+		 ******************************/
+
+		void read_ready_response() override { }
+
+		void io_progress_response() override
+		{
+			Signal_transmitter(_sigh).submit();
+		}
+};
+
+
+static Vfs_handle &open(Vfs::Env                     &vfs_env,
+                        String<128>                   path,
+                        Directory_service::Open_mode  mode)
+{
+	Vfs_handle *handle { nullptr };
+	Directory_service::Open_result const result {
+		vfs_env.root_dir().open(
+			path.string(), mode, &handle, vfs_env.alloc()) };
+
+	if (result != Directory_service::Open_result::OPEN_OK) {
+
+		error("failed to open file ", path.string());
+		class Failed { };
+		throw Failed { };
+	}
+	return *handle;
+}
+
+
+static Vfs_handle &open_wo(Vfs::Env    &vfs_env,
+                           String<128>  path)
+{
+	return open(vfs_env, path, Directory_service::OPEN_MODE_WRONLY);
+}
+
+
+static Vfs_handle &open_rw(Vfs::Env    &vfs_env,
+                           String<128>  path)
+{
+	return open(vfs_env, path, Directory_service::OPEN_MODE_RDWR);
+}
+
+
+class Crypto
+{
+	public:
+
+		enum class Operation
+		{
+			INVALID,
+			DECRYPT_BLOCK,
+			ENCRYPT_BLOCK
+		};
+
+		enum class Result
+		{
+			SUCCEEDED,
+			FAILED,
+			RETRY_LATER
+		};
+
+	private:
+
+		using Read_result = Vfs::File_io_service::Read_result;
+		using Open_result = Vfs::Directory_service::Open_result;
+
+		struct Key_directory
+		{
+			Vfs_handle *encrypt_handle;
+			Vfs_handle *decrypt_handle;
+			uint32_t    key_id;
+		};
+
+		enum class Job_state
+		{
+			SUBMITTED,
+			OP_WRITTEN_TO_VFS_HANDLE,
+			READING_VFS_HANDLE_SUCCEEDED,
+			COMPLETE
+		};
+
+		struct Job
+		{
+			Cbe::Request                 request;
+			Vfs_handle                  *handle;
+			Job_state                    state;
+			Operation                    op;
+			Crypto_cipher_buffer::Index  cipher_buf_idx;
+			Crypto_plain_buffer::Index   plain_buf_idx;
+		};
+
+		Vfs::Env                &_env;
+		String<32>        const  _path;
+		Vfs_handle              &_add_key_handle;
+		Vfs_handle              &_remove_key_handle;
+		Vfs_io_response_handler  _vfs_io_response_handler;
+		Key_directory            _key_dirs[2] {
+
+			{
+				.encrypt_handle = nullptr,
+				.decrypt_handle = nullptr,
+				.key_id = 0
+			}, {
+				.encrypt_handle = nullptr,
+				.decrypt_handle = nullptr,
+				.key_id = 0
+			}
+		};
+		Job _job {
+
+			.request        = Cbe::Request { },
+			.handle         = nullptr,
+			.state          = Job_state::SUBMITTED,
+			.op             = Operation::INVALID,
+			.cipher_buf_idx = Cbe::Crypto_cipher_buffer::Index { 0 },
+			.plain_buf_idx  = Cbe::Crypto_plain_buffer::Index  { 0 }
+		};
+
+		Key_directory &_get_unused_key_dir()
+		{
+			for (Key_directory &key_dir : _key_dirs) {
+				if (key_dir.key_id == 0) {
+					return key_dir;
+				}
+			}
+			class Failed { };
+			throw Failed { };
+		}
+
+		Key_directory &_lookup_key_dir(uint32_t key_id)
+		{
+			for (Key_directory &key_dir : _key_dirs) {
+				if (key_dir.key_id == key_id) {
+					return key_dir;
+				}
+			}
+			class Failed { };
+			throw Failed { };
+		}
+
+
+	public:
+
+		Crypto(Vfs::Env                  &env,
+		       Xml_node            const &crypto,
+		       Signal_context_capability  sigh)
+		:
+			_env                     { env },
+			_path                    { crypto.attribute_value("path", String<32>()) },
+			_add_key_handle          { open_wo(env, { _path.string(), "/add_key" }) },
+			_remove_key_handle       { open_wo(env, { _path.string(), "/remove_key" }) },
+			_vfs_io_response_handler { sigh }
+		{ }
+
+		bool request_acceptable() const
+		{
+			return _job.op == Operation::INVALID;
+		}
+
+		Result add_key(Key const &key)
+		{
+			char buffer[sizeof (key.value) + sizeof (key.id.value)] { };
+			memcpy(buffer, &key.id.value, sizeof (key.id.value));
+			memcpy(buffer + sizeof (key.id.value),
+			       key.value, sizeof (key.value));
+
+			_add_key_handle.seek(0);
+			file_size nr_of_written_bytes { 0 };
+			try {
+				_add_key_handle.fs().write(
+					&_add_key_handle, buffer, sizeof (buffer),
+					nr_of_written_bytes);
+
+			} catch (File_io_service::Insufficient_buffer) {
+
+				return Result::RETRY_LATER;
+			}
+			Key_directory &key_dir { _get_unused_key_dir() };
+
+			key_dir.encrypt_handle = &open_rw(
+				_env, { _path.string(), "/keys/", key.id.value, "/encrypt" });
+
+			key_dir.decrypt_handle = &open_rw(
+				_env, { _path.string(), "/keys/", key.id.value, "/decrypt" });
+
+			key_dir.key_id = key.id.value;
+			key_dir.encrypt_handle->handler(&_vfs_io_response_handler);
+			key_dir.decrypt_handle->handler(&_vfs_io_response_handler);
+			return Result::SUCCEEDED;
+		}
+
+		Result remove_key(Cbe::Key::Id key_id)
+		{
+			Vfs::file_size written = 0;
+			_remove_key_handle.seek(0);
+			try {
+				_remove_key_handle.fs().write(&_remove_key_handle,
+				                              (char const*)&key_id.value,
+				                              sizeof (key_id.value),
+				                              written);
+				(void)written;
+
+			} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+				return Result::RETRY_LATER;
+			}
+			Key_directory &key_dir { _lookup_key_dir(key_id.value) };
+			_env.root_dir().close(key_dir.encrypt_handle);
+			key_dir.encrypt_handle = nullptr;
+			_env.root_dir().close(key_dir.decrypt_handle);
+			key_dir.decrypt_handle = nullptr;
+			key_dir.key_id = 0;
+			return Result::SUCCEEDED;
+		}
+
+		void submit_request(Cbe::Request          const &request,
+		                    Operation                    op,
+		                    Crypto_plain_buffer::Index   plain_buf_idx,
+		                    Crypto_cipher_buffer::Index  cipher_buf_idx)
+		{
+			switch (op) {
+			case Operation::ENCRYPT_BLOCK:
+
+				_job.request        = request;
+				_job.state          = Job_state::SUBMITTED;
+				_job.op             = op;
+				_job.cipher_buf_idx = cipher_buf_idx;
+				_job.plain_buf_idx  = plain_buf_idx;
+				_job.handle         =
+					_lookup_key_dir(request.key_id()).encrypt_handle;
+
+				break;
+
+			case Operation::DECRYPT_BLOCK:
+
+				_job.request        = request;
+				_job.state          = Job_state::SUBMITTED;
+				_job.op             = op;
+				_job.cipher_buf_idx = cipher_buf_idx;
+				_job.plain_buf_idx  = plain_buf_idx;
+				_job.handle         =
+					_lookup_key_dir(request.key_id()).decrypt_handle;
+
+				break;
+
+			case Operation::INVALID:
+
+				class Bad_operation { };
+				throw Bad_operation { };
+			}
+		}
+
+		Cbe::Request peek_completed_encryption_request() const
+		{
+			if (_job.state != Job_state::COMPLETE ||
+			    _job.op != Operation::ENCRYPT_BLOCK) {
+
+				return Cbe::Request { };
+			}
+			return _job.request;
+		}
+
+		Cbe::Request peek_completed_decryption_request() const
+		{
+			if (_job.state != Job_state::COMPLETE ||
+			    _job.op != Operation::DECRYPT_BLOCK) {
+
+				return Cbe::Request { };
+			}
+			return _job.request;
+		}
+
+		void drop_completed_request()
+		{
+			if (_job.state != Job_state::COMPLETE) {
+
+				class Bad_state { };
+				throw Bad_state { };
+			}
+			_job.op = Operation::INVALID;
+		}
+
+		void _execute_decrypt_block(Job                  &job,
+		                            Crypto_plain_buffer  &plain_buf,
+		                            Crypto_cipher_buffer &cipher_buf,
+		                            bool                 &progress)
+		{
+			switch (job.state) {
+			case Job_state::SUBMITTED:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				file_size nr_of_written_bytes { 0 };
+				try {
+					job.handle->fs().write(
+						job.handle,
+						reinterpret_cast<char const*>(
+							&cipher_buf.item(job.cipher_buf_idx)),
+						file_size(sizeof (Cbe::Block_data)),
+						nr_of_written_bytes);
+
+					job.state = Job_state::OP_WRITTEN_TO_VFS_HANDLE;
+					progress = true;
+					return;
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+			}
+			case Job_state::OP_WRITTEN_TO_VFS_HANDLE:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				bool const success {
+					job.handle->fs().queue_read(
+						job.handle, sizeof (Cbe::Block_data)) };
+
+				if (!success) {
+					return;
+				}
+				job.state = Job_state::READING_VFS_HANDLE_SUCCEEDED;
+				progress = true;
+				break;
+			}
+			case Job_state::READING_VFS_HANDLE_SUCCEEDED:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result =
+					job.handle->fs().complete_read(
+						job.handle,
+						reinterpret_cast<char *>(
+							&plain_buf.item(job.plain_buf_idx)),
+						sizeof (Cbe::Block_data),
+						nr_of_read_bytes);
+
+				switch (result) {
+				case Read_result::READ_QUEUED:          return;
+				case Read_result::READ_ERR_INTERRUPT:   return;
+				case Read_result::READ_ERR_AGAIN:       return;
+				case Read_result::READ_ERR_WOULD_BLOCK: return;
+				default: break;
+				}
+				job.request.success(result == Read_result::READ_OK);
+				job.state = Job_state::COMPLETE;
+				progress = true;
+				return;
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void _execute_encrypt_block(Job                  &job,
+		                            Crypto_plain_buffer  &plain_buf,
+		                            Crypto_cipher_buffer &cipher_buf,
+		                            bool                 &progress)
+		{
+			switch (job.state) {
+			case Job_state::SUBMITTED:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				file_size nr_of_written_bytes { 0 };
+				try {
+					job.handle->fs().write(
+						job.handle,
+						reinterpret_cast<char const*>(
+							&plain_buf.item(job.plain_buf_idx)),
+						file_size(sizeof (Cbe::Block_data)),
+						nr_of_written_bytes);
+
+					job.state = Job_state::OP_WRITTEN_TO_VFS_HANDLE;
+					progress = true;
+					return;
+
+				} catch (Vfs::File_io_service::Insufficient_buffer) {
+
+					return;
+				}
+			}
+			case Job_state::OP_WRITTEN_TO_VFS_HANDLE:
+			{
+				job.handle->seek(job.request.block_number() * Cbe::BLOCK_SIZE);
+				bool success {
+					job.handle->fs().queue_read(
+						job.handle, sizeof (Cbe::Block_data)) };
+
+				if (!success) {
+					return;
+				}
+				job.state = Job_state::READING_VFS_HANDLE_SUCCEEDED;
+				progress = true;
+				return;
+			}
+			case Job_state::READING_VFS_HANDLE_SUCCEEDED:
+			{
+				file_size nr_of_read_bytes { 0 };
+				Read_result const result {
+					job.handle->fs().complete_read(
+						job.handle,
+						reinterpret_cast<char *>(
+							&cipher_buf.item(job.cipher_buf_idx)),
+						sizeof (Cbe::Block_data),
+						nr_of_read_bytes) };
+
+				switch (result) {
+				case Read_result::READ_QUEUED:          return;
+				case Read_result::READ_ERR_INTERRUPT:   return;
+				case Read_result::READ_ERR_AGAIN:       return;
+				case Read_result::READ_ERR_WOULD_BLOCK: return;
+				default: break;
+				}
+				job.request.success(result == Read_result::READ_OK);
+				job.state = Job_state::COMPLETE;
+				progress = true;
+				return;
+			}
+			default:
+
+				return;
+			}
+		}
+
+		void execute(Crypto_plain_buffer  &plain_buf,
+		             Crypto_cipher_buffer &cipher_buf,
+		             bool                 &progress)
+		{
+			switch (_job.op) {
+			case Operation::ENCRYPT_BLOCK:
+
+				_execute_encrypt_block(_job, plain_buf, cipher_buf, progress);
+				break;
+
+			case Operation::DECRYPT_BLOCK:
+
+				_execute_decrypt_block(_job, plain_buf, cipher_buf, progress);
+				break;
+
+			case Operation::INVALID:
+
+				break;
+			}
+		}
+};
 
 
 class Trust_anchor
@@ -69,15 +530,15 @@ class Trust_anchor
 		Vfs_io_response_handler  _handler;
 		String<128>       const  _path;
 		String<128>       const  _decrypt_path      { _path, "/decrypt" };
-		Vfs::Vfs_handle         &_decrypt_file      { vfs_open_rw(_vfs_env, { _decrypt_path }) };
+		Vfs::Vfs_handle         &_decrypt_file      { open_rw(_vfs_env, { _decrypt_path }) };
 		String<128>       const  _encrypt_path      { _path, "/encrypt" };
-		Vfs::Vfs_handle         &_encrypt_file      { vfs_open_rw(_vfs_env, { _encrypt_path }) };
+		Vfs::Vfs_handle         &_encrypt_file      { open_rw(_vfs_env, { _encrypt_path }) };
 		String<128>       const  _generate_key_path { _path, "/generate_key" };
-		Vfs::Vfs_handle         &_generate_key_file { vfs_open_rw(_vfs_env, { _generate_key_path }) };
+		Vfs::Vfs_handle         &_generate_key_file { open_rw(_vfs_env, { _generate_key_path }) };
 		String<128>       const  _initialize_path   { _path, "/initialize" };
-		Vfs::Vfs_handle         &_initialize_file   { vfs_open_rw(_vfs_env, { _initialize_path }) };
+		Vfs::Vfs_handle         &_initialize_file   { open_rw(_vfs_env, { _initialize_path }) };
 		String<128>       const  _hashsum_path      { _path, "/hashsum" };
-		Vfs::Vfs_handle         &_hashsum_file      { vfs_open_rw(_vfs_env, { _hashsum_path }) };
+		Vfs::Vfs_handle         &_hashsum_file      { open_rw(_vfs_env, { _hashsum_path }) };
 		Job                      _job               { };
 
 		void _execute_write_read_operation(Vfs_handle        &file,
