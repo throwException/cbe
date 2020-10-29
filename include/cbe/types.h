@@ -12,6 +12,7 @@
 /* Genode includes */
 #include <base/stdint.h>
 #include <base/output.h>
+#include <base/exception.h>
 #include <util/string.h>
 
 namespace Cbe {
@@ -376,7 +377,7 @@ namespace Cbe {
 }
 
 
-char const *to_string(Cbe::Request::Operation op)
+inline char const *to_string(Cbe::Request::Operation op)
 {
 	struct Unknown_operation_type : Genode::Exception { };
 	switch (op) {
@@ -397,7 +398,7 @@ char const *to_string(Cbe::Request::Operation op)
 }
 
 
-char const *to_string(Cbe::Trust_anchor_request::Operation op)
+inline char const *to_string(Cbe::Trust_anchor_request::Operation op)
 {
 	struct Unknown_operation_type : Genode::Exception { };
 	switch (op) {
@@ -413,7 +414,7 @@ char const *to_string(Cbe::Trust_anchor_request::Operation op)
 }
 
 
-void Cbe::Request::print(Genode::Output &out) const
+inline void Cbe::Request::print(Genode::Output &out) const
 {
 	if (!valid()) {
 		Genode::print(out, "<invalid>");
@@ -428,7 +429,7 @@ void Cbe::Request::print(Genode::Output &out) const
 	Genode::print(out, " succ=", _success);
 }
 
-void Cbe::Trust_anchor_request::print(Genode::Output &out) const
+inline void Cbe::Trust_anchor_request::print(Genode::Output &out) const
 {
 	if (!valid()) {
 		Genode::print(out, "<invalid>");
