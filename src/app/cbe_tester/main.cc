@@ -30,6 +30,7 @@
 /* CBE tester includes */
 #include <crypto.h>
 #include <trust_anchor.h>
+#include <verbose_node.h>
 
 using namespace Genode;
 using namespace Cbe;
@@ -121,56 +122,6 @@ static String<128> blk_pkt_to_string(Block::Packet_descriptor const &packet)
 			" succ=", packet.succeeded(),
 			" tag=", Hex(packet.tag().value));
 }
-
-
-class Verbose_node
-{
-	private:
-
-		bool _cmd_pool_cmd_pending     { false };
-		bool _cmd_pool_cmd_in_progress { false };
-		bool _cmd_pool_cmd_completed   { false };
-		bool _blk_io_req_in_progress   { false };
-		bool _blk_io_req_completed     { false };
-		bool _ta_req_in_progress       { false };
-		bool _ta_req_completed         { false };
-		bool _crypto_req_completed     { false };
-		bool _crypto_req_in_progress   { false };
-		bool _client_data_mismatch     { false };
-		bool _client_data_transferred  { false };
-
-	public:
-
-		Verbose_node(Xml_node const &config)
-		{
-			config.with_sub_node("verbose", [&] (Xml_node const &verbose) {
-
-				_cmd_pool_cmd_pending     = verbose.attribute_value("cmd_pool_cmd_pending"    , false);
-				_cmd_pool_cmd_in_progress = verbose.attribute_value("cmd_pool_cmd_in_progress", false);
-				_cmd_pool_cmd_completed   = verbose.attribute_value("cmd_pool_cmd_completed"  , false);
-				_blk_io_req_in_progress   = verbose.attribute_value("blk_io_req_in_progress"  , false);
-				_blk_io_req_completed     = verbose.attribute_value("blk_io_req_completed"    , false);
-				_ta_req_in_progress       = verbose.attribute_value("ta_req_in_progress"      , false);
-				_ta_req_completed         = verbose.attribute_value("ta_req_completed"        , false);
-				_crypto_req_completed     = verbose.attribute_value("crypto_req_completed"    , false);
-				_crypto_req_in_progress   = verbose.attribute_value("crypto_req_in_progress"  , false);
-				_client_data_mismatch     = verbose.attribute_value("client_data_mismatch"    , false);
-				_client_data_transferred  = verbose.attribute_value("client_data_transferred" , false);
-			});
-		}
-
-		bool cmd_pool_cmd_pending    () const { return _cmd_pool_cmd_pending    ; }
-		bool cmd_pool_cmd_in_progress() const { return _cmd_pool_cmd_in_progress; }
-		bool cmd_pool_cmd_completed  () const { return _cmd_pool_cmd_completed  ; }
-		bool blk_io_req_in_progress  () const { return _blk_io_req_in_progress  ; }
-		bool blk_io_req_completed    () const { return _blk_io_req_completed    ; }
-		bool ta_req_in_progress      () const { return _ta_req_in_progress      ; }
-		bool ta_req_completed        () const { return _ta_req_completed        ; }
-		bool crypto_req_completed    () const { return _crypto_req_completed    ; }
-		bool crypto_req_in_progress  () const { return _crypto_req_in_progress  ; }
-		bool client_data_mismatch    () const { return _client_data_mismatch    ; }
-		bool client_data_transferred () const { return _client_data_transferred ; }
-};
 
 
 template <typename T>
