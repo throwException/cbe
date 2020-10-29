@@ -140,8 +140,8 @@ append config {
 
 			<verbose
 				cmd_pool_cmd_pending="no"
-				cmd_pool_cmd_in_progress="yes"
-				cmd_pool_cmd_completed="yes"
+				cmd_pool_cmd_in_progress="no"
+				cmd_pool_cmd_completed="no"
 				blk_io_req_in_progress="no"
 				blk_io_req_completed="no"
 				ta_req_in_progress="no"
@@ -165,8 +165,9 @@ append config {
 
 			<commands>
 
-				<trust-anchor op="initialize" passphrase="foobar"/>
+				<log string="Initialize Trust Anchor, CBE image, and CBE library"/>
 
+				<trust-anchor op="initialize" passphrase="foobar"/>
 				<initialize>
 
 					<virtual-block-device
@@ -180,12 +181,28 @@ append config {
 						nr_of_leafs="256" />
 
 				</initialize>
-
 				<construct/>
-				<request op="write" vba="20" count="10" sync="no" salt="4321"/>
-				<request op="read" vba="20" count="10" sync="no" salt="4321"/>
-				<request op="write" vba="50" count="2" sync="no"/>
-				<request op="write" vba="20" count="10" sync="no"/>
+
+				<log string="Test synchronous write-read"/>
+
+				<request op="write" vba="1"   count="1"   sync="yes"/>
+				<request op="read"  vba="1"   count="1"   sync="yes"/>
+				<request op="write" vba="12"  count="10"  sync="yes"/>
+				<request op="read"  vba="12"  count="10"  sync="yes"/>
+				<request op="write" vba="123" count="100" sync="yes"/>
+				<request op="read"  vba="123" count="100" sync="yes"/>
+
+				<log string="Test synchronous write-read-compare"/>
+
+				<request op="write" vba="9"  count="1"  sync="yes" salt="4321"/>
+				<request op="read"  vba="9"  count="1"  sync="yes" salt="4321"/>
+				<request op="write" vba="91" count="19" sync="yes" salt="8765"/>
+				<request op="read"  vba="91" count="19" sync="yes" salt="8765"/>
+				<request op="write" vba="9"  count="1"  sync="yes" salt="1234"/>
+				<request op="write" vba="91" count="19" sync="yes" salt="5678"/>
+				<request op="read"  vba="9"  count="1"  sync="yes" salt="1234"/>
+				<request op="read"  vba="91" count="19" sync="yes" salt="5678"/>
+
 				<request op="create_snapshot" sync="no"/>
 				<check/>
 
@@ -193,13 +210,7 @@ append config {
 				<request op="write" vba="50" count="100" sync="no"/>
 				<request op="write" vba="30" count="100" sync="no"/>
 				<request op="write" vba="10" count="100" sync="no"/>
-				<request op="read" vba="50" count="100" sync="no"/>
-				<request op="read" vba="30" count="100" sync="no"/>
-				<request op="read" vba="10" count="100" sync="no"/>
 				<request op="create_snapshot" sync="no"/>
-				<request op="write" vba="50" count="100" sync="no"/>
-				<request op="write" vba="30" count="100" sync="no"/>
-				<request op="write" vba="10" count="100" sync="no"/>
 				<benchmark op="stop"/>
 
 				<request op="create_snapshot" sync="no"/>

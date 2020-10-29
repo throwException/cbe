@@ -806,6 +806,28 @@ class Block_connection_block_io : public Block_io
 };
 
 
+class Log_node
+{
+	private:
+
+		String<128> const _string;
+
+	public:
+
+		Log_node(Xml_node const &node)
+		:
+			_string { node.attribute_value("string", String<128> { }) }
+		{ }
+
+		String<128> const &string() const { return _string; }
+
+		void print(Genode::Output &out) const
+		{
+			Genode::print(out, "string=\"", _string, "\"");
+		}
+};
+
+
 class Benchmark_node
 {
 	public:
@@ -868,6 +890,9 @@ class Benchmark_node
 		void print(Genode::Output &out) const
 		{
 			Genode::print(out, "op=", _op_to_string(_op));
+			if (_label_avail) {
+				Genode::print(out, " label=", _label);
+			}
 		}
 };
 
@@ -1120,7 +1145,8 @@ class Command : public Fifo<Command>::Element
 			INITIALIZE,
 			CHECK,
 			DUMP,
-			LIST_SNAPSHOTS
+			LIST_SNAPSHOTS,
+			LOG
 		};
 
 		enum State
@@ -1140,6 +1166,7 @@ class Command : public Fifo<Command>::Element
 		Constructible<Request_node>            _request_node      { };
 		Constructible<Trust_anchor_node>       _trust_anchor_node { };
 		Constructible<Benchmark_node>          _benchmark_node    { };
+		Constructible<Log_node>                _log_node          { };
 		Constructible<Cbe_init::Configuration> _initialize        { };
 		Constructible<Cbe_dump::Configuration> _dump              { };
 
@@ -1166,6 +1193,7 @@ class Command : public Fifo<Command>::Element
 			case DESTRUCT: return "destruct";
 			case CHECK: return "check";
 			case LIST_SNAPSHOTS: return "list_snapshots";
+			case LOG: return "log";
 			}
 			return "?";
 		}
@@ -1187,6 +1215,7 @@ class Command : public Fifo<Command>::Element
 			case REQUEST:      _request_node.construct(node);      break;
 			case TRUST_ANCHOR: _trust_anchor_node.construct(node); break;
 			case BENCHMARK:    _benchmark_node.construct(node);    break;
+			case LOG:          _log_node.construct(node);          break;
 			default:                                               break;
 			}
 		}
@@ -1204,6 +1233,7 @@ class Command : public Fifo<Command>::Element
 			case REQUEST:      _request_node.construct(*other._request_node);           break;
 			case TRUST_ANCHOR: _trust_anchor_node.construct(*other._trust_anchor_node); break;
 			case BENCHMARK:    _benchmark_node.construct(*other._benchmark_node);       break;
+			case LOG:          _log_node.construct(*other._log_node);                   break;
 			default:                                                                    break;
 			}
 		}
@@ -1228,6 +1258,7 @@ class Command : public Fifo<Command>::Element
 			case CHECK:          return true;
 			case TRUST_ANCHOR:   return true;
 			case LIST_SNAPSHOTS: return true;
+			case LOG:            return true;
 			case REQUEST:        return _request_node->sync();
 			case INVALID:        throw Bad_type { };
 			}
@@ -1245,6 +1276,7 @@ class Command : public Fifo<Command>::Element
 			if (str == "check")          { return CHECK; }
 			if (str == "dump")           { return DUMP; }
 			if (str == "list-snapshots") { return LIST_SNAPSHOTS; }
+			if (str == "log")            { return LOG; }
 			class Bad_string { };
 			throw Bad_string { };
 		}
@@ -1259,6 +1291,7 @@ class Command : public Fifo<Command>::Element
 			case TRUST_ANCHOR:   Genode::print(out, " cfg=(", *_trust_anchor_node, ")"); break;
 			case BENCHMARK:      Genode::print(out, " cfg=(", *_benchmark_node, ")"); break;
 			case DUMP:           Genode::print(out, " cfg=(", *_dump, ")"); break;
+			case LOG:            Genode::print(out, " cfg=(", *_log_node, ")"); break;
 			case INVALID:        break;
 			case CHECK:          break;
 			case CONSTRUCT:      break;
@@ -1280,6 +1313,7 @@ class Command : public Fifo<Command>::Element
 		Request_node            const &request_node      () const { return *_request_node     ; }
 		Trust_anchor_node       const &trust_anchor_node () const { return *_trust_anchor_node; }
 		Benchmark_node          const &benchmark_node    () const { return *_benchmark_node   ; }
+		Log_node                const &log_node          () const { return *_log_node         ; }
 		Cbe_init::Configuration const &initialize        () const { return *_initialize       ; }
 		Cbe_dump::Configuration const &dump              () const { return *_dump             ; }
 
@@ -2182,6 +2216,23 @@ class Main
 			}
 		}
 
+		void _cmd_pool_handle_pending_log_cmds(bool &progress)
+		{
+			while (true) {
+
+				Command const cmd {
+					_cmd_pool.peek_pending_command(Command::LOG) };
+
+				if (cmd.type() == Command::INVALID) {
+					break;
+				}
+				log("\n", cmd.log_node().string(), "\n");
+				_cmd_pool.mark_command_in_progress(cmd.id());
+				_cmd_pool.mark_command_completed(cmd.id(), true);
+				progress = true;
+			}
+		}
+
 		void _cmd_pool_handle_pending_benchmark_cmds(bool &progress)
 		{
 			while (true) {
@@ -2217,6 +2268,7 @@ class Main
 				_cmd_pool_handle_pending_cbe_cmds(progress);
 				_cmd_pool_handle_pending_list_snapshots_cmds(progress);
 			}
+			_cmd_pool_handle_pending_log_cmds(progress);
 			_cmd_pool_handle_pending_ta_cmds(progress);
 			_cmd_pool_handle_pending_cbe_init_cmds(progress);
 			_cmd_pool_handle_pending_benchmark_cmds(progress);
