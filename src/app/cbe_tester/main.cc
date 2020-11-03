@@ -918,12 +918,12 @@ class Benchmark
 
 		void submit_request(Benchmark_node const &node)
 		{
-			class Bad_state { };
 			switch (node.op()) {
 			case Benchmark_node::START:
 
 				if (_state != STOPPED) {
-					throw Bad_state { };
+					class Bad_state_to_start { };
+					throw Bad_state_to_start { };
 				}
 				_id++;
 				_nr_of_virt_blks_read = 0;
@@ -936,31 +936,57 @@ class Benchmark
 			case Benchmark_node::STOP:
 
 				if (_state != STARTED) {
-					throw Bad_state { };
+					class Bad_state_to_stop { };
+					throw Bad_state_to_stop { };
 				}
 				uint64_t const stop_time_us {
 					_timer.curr_time().trunc_to_plain_us().value };
+
+				log("");
+				if (_start_node->label_avail()) {
+					log("Benchmark result \"", _start_node->label(), "\"");
+				} else {
+					log("Benchmark result (command ID ", _id, ")");
+				}
 
 				double const passed_time_sec {
 					(double)(stop_time_us - _start_time.value) /
 					(double)(1000 * 1000) };
 
-				double const bytes_per_sec_read {
-					((double)(_nr_of_virt_blks_read * Cbe::BLOCK_SIZE)) /
-					passed_time_sec };
+				log("   Ran ", passed_time_sec, " seconds.");
 
-				double const bytes_per_sec_written {
-					((double)(_nr_of_virt_blks_written * Cbe::BLOCK_SIZE)) /
-					passed_time_sec };
+				if (_nr_of_virt_blks_read != 0) {
 
-				log("benchmark completed: id=", _id,
-				    _start_node->label_avail() ? " label=(" : "",
-				    _start_node->label_avail() ? _start_node->label() : "",
-				    _start_node->label_avail() ? ")" : "",
-				    " duration=(", passed_time_sec, " sec)",
-				    " read=(", bytes_per_sec_read / (double)(1024 * 1024), " MiB/s)",
-				    " write=(", bytes_per_sec_written / (double)(1024 * 1024), " MiB/s)");
+					uint64_t const bytes_read {
+						_nr_of_virt_blks_read * Cbe::BLOCK_SIZE };
 
+					double const mibyte_read {
+						(double)bytes_read / (double)(1024 * 1024) };
+
+					double const mibyte_per_sec_read {
+						(double)bytes_read / (double)passed_time_sec /
+						(double)(1024 * 1024) };
+
+					log("   Have read ", mibyte_read, " mebibyte in total.");
+					log("   Have read ", mibyte_per_sec_read, " mebibyte per second.");
+				}
+
+				if (_nr_of_virt_blks_written != 0) {
+
+					uint64_t bytes_written {
+						_nr_of_virt_blks_written * Cbe::BLOCK_SIZE };
+
+					double const mibyte_written {
+						(double)bytes_written / (double)(1024 * 1024) };
+
+					double const mibyte_per_sec_written {
+						(double)bytes_written / (double)passed_time_sec /
+						(double)(1024 * 1024) };
+
+					log("   Have written ", mibyte_written, " mebibyte in total.");
+					log("   Have written ", mibyte_per_sec_written, " mebibyte per second.");
+				}
+				log("");
 				_state = STOPPED;
 				break;
 			}
@@ -2204,12 +2230,15 @@ class Main
 				Active_snapshot_ids ids;
 				_cbe->active_snapshot_ids(ids);
 				unsigned snap_nr { 0 };
+				log("");
+				log("List snapshots (command ID ", cmd.id(), ")");
 				for (unsigned idx { 0 }; idx < sizeof(ids.values) / sizeof(ids.values[0]); idx++) {
 					if (ids.values[idx] != 0) {
-						log("list snapshots: cmd=", cmd.id(), " snap=", snap_nr, " gen=", ids.values[idx]);
+						log("   Snapshot #", snap_nr, " is generation ", ids.values[idx]);
 						snap_nr++;
 					}
 				}
+				log("");
 				_cmd_pool.mark_command_in_progress(cmd.id());
 				_cmd_pool.mark_command_completed(cmd.id(), true);
 				progress = true;
