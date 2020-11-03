@@ -1,5 +1,6 @@
 base
-external_crypto_cxx
+aes_cbc_4k
+libcrypto
 os
 so
 vfs

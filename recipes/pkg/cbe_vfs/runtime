@@ -20,9 +20,8 @@
 
 	<content>
 		<rom label="cbe_cxx.lib.so"/>
-		<rom label="external_crypto_cxx.lib.so"/>
 		<rom label="ld.lib.so"/>
-		<rom label="libsparkcrypto.lib.so"/>
+		<rom label="libcrypto.lib.so"/>
 		<rom label="spark.lib.so"/>
 		<rom label="vfs"/>
 		<rom label="vfs_cbe.lib.so"/>
