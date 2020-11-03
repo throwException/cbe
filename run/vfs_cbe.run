@@ -207,7 +207,7 @@ append config {
 
 					<default caps="100"/>
 
-					<start name="vfs_cbe" caps="120">
+					<start name="vfs_cbe" caps="200">
 						<binary name="vfs"/>
 						<resource name="RAM" quantum="16M"/>
 						<provides><service name="File_system"/></provides>
