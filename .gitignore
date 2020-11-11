@@ -1,15 +1,5 @@
-*~
-
-# Object file
-*.o
-
-# Ada Library Information
-*.ali
-
 # editors, patch
 *~
 *.orig
 *.swp
 *.rej
-
-out

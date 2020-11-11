@@ -1,3 +1,0 @@
-[submodule ".github/lsc"]
-	path = .ci/lsc
-	url = https://github.com/Componolit/libsparkcrypto.git
