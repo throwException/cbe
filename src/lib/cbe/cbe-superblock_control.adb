@@ -1614,7 +1614,7 @@ is
 
             if Snapshot_Found then
 
-               SB.Snapshots (Snapshot_Idx).Valid := False;
+               SB.Snapshots (Snapshot_Idx).Keep := False;
 
                Discard_Disposable_Snapshots (
                   SB.Snapshots,
